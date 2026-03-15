@@ -22,10 +22,18 @@ import (
 	"github.com/filebrowser/filebrowser/v2/fileutils"
 )
 
+func cleanURLPath(p string) string {
+	if p == "" || p[0] != '/' {
+		p = "/" + p
+	}
+	return path.Clean(p)
+}
+
 var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+	cleanPath := cleanURLPath(r.URL.Path)
 	file, err := files.NewFileInfo(&files.FileOptions{
 		Fs:         d.user.Fs,
-		Path:       r.URL.Path,
+		Path:       cleanPath,
 		Modify:     d.user.Perm.Modify,
 		Expand:     true,
 		ReadHeader: d.server.TypeDetectionByHeader,
@@ -51,7 +59,7 @@ var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 			return http.StatusRequestEntityTooLarge, fmt.Errorf("file size %d exceeds maximum allowed read size of %d bytes", file.Size, maxReadSize)
 		}
 
-		f, err := d.user.Fs.Open(r.URL.Path)
+		f, err := d.user.Fs.Open(cleanPath)
 		if err != nil {
 			return errToStatus(err), err
 		}
@@ -83,13 +91,14 @@ var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 
 func resourceDeleteHandler(fileCache FileCache) handleFunc {
 	return withUser(func(_ http.ResponseWriter, r *http.Request, d *data) (int, error) {
-		if r.URL.Path == "/" || !d.user.Perm.Delete {
+		cleanPath := cleanURLPath(r.URL.Path)
+		if cleanPath == "/" || !d.user.Perm.Delete {
 			return http.StatusForbidden, nil
 		}
 
 		file, err := files.NewFileInfo(&files.FileOptions{
 			Fs:         d.user.Fs,
-			Path:       r.URL.Path,
+			Path:       cleanPath,
 			Modify:     d.user.Perm.Modify,
 			Expand:     false,
 			ReadHeader: d.server.TypeDetectionByHeader,
@@ -111,8 +120,8 @@ func resourceDeleteHandler(fileCache FileCache) handleFunc {
 		}
 
 		err = d.RunHook(func() error {
-			return d.user.Fs.RemoveAll(r.URL.Path)
-		}, "delete", r.URL.Path, "", d.user)
+			return d.user.Fs.RemoveAll(cleanPath)
+		}, "delete", cleanPath, "", d.user)
 
 		if err != nil {
 			return errToStatus(err), err
@@ -124,19 +133,20 @@ func resourceDeleteHandler(fileCache FileCache) handleFunc {
 
 func resourcePostHandler(fileCache FileCache) handleFunc {
 	return withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
-		if !d.user.Perm.Create || !d.Check(r.URL.Path) {
+		cleanPath := cleanURLPath(r.URL.Path)
+		if !d.user.Perm.Create || !d.Check(cleanPath) {
 			return http.StatusForbidden, nil
 		}
 
 		// Directories creation on POST.
-		if strings.HasSuffix(r.URL.Path, "/") {
-			err := d.user.Fs.MkdirAll(r.URL.Path, d.settings.DirMode)
+		if strings.HasSuffix(cleanPath, "/") {
+			err := d.user.Fs.MkdirAll(cleanPath, d.settings.DirMode)
 			return errToStatus(err), err
 		}
 
 		file, err := files.NewFileInfo(&files.FileOptions{
 			Fs:         d.user.Fs,
-			Path:       r.URL.Path,
+			Path:       cleanPath,
 			Modify:     d.user.Perm.Modify,
 			Expand:     false,
 			ReadHeader: d.server.TypeDetectionByHeader,
@@ -159,7 +169,7 @@ func resourcePostHandler(fileCache FileCache) handleFunc {
 		}
 
 		err = d.RunHook(func() error {
-			info, writeErr := writeFile(d.user.Fs, r.URL.Path, r.Body, d.settings.FileMode, d.settings.DirMode)
+			info, writeErr := writeFile(d.user.Fs, cleanPath, r.Body, d.settings.FileMode, d.settings.DirMode)
 			if writeErr != nil {
 				return writeErr
 			}
@@ -167,10 +177,10 @@ func resourcePostHandler(fileCache FileCache) handleFunc {
 			etag := fmt.Sprintf(`"%x%x"`, info.ModTime().UnixNano(), info.Size())
 			w.Header().Set("ETag", etag)
 			return nil
-		}, "upload", r.URL.Path, "", d.user)
+		}, "upload", cleanPath, "", d.user)
 
 		if err != nil {
-			_ = d.user.Fs.RemoveAll(r.URL.Path)
+			_ = d.user.Fs.RemoveAll(cleanPath)
 		}
 
 		return errToStatus(err), err
@@ -178,16 +188,17 @@ func resourcePostHandler(fileCache FileCache) handleFunc {
 }
 
 var resourcePutHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
-	if !d.user.Perm.Modify || !d.Check(r.URL.Path) {
+	cleanPath := cleanURLPath(r.URL.Path)
+	if !d.user.Perm.Modify || !d.Check(cleanPath) {
 		return http.StatusForbidden, nil
 	}
 
 	// Only allow PUT for files.
-	if strings.HasSuffix(r.URL.Path, "/") {
+	if strings.HasSuffix(cleanPath, "/") {
 		return http.StatusMethodNotAllowed, nil
 	}
 
-	exists, err := afero.Exists(d.user.Fs, r.URL.Path)
+	exists, err := afero.Exists(d.user.Fs, cleanPath)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -196,7 +207,7 @@ var resourcePutHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 	}
 
 	err = d.RunHook(func() error {
-		info, writeErr := writeFile(d.user.Fs, r.URL.Path, r.Body, d.settings.FileMode, d.settings.DirMode)
+		info, writeErr := writeFile(d.user.Fs, cleanPath, r.Body, d.settings.FileMode, d.settings.DirMode)
 		if writeErr != nil {
 			return writeErr
 		}
@@ -204,17 +215,18 @@ var resourcePutHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 		etag := fmt.Sprintf(`"%x%x"`, info.ModTime().UnixNano(), info.Size())
 		w.Header().Set("ETag", etag)
 		return nil
-	}, "save", r.URL.Path, "", d.user)
+	}, "save", cleanPath, "", d.user)
 
 	return errToStatus(err), err
 })
 
 func resourcePatchHandler(fileCache FileCache) handleFunc {
 	return withUser(func(_ http.ResponseWriter, r *http.Request, d *data) (int, error) {
-		src := r.URL.Path
+		src := cleanURLPath(r.URL.Path)
 		dst := r.URL.Query().Get("destination")
 		action := r.URL.Query().Get("action")
 		dst, err := url.QueryUnescape(dst)
+		dst = cleanURLPath(dst)
 		if !d.Check(src) || !d.Check(dst) {
 			return http.StatusForbidden, nil
 		}
@@ -380,9 +392,10 @@ type DiskUsageResponse struct {
 }
 
 var diskUsage = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+	cleanPath := cleanURLPath(r.URL.Path)
 	file, err := files.NewFileInfo(&files.FileOptions{
 		Fs:         d.user.Fs,
-		Path:       r.URL.Path,
+		Path:       cleanPath,
 		Modify:     d.user.Perm.Modify,
 		Expand:     false,
 		ReadHeader: false,

@@ -84,9 +84,15 @@ var rawHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) 
 		return http.StatusAccepted, nil
 	}
 
+	rawPath := r.URL.Path
+	if rawPath == "" || rawPath[0] != '/' {
+		rawPath = "/" + rawPath
+	}
+	cleanPath := gopath.Clean(rawPath)
+
 	file, err := files.NewFileInfo(&files.FileOptions{
 		Fs:         d.user.Fs,
-		Path:       r.URL.Path,
+		Path:       cleanPath,
 		Modify:     d.user.Perm.Modify,
 		Expand:     false,
 		ReadHeader: d.server.TypeDetectionByHeader,

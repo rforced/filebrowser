@@ -88,15 +88,35 @@ var withHashFile = func(fn handleFunc) handleFunc {
 // ref to https://github.com/filebrowser/filebrowser/pull/727
 // `/api/public/dl/MEEuZK-v/file-name.txt` for old browsers to save file with correct name
 func ifPathWithName(r *http.Request) (id, filePath string) {
-	pathElements := strings.Split(r.URL.Path, "/")
+	// Expect paths like `/api/public/dl/<id>/optional/relative/path`
+	rawPath := r.URL.Path
+	if rawPath == "" || rawPath[0] != '/' {
+		rawPath = "/" + rawPath
+	}
+
+	// Trim known prefix so the first element is the share id.
+	prefix := "/api/public/dl/"
+	if strings.HasPrefix(rawPath, prefix) {
+		rawPath = rawPath[len(prefix):]
+	} else if strings.HasPrefix(rawPath, "/") {
+		rawPath = rawPath[1:]
+	}
+
+	pathElements := strings.Split(rawPath, "/")
 	// prevent maliciously constructed parameters like `/api/public/dl/XZzCDnK2_not_exists_hash_name`
 	// len(pathElements) will be 1, and golang will panic `runtime error: index out of range`
-
 	switch len(pathElements) {
+	case 0:
+		return "", "/"
 	case 1:
-		return r.URL.Path, "/"
+		return pathElements[0], "/"
 	default:
-		return pathElements[0], path.Join("/", path.Join(pathElements[1:]...))
+		id = pathElements[0]
+		rel := path.Join(pathElements[1:]...)
+		// Ensure we never get an absolute path here; it will be
+		// resolved relative to the share's base path via BasePathFs.
+		filePath = path.Clean("/" + rel)
+		return id, filePath
 	}
 }
 
