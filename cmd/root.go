@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -92,6 +93,13 @@ func init() {
 	flags.String("redisCacheUrl", "", "redis cache URL (for multi-instance deployments), e.g. redis://user:pass@host:port")
 	flags.Int("imageProcessors", 4, "image processors count")
 	addServerFlags(flags)
+
+	// Auth and reCAPTCHA flags for quick setup
+	flags.String("auth.method", string(auth.MethodJSONAuth), "authentication type")
+	flags.String("recaptcha.key", "", "reCAPTCHA Enterprise site key")
+	flags.String("recaptcha.secret", "", "reCAPTCHA Enterprise API key")
+	flags.String("recaptcha.project", "", "Google Cloud project ID for reCAPTCHA Enterprise")
+	flags.String("recaptcha.allowed-hostnames", "", "comma-separated list of allowed hostnames/IPs for reCAPTCHA token validation")
 }
 
 // addServerFlags adds server related flags to the given FlagSet. These flags are available
@@ -468,7 +476,32 @@ func quickSetup(v *viper.Viper, s *storage.Storage) error {
 		err = s.Auth.Save(&auth.NoAuth{})
 	} else {
 		set.AuthMethod = auth.MethodJSONAuth
-		err = s.Auth.Save(&auth.JSONAuth{})
+
+		jsonAuth := &auth.JSONAuth{}
+
+		key := v.GetString("recaptcha.key")
+		secret := v.GetString("recaptcha.secret")
+		project := v.GetString("recaptcha.project")
+
+		if key != "" && secret != "" && project != "" {
+			rc := &auth.ReCaptcha{
+				Key:       key,
+				Secret:    secret,
+				ProjectID: project,
+			}
+
+			if hostnames := v.GetString("recaptcha.allowed-hostnames"); hostnames != "" {
+				for h := range strings.SplitSeq(hostnames, ",") {
+					if trimmed := strings.TrimSpace(h); trimmed != "" {
+						rc.AllowedHostnames = append(rc.AllowedHostnames, trimmed)
+					}
+				}
+			}
+
+			jsonAuth.ReCaptcha = rc
+		}
+
+		err = s.Auth.Save(jsonAuth)
 	}
 	if err != nil {
 		return err
