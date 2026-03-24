@@ -9,17 +9,20 @@
 
         <div class="card-content full" v-if="links.length > 0">
           <table>
-            <tr>
-              <th>{{ t("settings.path") }}</th>
-              <th>{{ t("settings.shareDuration") }}</th>
-              <th v-if="authStore.user?.perm.admin">
-                {{ t("settings.username") }}
-              </th>
-              <th></th>
-              <th></th>
-            </tr>
+            <thead>
+              <tr>
+                <th>{{ t("settings.path") }}</th>
+                <th>{{ t("settings.shareDuration") }}</th>
+                <th v-if="authStore.user?.perm.admin">
+                  {{ t("settings.username") }}
+                </th>
+                <th></th>
+                <th></th>
+              </tr>
+            </thead>
 
-            <tr v-for="link in links" :key="link.hash">
+            <tbody>
+              <tr v-for="link in links" :key="link.hash">
               <td>
                 <a :href="buildLink(link)" target="_blank">{{ link.path }}</a>
               </td>
@@ -51,6 +54,7 @@
                 </button>
               </td>
             </tr>
+            </tbody>
           </table>
         </div>
         <h2 class="message" v-else>
