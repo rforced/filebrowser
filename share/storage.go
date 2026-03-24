@@ -36,16 +36,7 @@ func (s *Storage) All() ([]*Link, error) {
 		return nil, err
 	}
 
-	for i, link := range links {
-		if link.Expire != 0 && link.Expire <= time.Now().Unix() {
-			if err := s.Delete(link.Hash); err != nil {
-				return nil, err
-			}
-			links = append(links[:i], links[i+1:]...)
-		}
-	}
-
-	return links, nil
+	return s.filterExpired(links)
 }
 
 // FindByUserID wraps a StorageBackend.FindByUserID.
@@ -56,16 +47,7 @@ func (s *Storage) FindByUserID(id uint) ([]*Link, error) {
 		return nil, err
 	}
 
-	for i, link := range links {
-		if link.Expire != 0 && link.Expire <= time.Now().Unix() {
-			if err := s.Delete(link.Hash); err != nil {
-				return nil, err
-			}
-			links = append(links[:i], links[i+1:]...)
-		}
-	}
-
-	return links, nil
+	return s.filterExpired(links)
 }
 
 // GetByHash wraps a StorageBackend.GetByHash.
@@ -98,16 +80,7 @@ func (s *Storage) Gets(path string, id uint) ([]*Link, error) {
 		return nil, err
 	}
 
-	for i, link := range links {
-		if link.Expire != 0 && link.Expire <= time.Now().Unix() {
-			if err := s.Delete(link.Hash); err != nil {
-				return nil, err
-			}
-			links = append(links[:i], links[i+1:]...)
-		}
-	}
-
-	return links, nil
+	return s.filterExpired(links)
 }
 
 // Save wraps a StorageBackend.Save
@@ -118,6 +91,25 @@ func (s *Storage) Save(l *Link) error {
 // Delete wraps a StorageBackend.Delete
 func (s *Storage) Delete(hash string) error {
 	return s.back.Delete(hash)
+}
+
+// filterExpired removes expired links from the storage and returns
+// only the non-expired ones.
+func (s *Storage) filterExpired(links []*Link) ([]*Link, error) {
+	now := time.Now().Unix()
+	active := make([]*Link, 0, len(links))
+
+	for _, link := range links {
+		if link.Expire != 0 && link.Expire <= now {
+			if err := s.Delete(link.Hash); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		active = append(active, link)
+	}
+
+	return active, nil
 }
 
 func (s *Storage) DeleteWithPathPrefix(path string) error {
