@@ -1,23 +1,45 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"slices"
-
-	recaptcha "cloud.google.com/go/recaptchaenterprise/v2/apiv1"
-	recaptchapb "cloud.google.com/go/recaptchaenterprise/v2/apiv1/recaptchaenterprisepb"
-	"google.golang.org/api/option"
 
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/users"
 )
 
+// assessmentResponse mirrors the relevant fields from a reCAPTCHA Enterprise
+// CreateAssessment REST response.
+type assessmentResponse struct {
+	TokenProperties struct {
+		Valid         bool   `json:"valid"`
+		InvalidReason string `json:"invalidReason,omitempty"`
+		Action        string `json:"action"`
+		Hostname      string `json:"hostname"`
+	} `json:"tokenProperties"`
+	RiskAnalysis struct {
+		Score   float32  `json:"score"`
+		Reasons []string `json:"reasons,omitempty"`
+	} `json:"riskAnalysis"`
+}
+
+// assessmentRequest mirrors the CreateAssessment REST request body.
+type assessmentRequest struct {
+	Event struct {
+		Token   string `json:"token"`
+		SiteKey string `json:"siteKey"`
+	} `json:"event"`
+}
+
+// Assessor abstracts the reCAPTCHA Enterprise assessment call for testing.
 type Assessor interface {
-	CreateAssessment(ctx context.Context, req *recaptchapb.CreateAssessmentRequest) (*recaptchapb.Assessment, error)
+	CreateAssessment(ctx context.Context, projectID string, req *assessmentRequest) (*assessmentResponse, error)
 }
 
 // MethodJSONAuth is used to identify json auth.
@@ -96,17 +118,49 @@ type ReCaptcha struct {
 	Assessor         Assessor `json:"-" yaml:"-"`
 }
 
-// gcloudAssessor wraps the real Google Cloud reCAPTCHA Enterprise client.
-type gcloudAssessor struct {
-	client *recaptcha.Client
+// restAssessor calls the reCAPTCHA Enterprise REST API with an API key.
+type restAssessor struct {
+	apiKey     string
+	httpClient *http.Client
 }
 
-func (g *gcloudAssessor) CreateAssessment(ctx context.Context, req *recaptchapb.CreateAssessmentRequest) (*recaptchapb.Assessment, error) {
-	return g.client.CreateAssessment(ctx, req)
-}
+func (a *restAssessor) CreateAssessment(_ context.Context, projectID string, req *assessmentRequest) (*assessmentResponse, error) {
+	url := fmt.Sprintf(
+		"https://recaptchaenterprise.googleapis.com/v1/projects/%s/assessments?key=%s",
+		projectID, a.apiKey,
+	)
 
-func (g *gcloudAssessor) Close() error {
-	return g.client.Close()
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling assessment request: %w", err)
+	}
+
+	client := a.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	resp, err := client.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("error sending assessment request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading assessment response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("reCAPTCHA API returned status %d: %s", resp.StatusCode, respBody)
+	}
+
+	var result assessmentResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("error decoding assessment response: %w", err)
+	}
+
+	return &result, nil
 }
 
 // Ok checks if a reCAPTCHA Enterprise token is valid by creating an assessment.
@@ -115,27 +169,14 @@ func (r *ReCaptcha) Ok(token string) (bool, error) {
 
 	assessor := r.Assessor
 	if assessor == nil {
-		client, err := recaptcha.NewClient(ctx, option.WithAPIKey(r.Secret))
-		if err != nil {
-			return false, fmt.Errorf("error creating reCAPTCHA client: %w", err)
-		}
-		defer client.Close()
-		assessor = &gcloudAssessor{client: client}
+		assessor = &restAssessor{apiKey: r.Secret}
 	}
 
-	event := &recaptchapb.Event{
-		Token:   token,
-		SiteKey: r.Key,
-	}
+	req := &assessmentRequest{}
+	req.Event.Token = token
+	req.Event.SiteKey = r.Key
 
-	request := &recaptchapb.CreateAssessmentRequest{
-		Assessment: &recaptchapb.Assessment{
-			Event: event,
-		},
-		Parent: fmt.Sprintf("projects/%s", r.ProjectID),
-	}
-
-	response, err := assessor.CreateAssessment(ctx, request)
+	response, err := assessor.CreateAssessment(ctx, r.ProjectID, req)
 	if err != nil {
 		return false, fmt.Errorf("error calling CreateAssessment: %w", err)
 	}

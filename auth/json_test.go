@@ -10,45 +10,35 @@ import (
 	"os"
 	"testing"
 
-	recaptchapb "cloud.google.com/go/recaptchaenterprise/v2/apiv1/recaptchaenterprisepb"
-
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/users"
 )
 
 // mockAssessor implements Assessor for testing.
 type mockAssessor struct {
-	response *recaptchapb.Assessment
+	response *assessmentResponse
 	err      error
 }
 
-func (m *mockAssessor) CreateAssessment(_ context.Context, _ *recaptchapb.CreateAssessmentRequest) (*recaptchapb.Assessment, error) {
+func (m *mockAssessor) CreateAssessment(_ context.Context, _ string, _ *assessmentRequest) (*assessmentResponse, error) {
 	return m.response, m.err
 }
 
-func validAssessment(score float32, action, hostname string) *recaptchapb.Assessment {
-	return &recaptchapb.Assessment{
-		TokenProperties: &recaptchapb.TokenProperties{
-			Valid:    true,
-			Action:   action,
-			Hostname: hostname,
-		},
-		RiskAnalysis: &recaptchapb.RiskAnalysis{
-			Score: score,
-		},
-	}
+func validAssessment(score float32, action, hostname string) *assessmentResponse {
+	resp := &assessmentResponse{}
+	resp.TokenProperties.Valid = true
+	resp.TokenProperties.Action = action
+	resp.TokenProperties.Hostname = hostname
+	resp.RiskAnalysis.Score = score
+	return resp
 }
 
-func invalidTokenAssessment() *recaptchapb.Assessment {
-	return &recaptchapb.Assessment{
-		TokenProperties: &recaptchapb.TokenProperties{
-			Valid:         false,
-			InvalidReason: recaptchapb.TokenProperties_EXPIRED,
-		},
-		RiskAnalysis: &recaptchapb.RiskAnalysis{
-			Score: 0.9,
-		},
-	}
+func invalidTokenAssessment() *assessmentResponse {
+	resp := &assessmentResponse{}
+	resp.TokenProperties.Valid = false
+	resp.TokenProperties.InvalidReason = "EXPIRED"
+	resp.RiskAnalysis.Score = 0.9
+	return resp
 }
 
 func TestReCaptchaOk(t *testing.T) {
@@ -146,7 +136,8 @@ func TestReCaptchaOk(t *testing.T) {
 func TestReCaptchaOkRequestFields(t *testing.T) {
 	t.Parallel()
 
-	var captured *recaptchapb.CreateAssessmentRequest
+	var capturedReq *assessmentRequest
+	var capturedProject string
 	assessor := &mockAssessor{response: validAssessment(0.9, "login", "example.com")}
 
 	// Wrap to capture the request
@@ -154,9 +145,10 @@ func TestReCaptchaOkRequestFields(t *testing.T) {
 		Key:       "my-site-key",
 		Secret:    "my-secret",
 		ProjectID: "my-project",
-		Assessor: assessorFunc(func(ctx context.Context, req *recaptchapb.CreateAssessmentRequest) (*recaptchapb.Assessment, error) {
-			captured = req
-			return assessor.CreateAssessment(ctx, req)
+		Assessor: assessorFunc(func(ctx context.Context, projectID string, req *assessmentRequest) (*assessmentResponse, error) {
+			capturedReq = req
+			capturedProject = projectID
+			return assessor.CreateAssessment(ctx, projectID, req)
 		}),
 	}
 
@@ -165,25 +157,25 @@ func TestReCaptchaOkRequestFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if captured == nil {
+	if capturedReq == nil {
 		t.Fatal("CreateAssessment was not called")
 	}
-	if captured.Parent != "projects/my-project" {
-		t.Errorf("Parent = %q, want %q", captured.Parent, "projects/my-project")
+	if capturedProject != "my-project" {
+		t.Errorf("ProjectID = %q, want %q", capturedProject, "my-project")
 	}
-	if captured.Assessment.Event.Token != "the-token" {
-		t.Errorf("Token = %q, want %q", captured.Assessment.Event.Token, "the-token")
+	if capturedReq.Event.Token != "the-token" {
+		t.Errorf("Token = %q, want %q", capturedReq.Event.Token, "the-token")
 	}
-	if captured.Assessment.Event.SiteKey != "my-site-key" {
-		t.Errorf("SiteKey = %q, want %q", captured.Assessment.Event.SiteKey, "my-site-key")
+	if capturedReq.Event.SiteKey != "my-site-key" {
+		t.Errorf("SiteKey = %q, want %q", capturedReq.Event.SiteKey, "my-site-key")
 	}
 }
 
 // assessorFunc adapts a function to the Assessor interface.
-type assessorFunc func(ctx context.Context, req *recaptchapb.CreateAssessmentRequest) (*recaptchapb.Assessment, error)
+type assessorFunc func(ctx context.Context, projectID string, req *assessmentRequest) (*assessmentResponse, error)
 
-func (f assessorFunc) CreateAssessment(ctx context.Context, req *recaptchapb.CreateAssessmentRequest) (*recaptchapb.Assessment, error) {
-	return f(ctx, req)
+func (f assessorFunc) CreateAssessment(ctx context.Context, projectID string, req *assessmentRequest) (*assessmentResponse, error) {
+	return f(ctx, projectID, req)
 }
 
 // mockUserStore is a minimal users.Store for Auth tests.
