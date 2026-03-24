@@ -18,6 +18,31 @@
         <span id="content_length"></span> {{ humanSize }}
       </p>
 
+      <template v-if="dir && selected.length <= 1">
+        <p>
+          <strong>{{ $t("prompts.size") }}:</strong>
+          <code v-if="!folderSizeCalculated">
+            <a
+              @click="calculateDirSize"
+              @keypress.enter="calculateDirSize"
+              tabindex="2"
+              >{{
+                calculatingSize
+                  ? $t("prompts.calculating")
+                  : $t("prompts.calculateSize")
+              }}</a
+            >
+          </code>
+          <span v-else>{{ folderSize }}</span>
+        </p>
+        <p v-if="folderSizeCalculated">
+          <strong>{{ $t("prompts.numberFiles") }}:</strong> {{ folderNumFiles }}
+        </p>
+        <p v-if="folderSizeCalculated">
+          <strong>{{ $t("prompts.numberDirs") }}:</strong> {{ folderNumDirs }}
+        </p>
+      </template>
+
       <div v-if="resolution">
         <strong>{{ $t("prompts.resolution") }}:</strong>
         {{ resolution.width }} x {{ resolution.height }}
@@ -110,6 +135,15 @@ import { files as api } from "@/api";
 export default {
   name: "info",
   inject: ["$showError"],
+  data() {
+    return {
+      folderSize: "",
+      folderNumFiles: 0,
+      folderNumDirs: 0,
+      folderSizeCalculated: false,
+      calculatingSize: false,
+    };
+  },
   computed: {
     ...mapState(useFileStore, [
       "req",
@@ -173,6 +207,29 @@ export default {
   },
   methods: {
     ...mapActions(useLayoutStore, ["closeHovers"]),
+    calculateDirSize: async function () {
+      if (this.calculatingSize) return;
+      this.calculatingSize = true;
+
+      let link;
+      if (this.selectedCount) {
+        link = this.req.items[this.selected[0]].url;
+      } else {
+        link = this.$route.path;
+      }
+
+      try {
+        const info = await api.dirSize(link);
+        this.folderSize = filesize(info.size);
+        this.folderNumFiles = info.numFiles;
+        this.folderNumDirs = info.numDirs;
+        this.folderSizeCalculated = true;
+      } catch (e) {
+        this.$showError(e);
+      } finally {
+        this.calculatingSize = false;
+      }
+    },
     checksum: async function (event, algo) {
       event.preventDefault();
 

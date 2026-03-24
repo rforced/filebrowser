@@ -205,6 +205,17 @@ export async function checksum(url: string, algo: ChecksumAlg) {
   return (await data.json()).checksums[algo];
 }
 
+export interface DirSizeInfo {
+  size: number;
+  numFiles: number;
+  numDirs: number;
+}
+
+export async function dirSize(url: string): Promise<DirSizeInfo> {
+  const data = await resourceAction(`${url}?dirsize=true`, "GET");
+  return (await data.json()) as DirSizeInfo;
+}
+
 export function getDownloadURL(file: ResourceItem, inline: any) {
   const authStore = useAuthStore();
   const params = {

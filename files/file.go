@@ -202,6 +202,37 @@ func (i *FileInfo) Checksum(algo string) error {
 	return nil
 }
 
+type DirSizeInfo struct {
+	Size     int64 `json:"size"`
+	NumFiles int64 `json:"numFiles"`
+	NumDirs  int64 `json:"numDirs"`
+}
+
+func (i *FileInfo) DirSize() (*DirSizeInfo, error) {
+	if !i.IsDir {
+		return &DirSizeInfo{Size: i.Size, NumFiles: 1, NumDirs: 0}, nil
+	}
+
+	var result DirSizeInfo
+	err := afero.Walk(i.Fs, i.Path, func(walkPath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if walkPath == i.Path {
+			return nil
+		}
+		if info.IsDir() {
+			result.NumDirs++
+		} else {
+			result.NumFiles++
+			result.Size += info.Size()
+		}
+		return nil
+	})
+
+	return &result, err
+}
+
 func (i *FileInfo) RealPath() string {
 	if realPathFs, ok := i.Fs.(interface {
 		RealPath(name string) (fPath string, err error)

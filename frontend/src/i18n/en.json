@@ -166,6 +166,8 @@
     "uploadMessage": "Select an option to upload.",
     "passwordRequired": "A password is required for sharing.",
     "expirationRequired": "An expiration time is required for sharing.",
+    "calculateSize": "Calculate",
+    "calculating": "Calculating...",
     "resolution": "Resolution",
     "discardEditorChanges": "Are you sure you wish to discard the changes you've made?",
     "replaceOrSkip": "Replace or skip files",
