@@ -20,7 +20,7 @@
 
       <template v-if="dir && fileStore.selected.length <= 1">
         <p>
-          <strong>{{ t("prompts.size") }}:</strong>
+          <strong>{{ t("prompts.size") }}: </strong>
           <a
             v-if="!folderSizeCalculated"
             class="action-link"
