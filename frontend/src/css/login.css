@@ -29,12 +29,20 @@
   width: 90%;
 }
 
-#login.recaptcha form {
-  min-width: 304px;
+#login .recaptcha-branding {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--textSecondary, #999);
+  max-width: 16em;
+  width: 90%;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, calc(-50% + 10em));
 }
 
-#login #recaptcha {
-  margin: 0.5em 0 0;
+#login .recaptcha-branding a {
+  color: var(--blue);
 }
 
 #login .wrong {

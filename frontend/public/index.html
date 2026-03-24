@@ -8,10 +8,6 @@
       content="width=device-width, initial-scale=1, user-scalable=no"
     />
 
-    [{[ if .ReCaptcha -]}]
-    <script src="[{[ .ReCaptchaHost ]}]/recaptcha/api.js?render=explicit"></script>
-    [{[ end ]}]
-
     [{[ if .Domain -]}]
     <link rel="stylesheet" href="https://kit.fontawesome.com/15eb3be31d.css" crossorigin="anonymous" />
     [{[ end ]}]
@@ -50,6 +46,21 @@
     <script>
       // We can assign JSON directly
       window.FileBrowser = [{[ .Json ]}];
+
+      // Dynamically inject ReCaptcha Enterprise script if enabled
+      if (window.FileBrowser.ReCaptcha && window.FileBrowser.ReCaptchaKey) {
+        var rs = document.createElement('script');
+        rs.src = 'https://www.google.com/recaptcha/enterprise.js?render=' + window.FileBrowser.ReCaptchaKey;
+        document.head.appendChild(rs);
+      }
+
+      // Dynamically inject custom CSS if enabled
+      if (window.FileBrowser.CSS) {
+        var cl = document.createElement('link');
+        cl.rel = 'stylesheet';
+        cl.href = window.FileBrowser.StaticURL + '/custom.css';
+        document.head.appendChild(cl);
+      }
       // Global function to prepend static url
       window.__prependStaticUrl = (url) => {
         return `${window.FileBrowser.StaticURL}/${url.replace(/^\/+/, "")}`;
@@ -168,8 +179,5 @@
 
     <script type="module" src="/src/main.ts"></script>
 
-    [{[ if .CSS -]}]
-    <link rel="stylesheet" href="[{[ .StaticURL ]}]/custom.css" />
-    [{[ end ]}]
   </body>
 </html>

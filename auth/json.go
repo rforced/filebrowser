@@ -1,11 +1,15 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
+	"slices"
+
+	recaptcha "cloud.google.com/go/recaptchaenterprise/v2/apiv1"
+	recaptchapb "cloud.google.com/go/recaptchaenterprise/v2/apiv1/recaptchaenterprisepb"
 
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/users"
@@ -78,45 +82,66 @@ func (a JSONAuth) LoginPage() bool {
 	return true
 }
 
-const reCaptchaAPI = "/recaptcha/api/siteverify"
-
-// ReCaptcha identifies a recaptcha connection.
+// ReCaptcha identifies a reCAPTCHA Enterprise connection.
 type ReCaptcha struct {
-	Host   string `json:"host"`
-	Key    string `json:"key"`
-	Secret string `json:"secret"`
+	Key              string   `json:"key"`
+	Secret           string   `json:"secret"`
+	ProjectID        string   `json:"project_id"`
+	AllowedHostnames []string `json:"allowed_hostnames,omitempty"`
 }
 
-// Ok checks if a reCaptcha responde is correct.
-func (r *ReCaptcha) Ok(response string) (bool, error) {
-	body := url.Values{}
-	body.Set("secret", r.Secret)
-	body.Add("response", response)
+// Ok checks if a reCAPTCHA Enterprise token is valid by creating an assessment.
+func (r *ReCaptcha) Ok(token string) (bool, error) {
+	ctx := context.Background()
 
-	client := &http.Client{}
-
-	resp, err := client.Post(
-		r.Host+reCaptchaAPI,
-		"application/x-www-form-urlencoded",
-		strings.NewReader(body.Encode()),
-	)
+	client, err := recaptcha.NewClient(ctx)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("error creating reCAPTCHA client: %w", err)
 	}
-	defer resp.Body.Close()
+	defer client.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	event := &recaptchapb.Event{
+		Token:   token,
+		SiteKey: r.Key,
+	}
+
+	request := &recaptchapb.CreateAssessmentRequest{
+		Assessment: &recaptchapb.Assessment{
+			Event: event,
+		},
+		Parent: fmt.Sprintf("projects/%s", r.ProjectID),
+	}
+
+	response, err := client.CreateAssessment(ctx, request)
+	if err != nil {
+		return false, fmt.Errorf("error calling CreateAssessment: %w", err)
+	}
+
+	// Check if the token is valid.
+	if !response.TokenProperties.Valid {
 		return false, nil
 	}
 
-	var data struct {
-		Success bool `json:"success"`
+	// Check if the expected action was executed.
+	if response.TokenProperties.Action != "login" {
+		return false, nil
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(&data)
-	if err != nil {
-		return false, err
+	// Score must be above threshold (0.5 recommended by Google)
+	if response.RiskAnalysis.Score < 0.5 {
+		return false, nil
 	}
 
-	return data.Success, nil
+	// When domain validation is disabled in the reCAPTCHA console (e.g. for
+	// IP-only deployments), anyone who obtains the site key can generate tokens
+	// from any origin. Google recommends checking the hostname returned in the
+	// response against an explicit allow-list to compensate.
+	if len(r.AllowedHostnames) > 0 {
+		hostname := response.TokenProperties.Hostname
+		if !slices.Contains(r.AllowedHostnames, hostname) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }

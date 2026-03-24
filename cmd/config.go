@@ -47,9 +47,10 @@ func addConfigFlags(flags *pflag.FlagSet) {
 	flags.String("auth.command", "", "command for auth.method=hook")
 	flags.String("auth.logoutPage", "", "url of custom logout page")
 
-	flags.String("recaptcha.host", "https://www.google.com", "use another host for ReCAPTCHA. recaptcha.net might be useful in China")
-	flags.String("recaptcha.key", "", "ReCaptcha site key")
-	flags.String("recaptcha.secret", "", "ReCaptcha secret")
+	flags.String("recaptcha.key", "", "reCAPTCHA Enterprise site key")
+	flags.String("recaptcha.secret", "", "reCAPTCHA Enterprise API key")
+	flags.String("recaptcha.project", "", "Google Cloud project ID for reCAPTCHA Enterprise")
+	flags.String("recaptcha.allowed-hostnames", "", "comma-separated list of allowed hostnames/IPs for reCAPTCHA token validation (required when domain validation is disabled)")
 
 	flags.String("branding.name", "", "replace 'File Browser' by this name")
 	flags.String("branding.theme", "", "set the theme")
@@ -116,10 +117,6 @@ func getNoAuth() auth.Auther {
 
 func getJSONAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (auth.Auther, error) {
 	jsonAuth := &auth.JSONAuth{}
-	host, err := flags.GetString("recaptcha.host")
-	if err != nil {
-		return nil, err
-	}
 
 	key, err := flags.GetString("recaptcha.key")
 	if err != nil {
@@ -131,23 +128,59 @@ func getJSONAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (au
 		return nil, err
 	}
 
+	project, err := flags.GetString("recaptcha.project")
+	if err != nil {
+		return nil, err
+	}
+
 	if key == "" {
 		if kmap, ok := defaultAuther["recaptcha"].(map[string]interface{}); ok {
-			key = kmap["key"].(string)
+			key, _ = kmap["key"].(string)
 		}
 	}
 
 	if secret == "" {
 		if smap, ok := defaultAuther["recaptcha"].(map[string]interface{}); ok {
-			secret = smap["secret"].(string)
+			secret, _ = smap["secret"].(string)
 		}
 	}
 
-	if key != "" && secret != "" {
+	if project == "" {
+		if pmap, ok := defaultAuther["recaptcha"].(map[string]interface{}); ok {
+			project, _ = pmap["project_id"].(string)
+		}
+	}
+
+	allowedHostnamesStr, err := flags.GetString("recaptcha.allowed-hostnames")
+	if err != nil {
+		return nil, err
+	}
+
+	var allowedHostnames []string
+	if allowedHostnamesStr == "" {
+		if amap, ok := defaultAuther["recaptcha"].(map[string]interface{}); ok {
+			if raw, ok := amap["allowed_hostnames"].([]interface{}); ok {
+				for _, v := range raw {
+					if s, ok := v.(string); ok {
+						allowedHostnames = append(allowedHostnames, s)
+					}
+				}
+			}
+		}
+	} else {
+		for h := range strings.SplitSeq(allowedHostnamesStr, ",") {
+			if trimmed := strings.TrimSpace(h); trimmed != "" {
+				allowedHostnames = append(allowedHostnames, trimmed)
+			}
+		}
+	}
+
+	if key != "" && secret != "" && project != "" {
 		jsonAuth.ReCaptcha = &auth.ReCaptcha{
-			Host:   host,
-			Key:    key,
-			Secret: secret,
+			Key:              key,
+			Secret:           secret,
+			ProjectID:        project,
+			AllowedHostnames: allowedHostnames,
 		}
 	}
 	return jsonAuth, nil

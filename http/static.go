@@ -77,8 +77,7 @@ func handleWithStaticData(w http.ResponseWriter, _ *http.Request, d *data, fSys 
 		auther := raw.(*auth.JSONAuth)
 
 		if auther.ReCaptcha != nil {
-			data["ReCaptcha"] = auther.ReCaptcha.Key != "" && auther.ReCaptcha.Secret != ""
-			data["ReCaptchaHost"] = auther.ReCaptcha.Host
+			data["ReCaptcha"] = auther.ReCaptcha.Key != "" && auther.ReCaptcha.Secret != "" && auther.ReCaptcha.ProjectID != ""
 			data["ReCaptchaKey"] = auther.ReCaptcha.Key
 		}
 	}

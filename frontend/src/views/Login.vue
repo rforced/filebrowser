@@ -1,5 +1,5 @@
 <template>
-  <div id="login" :class="{ recaptcha: recaptcha }">
+  <div id="login">
     <form @submit="submit">
       <img :src="logoURL" alt="File Browser" />
       <h1>{{ name }}</h1>
@@ -30,7 +30,6 @@
         :placeholder="t('login.passwordConfirm')"
       />
 
-      <div v-if="recaptcha" id="recaptcha"></div>
       <input
         class="button button--block"
         type="submit"
@@ -54,7 +53,7 @@ import {
   recaptchaKey,
   signup,
 } from "@/utils/constants";
-import { inject, onMounted, ref } from "vue";
+import { inject, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -83,7 +82,14 @@ const submit = async (event: Event) => {
 
   let captcha = "";
   if (recaptcha) {
-    captcha = window.grecaptcha.getResponse();
+    try {
+      captcha = await window.grecaptcha.enterprise.execute(recaptchaKey, {
+        action: "login",
+      });
+    } catch {
+      error.value = t("login.wrongCredentials");
+      return;
+    }
 
     if (captcha === "") {
       error.value = t("login.wrongCredentials");
@@ -125,15 +131,4 @@ const submit = async (event: Event) => {
     }
   }
 };
-
-// Run hooks
-onMounted(() => {
-  if (!recaptcha) return;
-
-  window.grecaptcha.ready(function () {
-    window.grecaptcha.render("recaptcha", {
-      sitekey: recaptchaKey,
-    });
-  });
-});
 </script>

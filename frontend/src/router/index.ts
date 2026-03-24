@@ -160,7 +160,10 @@ async function initAuth() {
   if (recaptcha) {
     await new Promise<void>((resolve) => {
       const check = () => {
-        if (typeof window.grecaptcha === "undefined") {
+        if (
+          typeof window.grecaptcha === "undefined" ||
+          typeof window.grecaptcha.enterprise === "undefined"
+        ) {
           setTimeout(check, 100);
         } else {
           resolve();
