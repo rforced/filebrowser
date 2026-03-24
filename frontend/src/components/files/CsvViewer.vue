@@ -37,7 +37,6 @@
             />
             <div class="encoding-list">
               <div v-if="encodingList.length == 0" class="message">
-                <i class="material-icons">sentiment_dissatisfied</i>
                 <span>{{ $t("files.lonely") }}</span>
               </div>
               <button
@@ -59,7 +58,6 @@
       <p>{{ displayError }}</p>
     </div>
     <div v-else-if="parsed.headers.length === 0" class="csv-empty">
-      <i class="material-icons">description</i>
       <p>{{ $t("files.lonely") }}</p>
     </div>
     <div v-else class="csv-table-container" @wheel.stop @touchmove.stop>

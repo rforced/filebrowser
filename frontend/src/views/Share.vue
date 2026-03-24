@@ -287,7 +287,6 @@
           class="share__box share__box__items"
         >
           <h2 class="message">
-            <i class="material-icons">sentiment_dissatisfied</i>
             <span>{{ t("files.lonely") }}</span>
           </h2>
         </div>

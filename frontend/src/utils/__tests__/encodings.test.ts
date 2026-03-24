@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  availableEncodings,
-  decode,
-  isEncodableResponse,
-} from "../encodings";
+import { availableEncodings, decode, isEncodableResponse } from "../encodings";
 
 describe("availableEncodings", () => {
   it("contains utf-8", () => {

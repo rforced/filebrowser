@@ -86,7 +86,7 @@ function createI18nPlugin() {
           shareDeleted: "Share deleted!",
         },
         files: {
-          lonely: "It feels lonely here...",
+          lonely: "Nothing here",
         },
         buttons: {
           delete: "Delete",
@@ -195,7 +195,7 @@ describe("Shares.vue", () => {
     await flushPromises();
 
     expect(wrapper.find("table").exists()).toBe(false);
-    expect(wrapper.text()).toContain("It feels lonely here...");
+    expect(wrapper.text()).toContain("Nothing here");
   });
 
   it("renders links pointing to the correct share URL", async () => {
@@ -220,9 +220,7 @@ describe("Shares.vue", () => {
       { hash: "s1", path: "/file.txt", expire: 0, userID: 2 },
     ];
     mockShareList.mockResolvedValue(shares);
-    mockUsersGetAll.mockResolvedValue([
-      { id: 2, username: "alice" },
-    ]);
+    mockUsersGetAll.mockResolvedValue([{ id: 2, username: "alice" }]);
 
     const authStore = useAuthStore();
     authStore.user = makeUser({ admin: true });
@@ -235,9 +233,7 @@ describe("Shares.vue", () => {
   });
 
   it("does not show username column for non-admin users", async () => {
-    const shares: Share[] = [
-      { hash: "s1", path: "/file.txt", expire: 0 },
-    ];
+    const shares: Share[] = [{ hash: "s1", path: "/file.txt", expire: 0 }];
     mockShareList.mockResolvedValue(shares);
 
     const authStore = useAuthStore();
