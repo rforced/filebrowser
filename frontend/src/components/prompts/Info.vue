@@ -1,26 +1,26 @@
 <template>
   <div class="card floating">
     <div class="card-title">
-      <h2>{{ $t("prompts.fileInfo") }}</h2>
+      <h2>{{ t("prompts.fileInfo") }}</h2>
     </div>
 
     <div class="card-content">
-      <p v-if="selected.length > 1">
-        {{ $t("prompts.filesSelected", { count: selected.length }) }}
+      <p v-if="fileStore.selected.length > 1">
+        {{ t("prompts.filesSelected", { count: fileStore.selected.length }) }}
       </p>
 
-      <p class="break-word" v-if="selected.length < 2">
-        <strong>{{ $t("prompts.displayName") }}</strong> {{ name }}
+      <p class="break-word" v-if="fileStore.selected.length < 2">
+        <strong>{{ t("prompts.displayName") }}</strong> {{ displayName }}
       </p>
 
-      <p v-if="!dir || selected.length > 1">
-        <strong>{{ $t("prompts.size") }}:</strong>
+      <p v-if="!dir || fileStore.selected.length > 1">
+        <strong>{{ t("prompts.size") }}:</strong>
         <span id="content_length"></span> {{ humanSize }}
       </p>
 
-      <template v-if="dir && selected.length <= 1">
+      <template v-if="dir && fileStore.selected.length <= 1">
         <p>
-          <strong>{{ $t("prompts.size") }}:</strong>
+          <strong>{{ t("prompts.size") }}:</strong>
           <code v-if="!folderSizeCalculated">
             <a
               @click="calculateDirSize"
@@ -28,36 +28,38 @@
               tabindex="2"
               >{{
                 calculatingSize
-                  ? $t("prompts.calculating")
-                  : $t("prompts.calculateSize")
+                  ? t("prompts.calculating")
+                  : t("prompts.calculateSize")
               }}</a
             >
           </code>
           <span v-else>{{ folderSize }}</span>
         </p>
         <p v-if="folderSizeCalculated">
-          <strong>{{ $t("prompts.numberFiles") }}:</strong> {{ folderNumFiles }}
+          <strong>{{ t("prompts.numberFiles") }}:</strong> {{ folderNumFiles }}
         </p>
         <p v-if="folderSizeCalculated">
-          <strong>{{ $t("prompts.numberDirs") }}:</strong> {{ folderNumDirs }}
+          <strong>{{ t("prompts.numberDirs") }}:</strong> {{ folderNumDirs }}
         </p>
       </template>
 
       <div v-if="resolution">
-        <strong>{{ $t("prompts.resolution") }}:</strong>
+        <strong>{{ t("prompts.resolution") }}:</strong>
         {{ resolution.width }} x {{ resolution.height }}
       </div>
 
-      <p v-if="selected.length < 2" :title="modTime">
-        <strong>{{ $t("prompts.lastModified") }}:</strong> {{ humanTime }}
+      <p v-if="fileStore.selected.length < 2" :title="modTime">
+        <strong>{{ t("prompts.lastModified") }}:</strong> {{ humanTime }}
       </p>
 
-      <template v-if="dir && selected.length === 0">
+      <template v-if="dir && fileStore.selected.length === 0">
         <p>
-          <strong>{{ $t("prompts.numberFiles") }}:</strong> {{ req.numFiles }}
+          <strong>{{ t("prompts.numberFiles") }}:</strong>
+          {{ fileStore.req?.numFiles }}
         </p>
         <p>
-          <strong>{{ $t("prompts.numberDirs") }}:</strong> {{ req.numDirs }}
+          <strong>{{ t("prompts.numberDirs") }}:</strong>
+          {{ fileStore.req?.numDirs }}
         </p>
       </template>
 
@@ -69,7 +71,7 @@
               @click="checksum($event, 'md5')"
               @keypress.enter="checksum($event, 'md5')"
               tabindex="2"
-              >{{ $t("prompts.show") }}</a
+              >{{ t("prompts.show") }}</a
             ></code
           >
         </p>
@@ -80,7 +82,7 @@
               @click="checksum($event, 'sha1')"
               @keypress.enter="checksum($event, 'sha1')"
               tabindex="3"
-              >{{ $t("prompts.show") }}</a
+              >{{ t("prompts.show") }}</a
             ></code
           >
         </p>
@@ -91,7 +93,7 @@
               @click="checksum($event, 'sha256')"
               @keypress.enter="checksum($event, 'sha256')"
               tabindex="4"
-              >{{ $t("prompts.show") }}</a
+              >{{ t("prompts.show") }}</a
             ></code
           >
         </p>
@@ -102,7 +104,7 @@
               @click="checksum($event, 'sha512')"
               @keypress.enter="checksum($event, 'sha512')"
               tabindex="5"
-              >{{ $t("prompts.show") }}</a
+              >{{ t("prompts.show") }}</a
             ></code
           >
         </p>
@@ -113,141 +115,139 @@
       <button
         id="focus-prompt"
         type="submit"
-        @click="closeHovers"
+        @click="layoutStore.closeHovers"
         class="button button--flat"
-        :aria-label="$t('buttons.ok')"
-        :title="$t('buttons.ok')"
+        :aria-label="t('buttons.ok')"
+        :title="t('buttons.ok')"
       >
-        {{ $t("buttons.ok") }}
+        {{ t("buttons.ok") }}
       </button>
     </div>
   </div>
 </template>
 
-<script>
-import { mapActions, mapState } from "pinia";
+<script setup lang="ts">
+import { computed, inject, ref } from "vue";
+import { useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { filesize } from "@/utils";
 import dayjs from "dayjs";
 import { files as api } from "@/api";
 
-export default {
-  name: "info",
-  inject: ["$showError"],
-  data() {
-    return {
-      folderSize: "",
-      folderNumFiles: 0,
-      folderNumDirs: 0,
-      folderSizeCalculated: false,
-      calculatingSize: false,
-    };
-  },
-  computed: {
-    ...mapState(useFileStore, [
-      "req",
-      "selected",
-      "selectedCount",
-      "isListing",
-    ]),
-    humanSize: function () {
-      if (this.selectedCount === 0 || !this.isListing) {
-        return filesize(this.req.size);
-      }
+const $showError = inject<IToastError>("$showError")!;
 
-      let sum = 0;
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
+const route = useRoute();
+const { t } = useI18n();
 
-      for (const selected of this.selected) {
-        sum += this.req.items[selected].size;
-      }
+const folderSize = ref("");
+const folderNumFiles = ref(0);
+const folderNumDirs = ref(0);
+const folderSizeCalculated = ref(false);
+const calculatingSize = ref(false);
 
-      return filesize(sum);
-    },
-    humanTime: function () {
-      if (this.selectedCount === 0) {
-        return dayjs(this.req.modified).fromNow();
-      }
+const humanSize = computed(() => {
+  if (fileStore.selectedCount === 0 || !fileStore.isListing) {
+    return filesize(fileStore.req?.size ?? 0);
+  }
 
-      return dayjs(this.req.items[this.selected[0]].modified).fromNow();
-    },
-    modTime: function () {
-      if (this.selectedCount === 0) {
-        return new Date(Date.parse(this.req.modified)).toLocaleString();
-      }
+  let sum = 0;
 
-      return new Date(
-        Date.parse(this.req.items[this.selected[0]].modified)
-      ).toLocaleString();
-    },
-    name: function () {
-      return this.selectedCount === 0
-        ? this.req.name
-        : this.req.items[this.selected[0]].name;
-    },
-    dir: function () {
-      return (
-        this.selectedCount > 1 ||
-        (this.selectedCount === 0
-          ? this.req.isDir
-          : this.req.items[this.selected[0]].isDir)
-      );
-    },
-    resolution: function () {
-      if (this.selectedCount === 1) {
-        const selectedItem = this.req.items[this.selected[0]];
-        if (selectedItem && selectedItem.type === "image") {
-          return selectedItem.resolution;
-        }
-      } else if (this.req && this.req.type === "image") {
-        return this.req.resolution;
-      }
-      return null;
-    },
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["closeHovers"]),
-    calculateDirSize: async function () {
-      if (this.calculatingSize) return;
-      this.calculatingSize = true;
+  for (const selected of fileStore.selected) {
+    sum += fileStore.req!.items[selected].size;
+  }
 
-      let link;
-      if (this.selectedCount) {
-        link = this.req.items[this.selected[0]].url;
-      } else {
-        link = this.$route.path;
-      }
+  return filesize(sum);
+});
 
-      try {
-        const info = await api.dirSize(link);
-        this.folderSize = filesize(info.size);
-        this.folderNumFiles = info.numFiles;
-        this.folderNumDirs = info.numDirs;
-        this.folderSizeCalculated = true;
-      } catch (e) {
-        this.$showError(e);
-      } finally {
-        this.calculatingSize = false;
-      }
-    },
-    checksum: async function (event, algo) {
-      event.preventDefault();
+const humanTime = computed(() => {
+  if (fileStore.selectedCount === 0) {
+    return dayjs(fileStore.req?.modified).fromNow();
+  }
 
-      let link;
+  return dayjs(fileStore.req!.items[fileStore.selected[0]].modified).fromNow();
+});
 
-      if (this.selectedCount) {
-        link = this.req.items[this.selected[0]].url;
-      } else {
-        link = this.$route.path;
-      }
+const modTime = computed(() => {
+  if (fileStore.selectedCount === 0) {
+    return new Date(Date.parse(fileStore.req?.modified ?? "")).toLocaleString();
+  }
 
-      try {
-        const hash = await api.checksum(link, algo);
-        event.target.textContent = hash;
-      } catch (e) {
-        this.$showError(e);
-      }
-    },
-  },
+  return new Date(
+    Date.parse(fileStore.req!.items[fileStore.selected[0]].modified)
+  ).toLocaleString();
+});
+
+const displayName = computed(() => {
+  return fileStore.selectedCount === 0
+    ? (fileStore.req?.name ?? "")
+    : fileStore.req!.items[fileStore.selected[0]].name;
+});
+
+const dir = computed(() => {
+  return (
+    fileStore.selectedCount > 1 ||
+    (fileStore.selectedCount === 0
+      ? (fileStore.req?.isDir ?? false)
+      : fileStore.req!.items[fileStore.selected[0]].isDir)
+  );
+});
+
+const resolution = computed(() => {
+  if (fileStore.selectedCount === 1) {
+    const selectedItem = fileStore.req?.items[fileStore.selected[0]];
+    if (selectedItem && selectedItem.type === "image") {
+      return selectedItem.resolution ?? null;
+    }
+  } else if (fileStore.req && fileStore.req.type === "image") {
+    return fileStore.req.resolution ?? null;
+  }
+  return null;
+});
+
+const calculateDirSize = async () => {
+  if (calculatingSize.value) return;
+  calculatingSize.value = true;
+
+  let link;
+  if (fileStore.selectedCount) {
+    link = fileStore.req!.items[fileStore.selected[0]].url;
+  } else {
+    link = route.path;
+  }
+
+  try {
+    const info = await api.dirSize(link);
+    folderSize.value = filesize(info.size);
+    folderNumFiles.value = info.numFiles;
+    folderNumDirs.value = info.numDirs;
+    folderSizeCalculated.value = true;
+  } catch (e) {
+    $showError(e as Error);
+  } finally {
+    calculatingSize.value = false;
+  }
+};
+
+const checksum = async (event: Event, algo: ChecksumAlg) => {
+  event.preventDefault();
+
+  let link;
+
+  if (fileStore.selectedCount) {
+    link = fileStore.req!.items[fileStore.selected[0]].url;
+  } else {
+    link = route.path;
+  }
+
+  try {
+    const hash = await api.checksum(link, algo);
+    (event.target as HTMLElement).textContent = hash;
+  } catch (e) {
+    $showError(e as Error);
+  }
 };
 </script>

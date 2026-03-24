@@ -1,14 +1,14 @@
 <template>
   <div class="card floating">
     <div class="card-title">
-      <h2>{{ $t("prompts.move") }}</h2>
+      <h2>{{ t("prompts.move") }}</h2>
     </div>
 
     <div class="card-content">
-      <p>{{ $t("prompts.moveMessage") }}</p>
+      <p>{{ t("prompts.moveMessage") }}</p>
       <file-list
         ref="fileList"
-        @update:selected="(val) => (dest = val)"
+        @update:selected="(val: string) => (dest = val)"
         :exclude="excludedFolders"
         tabindex="1"
       />
@@ -18,45 +18,47 @@
       class="card-action"
       style="display: flex; align-items: center; justify-content: space-between"
     >
-      <template v-if="user.perm.create">
+      <template v-if="authStore.user?.perm.create">
         <button
           class="button button--flat"
-          @click="$refs.fileList.createDir()"
-          :aria-label="$t('sidebar.newFolder')"
-          :title="$t('sidebar.newFolder')"
+          @click="fileList?.createDir()"
+          :aria-label="t('sidebar.newFolder')"
+          :title="t('sidebar.newFolder')"
           style="justify-self: left"
         >
-          <span>{{ $t("sidebar.newFolder") }}</span>
+          <span>{{ t("sidebar.newFolder") }}</span>
         </button>
       </template>
       <div>
         <button
           class="button button--flat button--grey"
-          @click="closeHovers"
-          :aria-label="$t('buttons.cancel')"
-          :title="$t('buttons.cancel')"
+          @click="layoutStore.closeHovers"
+          :aria-label="t('buttons.cancel')"
+          :title="t('buttons.cancel')"
           tabindex="3"
         >
-          {{ $t("buttons.cancel") }}
+          {{ t("buttons.cancel") }}
         </button>
         <button
           id="focus-prompt"
           class="button button--flat"
           @click="move"
-          :disabled="$route.path === dest"
-          :aria-label="$t('buttons.move')"
-          :title="$t('buttons.move')"
+          :disabled="route.path === dest"
+          :aria-label="t('buttons.move')"
+          :title="t('buttons.move')"
           tabindex="2"
         >
-          {{ $t("buttons.move") }}
+          {{ t("buttons.move") }}
         </button>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-import { mapActions, mapState, mapWritableState } from "pinia";
+<script setup lang="ts">
+import { ref, computed, inject } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { useAuthStore } from "@/stores/auth";
@@ -66,99 +68,98 @@ import buttons from "@/utils/buttons";
 import * as upload from "@/utils/upload";
 import { removePrefix } from "@/api/utils";
 
-export default {
-  name: "move",
-  components: { FileList },
-  data: function () {
-    return {
-      current: window.location.pathname,
-      dest: null,
-    };
-  },
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useFileStore, ["req", "selected"]),
-    ...mapState(useAuthStore, ["user"]),
-    ...mapWritableState(useFileStore, ["reload", "preselect"]),
-    excludedFolders() {
-      return this.selected
-        .filter((idx) => this.req.items[idx].isDir)
-        .map((idx) => this.req.items[idx].url);
-    },
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["showHover", "closeHovers"]),
-    move: async function (event) {
-      event.preventDefault();
-      const items = [];
+const $showError = inject<IToastError>("$showError")!;
 
-      for (const item of this.selected) {
-        items.push({
-          from: this.req.items[item].url,
-          to: this.dest + encodeURIComponent(this.req.items[item].name),
-          name: this.req.items[item].name,
-          size: this.req.items[item].size,
-          modified: this.req.items[item].modified,
-          overwrite: false,
-          rename: false,
-        });
-      }
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
+const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
+const { t } = useI18n();
 
-      const action = async (overwrite, rename) => {
-        buttons.loading("move");
+const fileList = ref<InstanceType<typeof FileList> | null>(null);
+const dest = ref<string | null>(null);
 
-        await api
-          .move(items, overwrite, rename)
-          .then(() => {
-            buttons.success("move");
-            this.preselect = removePrefix(items[0].to);
-            if (this.user.redirectAfterCopyMove)
-              this.$router.push({ path: this.dest });
-            else this.reload = true;
-          })
-          .catch((e) => {
-            buttons.done("move");
-            this.$showError(e);
-          });
-      };
+const excludedFolders = computed(() => {
+  return fileStore.selected
+    .filter((idx: number) => fileStore.req!.items[idx].isDir)
+    .map((idx: number) => fileStore.req!.items[idx].url);
+});
 
-      const dstItems = (await api.fetch(this.dest)).items;
-      const conflict = upload.checkConflict(items, dstItems);
+const move = async (event: Event) => {
+  event.preventDefault();
+  const items: {
+    from: string;
+    to: string;
+    name: string;
+    size: number;
+    modified: string;
+    overwrite: boolean;
+    rename: boolean;
+  }[] = [];
 
-      if (conflict.length > 0) {
-        this.showHover({
-          prompt: "resolve-conflict",
-          props: {
-            conflict: conflict,
-            files: items,
-          },
-          confirm: (event, result) => {
-            event.preventDefault();
-            this.closeHovers();
-            for (let i = result.length - 1; i >= 0; i--) {
-              const item = result[i];
-              if (item.checked.length == 2) {
-                items[item.index].rename = true;
-              } else if (
-                item.checked.length == 1 &&
-                item.checked[0] == "origin"
-              ) {
-                items[item.index].overwrite = true;
-              } else {
-                items.splice(item.index, 1);
-              }
-            }
-            if (items.length > 0) {
-              action();
-            }
-          },
-        });
+  for (const item of fileStore.selected) {
+    items.push({
+      from: fileStore.req!.items[item].url,
+      to: dest.value + encodeURIComponent(fileStore.req!.items[item].name),
+      name: fileStore.req!.items[item].name,
+      size: fileStore.req!.items[item].size,
+      modified: fileStore.req!.items[item].modified,
+      overwrite: false,
+      rename: false,
+    });
+  }
 
-        return;
-      }
+  const action = async (overwrite?: boolean, rename?: boolean) => {
+    buttons.loading("move");
 
-      action(false, false);
-    },
-  },
+    await api
+      .move(items, overwrite, rename)
+      .then(() => {
+        buttons.success("move");
+        fileStore.preselect = removePrefix(items[0].to);
+        if (authStore.user?.redirectAfterCopyMove)
+          router.push({ path: dest.value! });
+        else fileStore.reload = true;
+      })
+      .catch((e) => {
+        buttons.done("move");
+        $showError(e as Error);
+      });
+  };
+
+  const dstItems = (await api.fetch(dest.value!)).items;
+  const conflict = upload.checkConflict(items, dstItems);
+
+  if (conflict.length > 0) {
+    layoutStore.showHover({
+      prompt: "resolve-conflict",
+      props: {
+        conflict: conflict,
+        files: items,
+      },
+      confirm: (event: Event, result: any[]) => {
+        event.preventDefault();
+        layoutStore.closeHovers();
+        for (let i = result.length - 1; i >= 0; i--) {
+          const item = result[i];
+          if (item.checked.length == 2) {
+            items[item.index].rename = true;
+          } else if (item.checked.length == 1 && item.checked[0] == "origin") {
+            items[item.index].overwrite = true;
+          } else {
+            items.splice(item.index, 1);
+          }
+        }
+        if (items.length > 0) {
+          action();
+        }
+      },
+    });
+
+    return;
+  }
+
+  action(false, false);
 };
 </script>

@@ -1,98 +1,92 @@
 <template>
   <div class="card floating">
     <div class="card-content">
-      <p v-if="!this.isListing || selectedCount === 1">
-        {{ $t("prompts.deleteMessageSingle") }}
+      <p v-if="!fileStore.isListing || fileStore.selectedCount === 1">
+        {{ t("prompts.deleteMessageSingle") }}
       </p>
       <p v-else>
-        {{ $t("prompts.deleteMessageMultiple", { count: selectedCount }) }}
+        {{
+          t("prompts.deleteMessageMultiple", { count: fileStore.selectedCount })
+        }}
       </p>
     </div>
     <div class="card-action">
       <button
-        @click="closeHovers"
+        @click="layoutStore.closeHovers"
         class="button button--flat button--grey"
-        :aria-label="$t('buttons.cancel')"
-        :title="$t('buttons.cancel')"
+        :aria-label="t('buttons.cancel')"
+        :title="t('buttons.cancel')"
         tabindex="2"
       >
-        {{ $t("buttons.cancel") }}
+        {{ t("buttons.cancel") }}
       </button>
       <button
         id="focus-prompt"
         @click="submit"
         class="button button--flat button--red"
-        :aria-label="$t('buttons.delete')"
-        :title="$t('buttons.delete')"
+        :aria-label="t('buttons.delete')"
+        :title="t('buttons.delete')"
         tabindex="1"
       >
-        {{ $t("buttons.delete") }}
+        {{ t("buttons.delete") }}
       </button>
     </div>
   </div>
 </template>
 
-<script>
-import { mapActions, mapState, mapWritableState } from "pinia";
+<script setup lang="ts">
+import { inject } from "vue";
+import { useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { files as api } from "@/api";
 import buttons from "@/utils/buttons";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 
-export default {
-  name: "delete",
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useFileStore, [
-      "isListing",
-      "selectedCount",
-      "req",
-      "selected",
-    ]),
-    ...mapState(useLayoutStore, ["currentPrompt"]),
-    ...mapWritableState(useFileStore, ["reload", "preselect"]),
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["closeHovers"]),
-    submit: async function () {
-      buttons.loading("delete");
+const $showError = inject<IToastError>("$showError")!;
 
-      try {
-        if (!this.isListing) {
-          await api.remove(this.$route.path);
-          buttons.success("delete");
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
+const route = useRoute();
+const { t } = useI18n();
 
-          this.currentPrompt?.confirm();
-          this.closeHovers();
-          return;
-        }
+const submit = async () => {
+  buttons.loading("delete");
 
-        this.closeHovers();
+  try {
+    if (!fileStore.isListing) {
+      await api.remove(route.path);
+      buttons.success("delete");
 
-        if (this.selectedCount === 0) {
-          return;
-        }
+      layoutStore.currentPrompt?.confirm();
+      layoutStore.closeHovers();
+      return;
+    }
 
-        const promises = [];
-        for (const index of this.selected) {
-          promises.push(api.remove(this.req.items[index].url));
-        }
+    layoutStore.closeHovers();
 
-        await Promise.all(promises);
-        buttons.success("delete");
+    if (fileStore.selectedCount === 0) {
+      return;
+    }
 
-        const nearbyItem =
-          this.req.items[Math.max(0, Math.min(this.selected) - 1)];
+    const promises = [];
+    for (const index of fileStore.selected) {
+      promises.push(api.remove(fileStore.req!.items[index].url));
+    }
 
-        this.preselect = nearbyItem?.path;
+    await Promise.all(promises);
+    buttons.success("delete");
 
-        this.reload = true;
-      } catch (e) {
-        buttons.done("delete");
-        this.$showError(e);
-        if (this.isListing) this.reload = true;
-      }
-    },
-  },
+    const nearbyItem =
+      fileStore.req!.items[Math.max(0, Math.min(...fileStore.selected) - 1)];
+
+    fileStore.preselect = nearbyItem?.path;
+
+    fileStore.reload = true;
+  } catch (e) {
+    buttons.done("delete");
+    $showError(e as Error);
+    if (fileStore.isListing) fileStore.reload = true;
+  }
 };
 </script>

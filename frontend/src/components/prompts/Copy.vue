@@ -1,14 +1,14 @@
 <template>
   <div class="card floating">
     <div class="card-title">
-      <h2>{{ $t("prompts.copy") }}</h2>
+      <h2>{{ t("prompts.copy") }}</h2>
     </div>
 
     <div class="card-content">
-      <p>{{ $t("prompts.copyMessage") }}</p>
+      <p>{{ t("prompts.copyMessage") }}</p>
       <file-list
         ref="fileList"
-        @update:selected="(val) => (dest = val)"
+        @update:selected="(val: string) => (dest = val)"
         tabindex="1"
       />
     </div>
@@ -17,44 +17,46 @@
       class="card-action"
       style="display: flex; align-items: center; justify-content: space-between"
     >
-      <template v-if="user.perm.create">
+      <template v-if="authStore.user?.perm.create">
         <button
           class="button button--flat"
-          @click="$refs.fileList.createDir()"
-          :aria-label="$t('sidebar.newFolder')"
-          :title="$t('sidebar.newFolder')"
+          @click="fileList?.createDir()"
+          :aria-label="t('sidebar.newFolder')"
+          :title="t('sidebar.newFolder')"
           style="justify-self: left"
         >
-          <span>{{ $t("sidebar.newFolder") }}</span>
+          <span>{{ t("sidebar.newFolder") }}</span>
         </button>
       </template>
       <div>
         <button
           class="button button--flat button--grey"
-          @click="closeHovers"
-          :aria-label="$t('buttons.cancel')"
-          :title="$t('buttons.cancel')"
+          @click="layoutStore.closeHovers"
+          :aria-label="t('buttons.cancel')"
+          :title="t('buttons.cancel')"
           tabindex="3"
         >
-          {{ $t("buttons.cancel") }}
+          {{ t("buttons.cancel") }}
         </button>
         <button
           id="focus-prompt"
           class="button button--flat"
           @click="copy"
-          :aria-label="$t('buttons.copy')"
-          :title="$t('buttons.copy')"
+          :aria-label="t('buttons.copy')"
+          :title="t('buttons.copy')"
           tabindex="2"
         >
-          {{ $t("buttons.copy") }}
+          {{ t("buttons.copy") }}
         </button>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-import { mapActions, mapState, mapWritableState } from "pinia";
+<script setup lang="ts">
+import { ref, inject } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { useAuthStore } from "@/stores/auth";
@@ -64,100 +66,98 @@ import buttons from "@/utils/buttons";
 import * as upload from "@/utils/upload";
 import { removePrefix } from "@/api/utils";
 
-export default {
-  name: "copy",
-  components: { FileList },
-  data: function () {
-    return {
-      current: window.location.pathname,
-      dest: null,
-    };
-  },
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useFileStore, ["req", "selected"]),
-    ...mapState(useAuthStore, ["user"]),
-    ...mapWritableState(useFileStore, ["reload", "preselect"]),
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["showHover", "closeHovers"]),
-    copy: async function (event) {
-      event.preventDefault();
-      const items = [];
+const $showError = inject<IToastError>("$showError")!;
 
-      // Create a new promise for each file.
-      for (const item of this.selected) {
-        items.push({
-          from: this.req.items[item].url,
-          to: this.dest + encodeURIComponent(this.req.items[item].name),
-          name: this.req.items[item].name,
-          size: this.req.items[item].size,
-          modified: this.req.items[item].modified,
-          overwrite: false,
-          rename: this.$route.path === this.dest,
-        });
-      }
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
+const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
+const { t } = useI18n();
 
-      const action = async (overwrite, rename) => {
-        buttons.loading("copy");
+const fileList = ref<InstanceType<typeof FileList> | null>(null);
+const dest = ref<string | null>(null);
 
-        await api
-          .copy(items, overwrite, rename)
-          .then(() => {
-            buttons.success("copy");
-            this.preselect = removePrefix(items[0].to);
+const copy = async (event: Event) => {
+  event.preventDefault();
+  const items: {
+    from: string;
+    to: string;
+    name: string;
+    size: number;
+    modified: string;
+    overwrite: boolean;
+    rename: boolean;
+  }[] = [];
 
-            if (this.$route.path === this.dest) {
-              this.reload = true;
+  // Create a new promise for each file.
+  for (const item of fileStore.selected) {
+    items.push({
+      from: fileStore.req!.items[item].url,
+      to: dest.value + encodeURIComponent(fileStore.req!.items[item].name),
+      name: fileStore.req!.items[item].name,
+      size: fileStore.req!.items[item].size,
+      modified: fileStore.req!.items[item].modified,
+      overwrite: false,
+      rename: route.path === dest.value,
+    });
+  }
 
-              return;
-            }
+  const action = async (overwrite?: boolean, rename?: boolean) => {
+    buttons.loading("copy");
 
-            if (this.user.redirectAfterCopyMove)
-              this.$router.push({ path: this.dest });
-          })
-          .catch((e) => {
-            buttons.done("copy");
-            this.$showError(e);
-          });
-      };
+    await api
+      .copy(items, overwrite, rename)
+      .then(() => {
+        buttons.success("copy");
+        fileStore.preselect = removePrefix(items[0].to);
 
-      const dstItems = (await api.fetch(this.dest)).items;
-      const conflict = upload.checkConflict(items, dstItems);
+        if (route.path === dest.value) {
+          fileStore.reload = true;
 
-      if (conflict.length > 0) {
-        this.showHover({
-          prompt: "resolve-conflict",
-          props: {
-            conflict: conflict,
-          },
-          confirm: (event, result) => {
-            event.preventDefault();
-            this.closeHovers();
-            for (let i = result.length - 1; i >= 0; i--) {
-              const item = result[i];
-              if (item.checked.length == 2) {
-                items[item.index].rename = true;
-              } else if (
-                item.checked.length == 1 &&
-                item.checked[0] == "origin"
-              ) {
-                items[item.index].overwrite = true;
-              } else {
-                items.splice(item.index, 1);
-              }
-            }
-            if (items.length > 0) {
-              action();
-            }
-          },
-        });
+          return;
+        }
 
-        return;
-      }
+        if (authStore.user?.redirectAfterCopyMove)
+          router.push({ path: dest.value! });
+      })
+      .catch((e) => {
+        buttons.done("copy");
+        $showError(e as Error);
+      });
+  };
 
-      action(false, false);
-    },
-  },
+  const dstItems = (await api.fetch(dest.value!)).items;
+  const conflict = upload.checkConflict(items, dstItems);
+
+  if (conflict.length > 0) {
+    layoutStore.showHover({
+      prompt: "resolve-conflict",
+      props: {
+        conflict: conflict,
+      },
+      confirm: (event: Event, result: any[]) => {
+        event.preventDefault();
+        layoutStore.closeHovers();
+        for (let i = result.length - 1; i >= 0; i--) {
+          const item = result[i];
+          if (item.checked.length == 2) {
+            items[item.index].rename = true;
+          } else if (item.checked.length == 1 && item.checked[0] == "origin") {
+            items[item.index].overwrite = true;
+          } else {
+            items.splice(item.index, 1);
+          }
+        }
+        if (items.length > 0) {
+          action();
+        }
+      },
+    });
+
+    return;
+  }
+
+  action(false, false);
 };
 </script>

@@ -24,163 +24,177 @@
   </div>
 </template>
 
-<script>
-import { mapState, mapActions } from "pinia";
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, inject } from "vue";
+import { useRoute } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 
-import url from "@/utils/url";
+import urlUtil from "@/utils/url";
 import { files } from "@/api";
 import { StatusError } from "@/api/utils.js";
 
-export default {
-  name: "file-list",
-  props: {
-    exclude: {
-      type: Array,
-      default: () => [],
-    },
-  },
-  data: function () {
-    return {
-      items: [],
-      touches: {
-        id: "",
-        count: 0,
-      },
-      selected: null,
-      current: window.location.pathname,
-      nextAbortController: new AbortController(),
-    };
-  },
-  inject: ["$showError"],
-  computed: {
-    ...mapState(useAuthStore, ["user"]),
-    ...mapState(useFileStore, ["req"]),
-    nav() {
-      return decodeURIComponent(this.current);
-    },
-  },
-  mounted() {
-    this.fillOptions(this.req);
-  },
-  unmounted() {
-    this.abortOngoingNext();
-  },
-  methods: {
-    ...mapActions(useLayoutStore, ["showHover"]),
-    abortOngoingNext() {
-      this.nextAbortController.abort();
-    },
-    fillOptions(req) {
-      // Sets the current path and resets
-      // the current items.
-      this.current = req.url;
-      this.items = [];
+const props = withDefaults(
+  defineProps<{
+    exclude?: string[];
+  }>(),
+  {
+    exclude: () => [],
+  }
+);
 
-      this.$emit("update:selected", this.current);
+const emit = defineEmits<{
+  "update:selected": [value: string];
+}>();
 
-      // If the path isn't the root path,
-      // show a button to navigate to the previous
-      // directory.
-      if (req.url !== "/files/") {
-        this.items.push({
-          name: "..",
-          url: url.removeLastDir(req.url) + "/",
-        });
-      }
+const route = useRoute();
+const authStore = useAuthStore();
+const fileStore = useFileStore();
+const layoutStore = useLayoutStore();
+const $showError = inject<IToastError>("$showError")!;
 
-      // If this folder is empty, finish here.
-      if (req.items === null) return;
+interface FileListItem {
+  name: string;
+  url: string;
+}
 
-      // Otherwise we add every directory to the
-      // move options.
-      for (const item of req.items) {
-        if (!item.isDir) continue;
-        if (this.exclude?.includes(item.url)) continue;
+const items = ref<FileListItem[]>([]);
+const touches = ref({ id: "", count: 0 });
+const selected = ref<string | null>(null);
+const current = ref(window.location.pathname);
+let nextAbortController = new AbortController();
 
-        this.items.push({
-          name: item.name,
-          url: item.url,
-        });
-      }
-    },
-    next: function (event) {
-      // Retrieves the URL of the directory the user
-      // just clicked in and fill the options with its
-      // content.
-      const uri = event.currentTarget.dataset.url;
-      this.abortOngoingNext();
-      this.nextAbortController = new AbortController();
-      files
-        .fetch(uri, this.nextAbortController.signal)
-        .then(this.fillOptions)
-        .catch((e) => {
-          if (e instanceof StatusError && e.is_canceled) {
-            return;
-          }
-          this.$showError(e);
-        });
-    },
-    touchstart(event) {
-      const url = event.currentTarget.dataset.url;
+const nav = computed(() => decodeURIComponent(current.value));
 
-      // In 300 milliseconds, we shall reset the count.
-      setTimeout(() => {
-        this.touches.count = 0;
-      }, 300);
+const fillOptions = (req: Resource) => {
+  // Sets the current path and resets
+  // the current items.
+  current.value = req.url;
+  items.value = [];
 
-      // If the element the user is touching
-      // is different from the last one he touched,
-      // reset the count.
-      if (this.touches.id !== url) {
-        this.touches.id = url;
-        this.touches.count = 1;
+  emit("update:selected", current.value);
+
+  // If the path isn't the root path,
+  // show a button to navigate to the previous
+  // directory.
+  if (req.url !== "/files/") {
+    items.value.push({
+      name: "..",
+      url: urlUtil.removeLastDir(req.url) + "/",
+    });
+  }
+
+  // If this folder is empty, finish here.
+  if (req.items === null) return;
+
+  // Otherwise we add every directory to the
+  // move options.
+  for (const item of req.items) {
+    if (!item.isDir) continue;
+    if (props.exclude?.includes(item.url)) continue;
+
+    items.value.push({
+      name: item.name,
+      url: item.url,
+    });
+  }
+};
+
+const abortOngoingNext = () => {
+  nextAbortController.abort();
+};
+
+const next = (event: Event) => {
+  // Retrieves the URL of the directory the user
+  // just clicked in and fill the options with its
+  // content.
+  const uri = (event.currentTarget as HTMLElement).dataset.url;
+  abortOngoingNext();
+  nextAbortController = new AbortController();
+  files
+    .fetch(uri!, nextAbortController.signal)
+    .then(fillOptions)
+    .catch((e: unknown) => {
+      if (e instanceof StatusError && e.is_canceled) {
         return;
       }
+      $showError(e as Error);
+    });
+};
 
-      this.touches.count++;
+const touchstart = (event: Event) => {
+  const url = (event.currentTarget as HTMLElement).dataset.url;
 
-      // If there is more than one touch already,
-      // open the next screen.
-      if (this.touches.count > 1) {
-        this.next(event);
-      }
-    },
-    itemClick: function (event) {
-      if (this.user.singleClick) this.next(event);
-      else this.select(event);
-    },
-    select: function (event) {
-      // If the element is already selected, unselect it.
-      if (this.selected === event.currentTarget.dataset.url) {
-        this.selected = null;
-        this.$emit("update:selected", this.current);
-        return;
-      }
+  // In 300 milliseconds, we shall reset the count.
+  setTimeout(() => {
+    touches.value.count = 0;
+  }, 300);
 
-      // Otherwise select the element.
-      this.selected = event.currentTarget.dataset.url;
-      this.$emit("update:selected", this.selected);
-    },
-    createDir: async function () {
-      this.showHover({
-        prompt: "newDir",
-        action: null,
-        confirm: (url) => {
-          const paths = url.split("/");
-          this.items.push({
-            name: paths[paths.length - 2],
-            url: url,
-          });
-        },
-        props: {
-          redirect: false,
-          base: this.current === this.$route.path ? null : this.current,
-        },
+  // If the element the user is touching
+  // is different from the last one he touched,
+  // reset the count.
+  if (touches.value.id !== url) {
+    touches.value.id = url!;
+    touches.value.count = 1;
+    return;
+  }
+
+  touches.value.count++;
+
+  // If there is more than one touch already,
+  // open the next screen.
+  if (touches.value.count > 1) {
+    next(event);
+  }
+};
+
+const itemClick = (event: Event) => {
+  if (authStore.user?.singleClick) next(event);
+  else select(event);
+};
+
+const select = (event: Event) => {
+  const url = (event.currentTarget as HTMLElement).dataset.url;
+  // If the element is already selected, unselect it.
+  if (selected.value === url) {
+    selected.value = null;
+    emit("update:selected", current.value);
+    return;
+  }
+
+  // Otherwise select the element.
+  selected.value = url!;
+  emit("update:selected", selected.value);
+};
+
+const createDir = () => {
+  layoutStore.showHover({
+    prompt: "newDir",
+    action: undefined,
+    confirm: (url: string) => {
+      const paths = url.split("/");
+      items.value.push({
+        name: paths[paths.length - 2],
+        url: url,
       });
     },
-  },
+    props: {
+      redirect: false,
+      base: current.value === route.path ? null : current.value,
+    },
+  });
 };
+
+onMounted(() => {
+  if (fileStore.req) {
+    fillOptions(fileStore.req);
+  }
+});
+
+onUnmounted(() => {
+  abortOngoingNext();
+});
+
+defineExpose({ createDir });
 </script>

@@ -56,11 +56,18 @@ vi.mock("@/api", () => ({
   },
 }));
 
+const mockRoute = { path: "/files/test-folder/" };
+
+vi.mock("vue-router", () => ({
+  useRoute: () => mockRoute,
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
 import Info from "../Info.vue";
 
 function createI18nPlugin() {
   return createI18n({
-    legacy: true,
+    legacy: false,
     locale: "en",
     messages: {
       en: {
@@ -117,6 +124,9 @@ function mountInfo(opts: MountOptions = {}) {
     showError = vi.fn(),
   } = opts;
 
+  // Update the mock route for useRoute()
+  mockRoute.path = route.path;
+
   const pinia = createPinia();
   setActivePinia(pinia);
 
@@ -132,9 +142,6 @@ function mountInfo(opts: MountOptions = {}) {
         plugins: [pinia, i18n],
         provide: {
           $showError: showError,
-        },
-        mocks: {
-          $route: route,
         },
       },
     }),

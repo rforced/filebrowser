@@ -1,3 +1,8 @@
+interface ImageResolution {
+  width: number;
+  height: number;
+}
+
 interface ResourceBase {
   path: string;
   name: string;
@@ -9,6 +14,7 @@ interface ResourceBase {
   isSymlink: boolean;
   type: ResourceType;
   url: string;
+  resolution?: ImageResolution;
 }
 
 interface Resource extends ResourceBase {
