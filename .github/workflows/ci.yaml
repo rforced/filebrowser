@@ -74,7 +74,7 @@ jobs:
           version: "latest"
 
   test:
-    name: Test
+    name: Test Backend
     runs-on: ubuntu-latest
     steps:
       - uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
