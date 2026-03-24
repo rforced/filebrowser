@@ -10,6 +10,7 @@ import (
 
 	recaptcha "cloud.google.com/go/recaptchaenterprise/v2/apiv1"
 	recaptchapb "cloud.google.com/go/recaptchaenterprise/v2/apiv1/recaptchaenterprisepb"
+	"google.golang.org/api/option"
 
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/users"
@@ -114,7 +115,7 @@ func (r *ReCaptcha) Ok(token string) (bool, error) {
 
 	assessor := r.Assessor
 	if assessor == nil {
-		client, err := recaptcha.NewClient(ctx)
+		client, err := recaptcha.NewClient(ctx, option.WithAPIKey(r.Secret))
 		if err != nil {
 			return false, fmt.Errorf("error creating reCAPTCHA client: %w", err)
 		}
