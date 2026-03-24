@@ -15,6 +15,10 @@ import (
 	"github.com/rforced/filebrowser/v2/users"
 )
 
+type Assessor interface {
+	CreateAssessment(ctx context.Context, req *recaptchapb.CreateAssessmentRequest) (*recaptchapb.Assessment, error)
+}
+
 // MethodJSONAuth is used to identify json auth.
 const MethodJSONAuth settings.AuthMethod = "json"
 
@@ -88,17 +92,35 @@ type ReCaptcha struct {
 	Secret           string   `json:"secret"`
 	ProjectID        string   `json:"project_id"`
 	AllowedHostnames []string `json:"allowed_hostnames,omitempty"`
+	Assessor         Assessor `json:"-" yaml:"-"`
+}
+
+// gcloudAssessor wraps the real Google Cloud reCAPTCHA Enterprise client.
+type gcloudAssessor struct {
+	client *recaptcha.Client
+}
+
+func (g *gcloudAssessor) CreateAssessment(ctx context.Context, req *recaptchapb.CreateAssessmentRequest) (*recaptchapb.Assessment, error) {
+	return g.client.CreateAssessment(ctx, req)
+}
+
+func (g *gcloudAssessor) Close() error {
+	return g.client.Close()
 }
 
 // Ok checks if a reCAPTCHA Enterprise token is valid by creating an assessment.
 func (r *ReCaptcha) Ok(token string) (bool, error) {
 	ctx := context.Background()
 
-	client, err := recaptcha.NewClient(ctx)
-	if err != nil {
-		return false, fmt.Errorf("error creating reCAPTCHA client: %w", err)
+	assessor := r.Assessor
+	if assessor == nil {
+		client, err := recaptcha.NewClient(ctx)
+		if err != nil {
+			return false, fmt.Errorf("error creating reCAPTCHA client: %w", err)
+		}
+		defer client.Close()
+		assessor = &gcloudAssessor{client: client}
 	}
-	defer client.Close()
 
 	event := &recaptchapb.Event{
 		Token:   token,
@@ -112,7 +134,7 @@ func (r *ReCaptcha) Ok(token string) (bool, error) {
 		Parent: fmt.Sprintf("projects/%s", r.ProjectID),
 	}
 
-	response, err := client.CreateAssessment(ctx, request)
+	response, err := assessor.CreateAssessment(ctx, request)
 	if err != nil {
 		return false, fmt.Errorf("error calling CreateAssessment: %w", err)
 	}
