@@ -21,18 +21,19 @@
       <template v-if="dir && fileStore.selected.length <= 1">
         <p>
           <strong>{{ t("prompts.size") }}:</strong>
-          <code v-if="!folderSizeCalculated">
-            <a
-              @click="calculateDirSize"
-              @keypress.enter="calculateDirSize"
-              tabindex="2"
-              >{{
-                calculatingSize
-                  ? t("prompts.calculating")
-                  : t("prompts.calculateSize")
-              }}</a
-            >
-          </code>
+          <a
+            v-if="!folderSizeCalculated"
+            class="action-link"
+            @click="calculateDirSize"
+            @keypress.enter="calculateDirSize"
+            tabindex="2"
+          >
+            {{
+              calculatingSize
+                ? t("prompts.calculating")
+                : t("prompts.calculateSize")
+            }}
+          </a>
           <span v-else>{{ folderSize }}</span>
         </p>
         <p v-if="folderSizeCalculated">
@@ -65,47 +66,43 @@
 
       <template v-if="!dir">
         <p>
-          <strong>MD5: </strong
-          ><code
-            ><a
-              @click="checksum($event, 'md5')"
-              @keypress.enter="checksum($event, 'md5')"
-              tabindex="2"
-              >{{ t("prompts.show") }}</a
-            ></code
+          <strong>MD5:</strong>
+          <a
+            class="action-link"
+            @click="checksum($event, 'md5')"
+            @keypress.enter="checksum($event, 'md5')"
+            tabindex="2"
+            >{{ t("prompts.show") }}</a
           >
         </p>
         <p>
-          <strong>SHA1: </strong
-          ><code
-            ><a
-              @click="checksum($event, 'sha1')"
-              @keypress.enter="checksum($event, 'sha1')"
-              tabindex="3"
-              >{{ t("prompts.show") }}</a
-            ></code
+          <strong>SHA1:</strong>
+          <a
+            class="action-link"
+            @click="checksum($event, 'sha1')"
+            @keypress.enter="checksum($event, 'sha1')"
+            tabindex="3"
+            >{{ t("prompts.show") }}</a
           >
         </p>
         <p>
-          <strong>SHA256: </strong
-          ><code
-            ><a
-              @click="checksum($event, 'sha256')"
-              @keypress.enter="checksum($event, 'sha256')"
-              tabindex="4"
-              >{{ t("prompts.show") }}</a
-            ></code
+          <strong>SHA256:</strong>
+          <a
+            class="action-link"
+            @click="checksum($event, 'sha256')"
+            @keypress.enter="checksum($event, 'sha256')"
+            tabindex="4"
+            >{{ t("prompts.show") }}</a
           >
         </p>
         <p>
-          <strong>SHA512: </strong
-          ><code
-            ><a
-              @click="checksum($event, 'sha512')"
-              @keypress.enter="checksum($event, 'sha512')"
-              tabindex="5"
-              >{{ t("prompts.show") }}</a
-            ></code
+          <strong>SHA512:</strong>
+          <a
+            class="action-link"
+            @click="checksum($event, 'sha512')"
+            @keypress.enter="checksum($event, 'sha512')"
+            tabindex="5"
+            >{{ t("prompts.show") }}</a
           >
         </p>
       </template>
@@ -251,3 +248,15 @@ const checksum = async (event: Event, algo: ChecksumAlg) => {
   }
 };
 </script>
+
+<style scoped>
+.action-link {
+  cursor: pointer;
+  text-decoration: underline;
+  color: var(--blue);
+}
+
+.action-link:hover {
+  opacity: 0.8;
+}
+</style>

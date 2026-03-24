@@ -225,8 +225,8 @@ func (i *FileInfo) DirSize() (*DirSizeInfo, error) {
 			result.NumDirs++
 		} else {
 			result.NumFiles++
-			result.Size += info.Size()
 		}
+		result.Size += info.Size()
 		return nil
 	})
 

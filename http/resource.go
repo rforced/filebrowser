@@ -37,6 +37,14 @@ var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 	}
 
 	encoding := r.Header.Get("X-Encoding")
+	if r.URL.Query().Get("dirsize") == "true" {
+		dirInfo, err := file.DirSize()
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+		return renderJSON(w, r, dirInfo)
+	}
+
 	if file.IsDir {
 		file.Sorting = d.user.Sorting
 		file.ApplySort()
@@ -76,14 +84,6 @@ var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 
 		// do not waste bandwidth if we just want the checksum
 		file.Content = ""
-	}
-
-	if r.URL.Query().Get("dirsize") == "true" {
-		dirInfo, err := file.DirSize()
-		if err != nil {
-			return http.StatusInternalServerError, err
-		}
-		return renderJSON(w, r, dirInfo)
 	}
 
 	return renderJSON(w, r, file)
