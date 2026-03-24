@@ -122,6 +122,7 @@
     "username": "Username",
     "usernameTaken": "Username already taken",
     "wrongCredentials": "Wrong credentials",
+    "captchaFailed": "Security verification failed. Please try again or contact support if this issue persists.",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
       "inactivity": "You have been logged out due to inactivity."

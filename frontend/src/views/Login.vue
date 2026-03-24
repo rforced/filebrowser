@@ -53,7 +53,7 @@ import {
   recaptchaKey,
   signup,
 } from "@/utils/constants";
-import { inject, ref } from "vue";
+import { inject, ref, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -74,6 +74,31 @@ const $showError = inject<IToastError>("$showError")!;
 
 const reason = route.query["logout-reason"] ?? null;
 
+// Dynamically load reCAPTCHA Enterprise script only on the login page
+let recaptchaScript: HTMLScriptElement | null = null;
+
+onMounted(() => {
+  if (recaptcha && recaptchaKey) {
+    recaptchaScript = document.createElement("script");
+    recaptchaScript.src =
+      "https://www.google.com/recaptcha/enterprise.js?render=" + recaptchaKey;
+    document.head.appendChild(recaptchaScript);
+  }
+});
+
+onBeforeUnmount(() => {
+  // Remove the reCAPTCHA script tag
+  if (recaptchaScript) {
+    recaptchaScript.remove();
+    recaptchaScript = null;
+  }
+  // Remove the reCAPTCHA badge injected by Google
+  const badge = document.querySelector(".grecaptcha-badge");
+  if (badge) {
+    badge.remove();
+  }
+});
+
 const submit = async (event: Event) => {
   event.preventDefault();
   event.stopPropagation();
@@ -83,6 +108,26 @@ const submit = async (event: Event) => {
   let captcha = "";
   if (recaptcha) {
     try {
+      // Wait for the reCAPTCHA Enterprise script to be ready
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(
+          () => reject(new Error("reCAPTCHA script load timeout")),
+          10000
+        );
+        const check = () => {
+          if (
+            typeof window.grecaptcha !== "undefined" &&
+            typeof window.grecaptcha.enterprise !== "undefined"
+          ) {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            setTimeout(check, 100);
+          }
+        };
+        check();
+      });
+
       captcha = await window.grecaptcha.enterprise.execute(recaptchaKey, {
         action: "login",
       });
@@ -112,9 +157,10 @@ const submit = async (event: Event) => {
     await auth.login(username.value, password.value, captcha);
     router.push({ path: redirect });
   } catch (e: any) {
-    // console.error(e);
     if (e instanceof StatusError) {
-      if (e.status === 409) {
+      if (e.status === 429) {
+        error.value = t("login.captchaFailed");
+      } else if (e.status === 409) {
         error.value = t("login.usernameTaken");
       } else if (e.status === 403) {
         error.value = t("login.wrongCredentials");

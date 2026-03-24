@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"slices"
@@ -32,8 +34,9 @@ type assessmentResponse struct {
 // assessmentRequest mirrors the CreateAssessment REST request body.
 type assessmentRequest struct {
 	Event struct {
-		Token   string `json:"token"`
-		SiteKey string `json:"siteKey"`
+		Token          string `json:"token"`
+		SiteKey        string `json:"siteKey"`
+		ExpectedAction string `json:"expectedAction"`
 	} `json:"event"`
 }
 
@@ -44,6 +47,9 @@ type Assessor interface {
 
 // MethodJSONAuth is used to identify json auth.
 const MethodJSONAuth settings.AuthMethod = "json"
+
+// ErrCaptchaFailed is returned when the reCAPTCHA verification fails.
+var ErrCaptchaFailed = errors.New("captcha verification failed")
 
 // dummyHash is used to prevent user enumeration timing attacks.
 // It MUST be a valid bcrypt hash.
@@ -82,7 +88,7 @@ func (a JSONAuth) Auth(r *http.Request, usr users.Store, _ *settings.Settings, s
 		}
 
 		if !ok {
-			return nil, os.ErrPermission
+			return nil, ErrCaptchaFailed
 		}
 	}
 
@@ -175,34 +181,47 @@ func (r *ReCaptcha) Ok(token string) (bool, error) {
 	req := &assessmentRequest{}
 	req.Event.Token = token
 	req.Event.SiteKey = r.Key
+	req.Event.ExpectedAction = "login"
 
 	response, err := assessor.CreateAssessment(ctx, r.ProjectID, req)
 	if err != nil {
+		log.Printf("[reCAPTCHA] CreateAssessment error: %v", err)
 		return false, fmt.Errorf("error calling CreateAssessment: %w", err)
 	}
 
+	log.Printf("[reCAPTCHA] Assessment result: valid=%v action=%q score=%.1f hostname=%q",
+		response.TokenProperties.Valid,
+		response.TokenProperties.Action,
+		response.RiskAnalysis.Score,
+		response.TokenProperties.Hostname,
+	)
+
 	// Check if the token is valid.
 	if !response.TokenProperties.Valid {
+		log.Printf("[reCAPTCHA] Token invalid, reason: %s", response.TokenProperties.InvalidReason)
 		return false, nil
 	}
 
 	// Check if the expected action was executed.
 	if response.TokenProperties.Action != "login" {
+		log.Printf("[reCAPTCHA] Action mismatch: got %q, want %q", response.TokenProperties.Action, "login")
 		return false, nil
 	}
 
-	// Score must be above threshold (0.5 recommended by Google)
+	// Score must be above the threshold (0.5 recommended by Google)
 	if response.RiskAnalysis.Score < 0.5 {
+		log.Printf("[reCAPTCHA] Score %.1f below threshold 0.5", response.RiskAnalysis.Score)
 		return false, nil
 	}
 
 	// When domain validation is disabled in the reCAPTCHA console (e.g. for
 	// IP-only deployments), anyone who obtains the site key can generate tokens
 	// from any origin. Google recommends checking the hostname returned in the
-	// response against an explicit allow-list to compensate.
+	// response against an explicit allowlist to compensate.
 	if len(r.AllowedHostnames) > 0 {
 		hostname := response.TokenProperties.Hostname
 		if !slices.Contains(r.AllowedHostnames, hostname) {
+			log.Printf("[reCAPTCHA] Hostname %q not in allowed list %v", hostname, r.AllowedHostnames)
 			return false, nil
 		}
 	}

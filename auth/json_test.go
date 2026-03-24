@@ -169,6 +169,9 @@ func TestReCaptchaOkRequestFields(t *testing.T) {
 	if capturedReq.Event.SiteKey != "my-site-key" {
 		t.Errorf("SiteKey = %q, want %q", capturedReq.Event.SiteKey, "my-site-key")
 	}
+	if capturedReq.Event.ExpectedAction != "login" {
+		t.Errorf("ExpectedAction = %q, want %q", capturedReq.Event.ExpectedAction, "login")
+	}
 }
 
 // assessorFunc adapts a function to the Assessor interface.

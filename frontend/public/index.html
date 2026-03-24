@@ -47,12 +47,6 @@
       // We can assign JSON directly
       window.FileBrowser = [{[ .Json ]}];
 
-      // Dynamically inject ReCaptcha Enterprise script if enabled
-      if (window.FileBrowser.ReCaptcha && window.FileBrowser.ReCaptchaKey) {
-        var rs = document.createElement('script');
-        rs.src = 'https://www.google.com/recaptcha/enterprise.js?render=' + window.FileBrowser.ReCaptchaKey;
-        document.head.appendChild(rs);
-      }
 
       // Dynamically inject custom CSS if enabled
       if (window.FileBrowser.CSS) {
