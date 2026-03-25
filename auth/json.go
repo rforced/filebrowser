@@ -171,6 +171,11 @@ func (a *restAssessor) CreateAssessment(_ context.Context, projectID string, req
 
 // Ok checks if a reCAPTCHA Enterprise token is valid by creating an assessment.
 func (r *ReCaptcha) Ok(token string) (bool, error) {
+	if token == "" {
+		log.Printf("[reCAPTCHA] Empty token received, rejecting")
+		return false, nil
+	}
+
 	ctx := context.Background()
 
 	assessor := r.Assessor
