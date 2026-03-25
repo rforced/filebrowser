@@ -6,7 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
+
+	"github.com/tomasen/realip"
 
 	fbAuth "github.com/rforced/filebrowser/v2/auth"
 	fberrors "github.com/rforced/filebrowser/v2/errors"
@@ -15,7 +18,43 @@ import (
 
 const (
 	DefaultTokenExpirationTime = time.Hour * 2
+	loginRateLimit             = 10
+	loginRateWindow            = time.Minute
 )
+
+type loginAttempts struct {
+	mu    sync.Mutex
+	times []time.Time
+}
+
+var loginRateLimiter sync.Map // map[string]*loginAttempts
+
+// checkLoginRateLimit returns true if the IP has exceeded the login rate limit.
+func checkLoginRateLimit(ip string) bool {
+	now := time.Now()
+	val, _ := loginRateLimiter.LoadOrStore(ip, &loginAttempts{})
+	attempts := val.(*loginAttempts)
+
+	attempts.mu.Lock()
+	defer attempts.mu.Unlock()
+
+	// Remove attempts outside the rate window
+	cutoff := now.Add(-loginRateWindow)
+	valid := attempts.times[:0]
+	for _, t := range attempts.times {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+	attempts.times = valid
+
+	if len(attempts.times) >= loginRateLimit {
+		return true
+	}
+
+	attempts.times = append(attempts.times, now)
+	return false
+}
 
 type userInfo struct {
 	ID                    uint              `json:"id"`
@@ -98,6 +137,14 @@ func withAdmin(fn handleFunc) handleFunc {
 
 func loginHandler(tokenExpireTime time.Duration) handleFunc {
 	return func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+		// Check rate limit before any auth or recaptcha logic
+		clientIP := realip.FromRequest(r)
+		if checkLoginRateLimit(clientIP) {
+			log.Printf("login rate limit exceeded for IP %s", clientIP)
+			w.Header().Set("Retry-After", "60")
+			return http.StatusTooManyRequests, nil
+		}
+
 		auther, err := d.store.Auth.Get(d.settings.AuthMethod)
 		if err != nil {
 			return http.StatusInternalServerError, err

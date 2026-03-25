@@ -124,7 +124,9 @@
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
       "inactivity": "You have been logged out due to inactivity."
-    }
+    },
+    "captchaFailed": "安全驗證失敗。請重試，如果問題持續存在，請聯繫支援。",
+    "rateLimited": "登入嘗試次數過多。請在一分鐘後重試。"
   },
   "permanent": "永久",
   "prompts": {

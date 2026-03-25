@@ -124,7 +124,9 @@
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
       "inactivity": "You have been logged out due to inactivity."
-    }
+    },
+    "captchaFailed": "Verifica di sicurezza non riuscita. Riprova o contatta l'assistenza se il problema persiste.",
+    "rateLimited": "Troppi tentativi di accesso. Riprova dopo un minuto."
   },
   "permanent": "Permanente",
   "prompts": {

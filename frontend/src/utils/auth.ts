@@ -73,10 +73,14 @@ export async function login(
   if (res.status === 200) {
     await saveToken(body);
   } else {
-    throw new StatusError(
+    const err = new StatusError(
       body || `${res.status} ${res.statusText}`,
       res.status
     );
+    if (res.headers.get("Retry-After")) {
+      err.retryAfter = parseInt(res.headers.get("Retry-After")!, 10);
+    }
+    throw err;
   }
 }
 

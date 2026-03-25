@@ -4,6 +4,7 @@ import { baseURL } from "@/utils/constants";
 import { encodePath } from "@/utils/url";
 
 export class StatusError extends Error {
+  retryAfter?: number;
   constructor(
     message: any,
     public status?: number,

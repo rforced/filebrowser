@@ -124,7 +124,9 @@
     "passwordTooShort": "Passwort muss mindestens {min} Zeichen lang sein",
     "logout_reasons": {
       "inactivity": "Du wurdest wegen Inaktivität abgemeldet."
-    }
+    },
+    "captchaFailed": "Sicherheitsüberprüfung fehlgeschlagen. Bitte versuchen Sie es erneut oder kontaktieren Sie den Support, wenn das Problem weiterhin besteht.",
+    "rateLimited": "Zu viele Anmeldeversuche. Bitte versuchen Sie es nach einer Minute erneut."
   },
   "permanent": "Permanent",
   "prompts": {

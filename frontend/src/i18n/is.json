@@ -124,7 +124,9 @@
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
       "inactivity": "You have been logged out due to inactivity."
-    }
+    },
+    "captchaFailed": "Öryggisstaðfesting mistókst. Vinsamlegast reyndu aftur eða hafðu samband við þjónustuver ef vandamálið er viðvarandi.",
+    "rateLimited": "Of margar innskráningartilraunir. Vinsamlegast reyndu aftur eftir eina mínútu."
   },
   "permanent": "Varanlegt",
   "prompts": {

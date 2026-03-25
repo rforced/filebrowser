@@ -124,7 +124,9 @@
     "passwordTooShort": "A palavra-passe tem de ter pelo menos {min} caracteres",
     "logout_reasons": {
       "inactivity": "Foi terminada a sessão por inactividade."
-    }
+    },
+    "captchaFailed": "A verificação de segurança falhou. Por favor, tente novamente ou contacte o suporte se o problema persistir.",
+    "rateLimited": "Demasiadas tentativas de início de sessão. Por favor, tente novamente após um minuto."
   },
   "permanent": "Permanente",
   "prompts": {

@@ -124,7 +124,9 @@
     "passwordTooShort": "密码必须至少包含 {min} 个字符",
     "logout_reasons": {
       "inactivity": "由于未活动，您已登出。"
-    }
+    },
+    "captchaFailed": "安全验证失败。请重试，如果问题持续存在，请联系支持。",
+    "rateLimited": "登录尝试次数过多。请在一分钟后重试。"
   },
   "permanent": "永久",
   "prompts": {

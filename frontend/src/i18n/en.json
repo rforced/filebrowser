@@ -123,6 +123,7 @@
     "usernameTaken": "Username already taken",
     "wrongCredentials": "Wrong credentials",
     "captchaFailed": "Security verification failed. Please try again or contact support if this issue persists.",
+    "rateLimited": "Too many login attempts. Please try again after one minute.",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
       "inactivity": "You have been logged out due to inactivity."

@@ -124,7 +124,9 @@
     "passwordTooShort": "Wachtwoord moet minstens {min} tekens bevatten",
     "logout_reasons": {
       "inactivity": "U bent uitgelogd vanwege inactiviteit."
-    }
+    },
+    "captchaFailed": "Beveiligingsverificatie mislukt. Probeer het opnieuw of neem contact op met ondersteuning als dit probleem aanhoudt.",
+    "rateLimited": "Te veel inlogpogingen. Probeer het opnieuw na één minuut."
   },
   "permanent": "Permanent",
   "prompts": {

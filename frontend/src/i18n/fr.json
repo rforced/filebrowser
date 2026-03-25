@@ -124,7 +124,9 @@
     "passwordTooShort": "Le mot de passe doit contenir au moins {min} caractères",
     "logout_reasons": {
       "inactivity": "Vous avez été déconnecté(e) en raison d'une inactivité prolongée."
-    }
+    },
+    "captchaFailed": "La vérification de sécurité a échoué. Veuillez réessayer ou contacter le support si le problème persiste.",
+    "rateLimited": "Trop de tentatives de connexion. Veuillez réessayer après une minute."
   },
   "permanent": "Permanent",
   "prompts": {

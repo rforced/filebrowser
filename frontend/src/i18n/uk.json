@@ -124,7 +124,9 @@
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
       "inactivity": "You have been logged out due to inactivity."
-    }
+    },
+    "captchaFailed": "Перевірка безпеки не вдалася. Будь ласка, спробуйте ще раз або зверніться до служби підтримки, якщо проблема не зникає.",
+    "rateLimited": "Забагато спроб входу. Будь ласка, спробуйте ще раз через одну хвилину."
   },
   "permanent": "Постійний",
   "prompts": {

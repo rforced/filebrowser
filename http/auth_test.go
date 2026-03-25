@@ -435,3 +435,98 @@ func TestUserInfoFrom(t *testing.T) {
 		t.Errorf("Commands length = %d, want 2", len(info.Commands))
 	}
 }
+
+func TestCheckLoginRateLimit(t *testing.T) {
+	// Use a unique IP to avoid interference from other tests
+	ip := "test-ratelimit-192.0.2.1"
+
+	// Clean up any existing state for this IP
+	loginRateLimiter.Delete(ip)
+
+	// First 10 attempts should be allowed
+	for i := range 10 {
+		if checkLoginRateLimit(ip) {
+			t.Fatalf("attempt %d should not be rate limited", i+1)
+		}
+	}
+
+	// 11th attempt should be rate limited
+	if !checkLoginRateLimit(ip) {
+		t.Error("attempt 11 should be rate limited")
+	}
+}
+
+func TestLoginHandler_RateLimited(t *testing.T) {
+	t.Parallel()
+	env := setupTestStorage(t)
+
+	handler := handle(loginHandler(2*time.Hour), "", env.storage, env.server)
+
+	// Use a unique X-Forwarded-For IP for this test
+	testIP := "198.51.100.1"
+	loginRateLimiter.Delete(testIP)
+
+	// Exhaust the rate limit with 10 requests
+	for i := range 10 {
+		body := `{"username":"testuser","password":"wrongpassword"}`
+		r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-Forwarded-For", testIP)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, r)
+
+		if recorder.Code == http.StatusTooManyRequests {
+			t.Fatalf("request %d should not be rate limited yet", i+1)
+		}
+	}
+
+	// 11th request should be rate limited
+	body := `{"username":"testuser","password":"wrongpassword"}`
+	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-Forwarded-For", testIP)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, r)
+
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want %d", recorder.Code, http.StatusTooManyRequests)
+	}
+
+	retryAfter := recorder.Header().Get("Retry-After")
+	if retryAfter != "60" {
+		t.Errorf("Retry-After = %q, want %q", retryAfter, "60")
+	}
+}
+
+func TestLoginHandler_RateLimitCheckedBeforeAuth(t *testing.T) {
+	t.Parallel()
+	env := setupTestStorage(t)
+
+	handler := handle(loginHandler(2*time.Hour), "", env.storage, env.server)
+
+	// Use a unique IP
+	testIP := "198.51.100.2"
+	loginRateLimiter.Delete(testIP)
+
+	// Exhaust rate limit
+	for range 10 {
+		body := `{"username":"testuser","password":"S3cur3P@ssw0rd!xyz"}`
+		r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-Forwarded-For", testIP)
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, r)
+	}
+
+	// Even with valid credentials, should be rate limited
+	body := `{"username":"testuser","password":"S3cur3P@ssw0rd!xyz"}`
+	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-Forwarded-For", testIP)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, r)
+
+	if recorder.Code != http.StatusTooManyRequests {
+		t.Errorf("status = %d, want %d (rate limit should block even valid credentials)", recorder.Code, http.StatusTooManyRequests)
+	}
+}

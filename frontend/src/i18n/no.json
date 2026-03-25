@@ -124,7 +124,9 @@
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
       "inactivity": "Du har blitt logget ut på grunn av inaktivitet"
-    }
+    },
+    "captchaFailed": "Sikkerhetsverifisering mislyktes. Vennligst prøv igjen eller kontakt brukerstøtte hvis problemet vedvarer.",
+    "rateLimited": "For mange innloggingsforsøk. Vennligst prøv igjen etter ett minutt."
   },
   "permanent": "Permanent",
   "prompts": {

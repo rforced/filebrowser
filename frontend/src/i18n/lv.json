@@ -124,7 +124,9 @@
     "passwordTooShort": "Parolei jābūt vismaz {min} rakstzīmju garai",
     "logout_reasons": {
       "inactivity": "Jūs esat atteicies no sistēmas neaktivitātes dēļ."
-    }
+    },
+    "captchaFailed": "Drošības pārbaude neizdevās. Lūdzu, mēģiniet vēlreiz vai sazinieties ar atbalstu, ja problēma turpinās.",
+    "rateLimited": "Pārāk daudz pieteikšanās mēģinājumu. Lūdzu, mēģiniet vēlreiz pēc vienas minūtes."
   },
   "permanent": "Pastāvīgs",
   "prompts": {

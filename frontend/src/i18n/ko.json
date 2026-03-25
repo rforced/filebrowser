@@ -124,7 +124,9 @@
     "passwordTooShort": "비밀번호는 최소 {min}자 이상이어야 함",
     "logout_reasons": {
       "inactivity": "활동이 없어 로그아웃 되었습니다."
-    }
+    },
+    "captchaFailed": "보안 인증에 실패했습니다. 다시 시도하거나 문제가 지속되면 지원팀에 문의하세요.",
+    "rateLimited": "로그인 시도가 너무 많습니다. 1분 후에 다시 시도해 주세요."
   },
   "permanent": "영구",
   "prompts": {
