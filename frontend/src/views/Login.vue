@@ -34,6 +34,7 @@
         class="button button--block"
         type="submit"
         :value="createMode ? t('login.signup') : t('login.submit')"
+        :disabled="loading"
       />
 
       <p @click="toggleMode" v-if="signup">
@@ -63,6 +64,7 @@ const error = ref<string>("");
 const username = ref<string>("");
 const password = ref<string>("");
 const passwordConfirm = ref<string>("");
+const loading = ref<boolean>(false);
 
 const route = useRoute();
 const router = useRouter();
@@ -103,6 +105,9 @@ const submit = async (event: Event) => {
   event.preventDefault();
   event.stopPropagation();
 
+  loading.value = true;
+  error.value = "";
+
   const redirect = (route.query.redirect || "/files/") as string;
 
   let captcha = "";
@@ -133,11 +138,13 @@ const submit = async (event: Event) => {
       });
     } catch {
       error.value = t("login.wrongCredentials");
+      loading.value = false;
       return;
     }
 
     if (captcha === "") {
       error.value = t("login.wrongCredentials");
+      loading.value = false;
       return;
     }
   }
@@ -145,6 +152,7 @@ const submit = async (event: Event) => {
   if (createMode.value) {
     if (password.value !== passwordConfirm.value) {
       error.value = t("login.passwordsDontMatch");
+      loading.value = false;
       return;
     }
   }
@@ -157,8 +165,11 @@ const submit = async (event: Event) => {
     await auth.login(username.value, password.value, captcha);
     router.push({ path: redirect });
   } catch (e: any) {
+    loading.value = false;
     if (e instanceof StatusError) {
-      if (e.status === 429) {
+      if (e.status === 429 && e.retryAfter) {
+        error.value = t("login.rateLimited");
+      } else if (e.status === 429) {
         error.value = t("login.captchaFailed");
       } else if (e.status === 409) {
         error.value = t("login.usernameTaken");
