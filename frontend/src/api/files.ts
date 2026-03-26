@@ -289,7 +289,10 @@ export async function extract(
     body: JSON.stringify(options),
   });
 
-  if (!res.ok && !res.headers.get("Content-Type")?.includes("text/event-stream")) {
+  if (
+    !res.ok &&
+    !res.headers.get("Content-Type")?.includes("text/event-stream")
+  ) {
     const text = await res.text();
     throw new Error(text || `${res.status} ${res.statusText}`);
   }

@@ -985,9 +985,12 @@ const windowsResize = throttle(() => {
 const archiveExtensions = [
   ".zip",
   ".tar",
-  ".tar.gz", ".tgz",
-  ".tar.zst", ".tzst",
-  ".tar.lz4", ".tlz4",
+  ".tar.gz",
+  ".tgz",
+  ".tar.zst",
+  ".tzst",
+  ".tar.lz4",
+  ".tlz4",
   ".zst",
   ".lz4",
 ];
@@ -1002,7 +1005,15 @@ const archiveBaseName = (name: string): string => {
   for (const ext of [".tar.gz", ".tar.zst", ".tar.lz4"]) {
     if (lower.endsWith(ext)) return name.slice(0, -ext.length);
   }
-  for (const ext of [".tgz", ".tzst", ".tlz4", ".zip", ".tar", ".zst", ".lz4"]) {
+  for (const ext of [
+    ".tgz",
+    ".tzst",
+    ".tlz4",
+    ".zip",
+    ".tar",
+    ".zst",
+    ".lz4",
+  ]) {
     if (lower.endsWith(ext)) return name.slice(0, -ext.length);
   }
   return name;

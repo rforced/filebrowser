@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -24,7 +23,7 @@ func TestPublicShareHandlerAuthentication(t *testing.T) {
 	t.Parallel()
 
 	// Reset the share rate limiter so parallel test runs don't interfere.
-	shareRateLimiter = sync.Map{}
+	shareRateLimiter.Clear()
 
 	const passwordBcrypt = "$2y$10$TFAmdCbyd/mEZDe5fUeZJu.MaJQXRTwdqb/IQV.eTn6dWrF58gCSe"
 	testCases := map[string]struct {
@@ -109,12 +108,13 @@ func TestPublicShareHandlerAuthentication(t *testing.T) {
 				// Assign a unique remote address to each subtest to avoid
 				// hitting the share rate limiter across parallel tests.
 				c := testIPCounter.Add(1)
-				tc.req.RemoteAddr = fmt.Sprintf("10.0.0.%d:12345", c)
+				req := tc.req.Clone(t.Context())
+				req.RemoteAddr = fmt.Sprintf("10.0.0.%d:12345", c)
 
 				recorder := httptest.NewRecorder()
 				handler := handle(handler, "", storage, &settings.Server{})
 
-				handler.ServeHTTP(recorder, tc.req)
+				handler.ServeHTTP(recorder, req)
 				result := recorder.Result()
 				defer result.Body.Close()
 				if result.StatusCode != tc.expectedStatusCode {

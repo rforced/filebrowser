@@ -35,7 +35,9 @@
         </div>
         <p class="extract-status">
           {{ currentFile }}
-          <span v-if="fileCount > 0">({{ fileCount }} {{ t("prompts.extractFiles") }})</span>
+          <span v-if="fileCount > 0"
+            >({{ fileCount }} {{ t("prompts.extractFiles") }})</span
+          >
         </p>
       </div>
     </div>
@@ -119,10 +121,7 @@ const submit = async () => {
             (progress.current / progress.total) * 100
           );
         } else {
-          progressPercent.value = Math.min(
-            99,
-            progressPercent.value + 1
-          );
+          progressPercent.value = Math.min(99, progressPercent.value + 1);
         }
         if (progress.done && !progress.error) {
           progressPercent.value = 100;
@@ -135,7 +134,10 @@ const submit = async () => {
     layoutStore.closeHovers();
   } catch (e: any) {
     extracting.value = false;
-    if (e.message?.includes("409") || e.message?.includes("destination already exists")) {
+    if (
+      e.message?.includes("409") ||
+      e.message?.includes("destination already exists")
+    ) {
       if (confirm(t("prompts.extractOverwrite"))) {
         extracting.value = true;
         try {
@@ -154,10 +156,7 @@ const submit = async () => {
                   (progress.current / progress.total) * 100
                 );
               } else {
-                progressPercent.value = Math.min(
-                  99,
-                  progressPercent.value + 1
-                );
+                progressPercent.value = Math.min(99, progressPercent.value + 1);
               }
               if (progress.done && !progress.error) {
                 progressPercent.value = 100;
