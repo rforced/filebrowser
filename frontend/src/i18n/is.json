@@ -135,7 +135,7 @@
     "currentlyNavigating": "Núverandi staðsetning:",
     "deleteMessageMultiple": "Ertu viss um að þú viljir eyða {count} skjölum?",
     "deleteMessageSingle": "Ertu viss um að þú viljir eyða þessu skjali/möppu?",
-    "deleteMessageShare": "Are you sure you wish to delete this share({path})?",
+    "deleteMessageShare": "Are you sure you wish to delete this share?",
     "deleteUser": "Are you sure you want to delete this user?",
     "deleteTitle": "Eyða skjölum",
     "displayName": "Nafn: ",

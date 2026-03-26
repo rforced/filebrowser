@@ -135,7 +135,7 @@
     "currentlyNavigating": "A navegar em:",
     "deleteMessageMultiple": "Quer eliminar {count} ficheiro(s)?",
     "deleteMessageSingle": "Quer eliminar esta pasta/ficheiro?",
-    "deleteMessageShare": "Are you sure you wish to delete this share({path})?",
+    "deleteMessageShare": "Are you sure you wish to delete this share?",
     "deleteUser": "Are you sure you want to delete this user?",
     "deleteTitle": "Eliminar ficheiros",
     "displayName": "Nome:",
