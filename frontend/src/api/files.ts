@@ -280,7 +280,7 @@ export async function extract(
   url = removePrefix(url);
   const authStore = useAuthStore();
 
-  const res = await fetch(`${baseURL}/api/extract${url}`, {
+  const res = await globalThis.fetch(`${baseURL}/api/extract${url}`, {
     method: "POST",
     headers: {
       "X-Auth": authStore.jwt,

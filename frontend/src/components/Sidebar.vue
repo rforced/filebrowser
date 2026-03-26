@@ -114,7 +114,8 @@
     <p class="credits">
       <span>
         <a @click="help">{{ $t("sidebar.help") }}</a>
-        <span v-if="version"> ({{ version }})</span>
+        <br />
+        <span v-if="version"> {{ version }}</span>
       </span>
     </p>
   </nav>
