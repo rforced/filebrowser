@@ -15,7 +15,7 @@
           </tr>
 
           <tr v-for="link in links" :key="link.hash">
-            <td>{{ link.hash }}</td>
+            <td>{{ link.hash.substring(0, 5) }}...</td>
             <td>
               <template v-if="link.expire !== 0">{{
                 humanTime(link.expire)
