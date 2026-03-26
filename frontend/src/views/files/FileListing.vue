@@ -301,6 +301,12 @@
             @action="download"
             :counter="fileStore.selectedCount"
           />
+          <action
+            v-if="headerButtons.extract"
+            icon="unarchive"
+            :label="t('buttons.extract')"
+            @action="extractArchive"
+          />
           <action icon="info" :label="t('buttons.info')" show="info" />
         </context-menu>
 
@@ -472,6 +478,12 @@ const viewIcon = computed(() => {
     : icons[authStore.user.viewMode];
 });
 const headerButtons = computed(() => {
+  const selectedIsArchive =
+    fileStore.selectedCount === 1 &&
+    fileStore.req !== null &&
+    !fileStore.req.items[fileStore.selected[0]]?.isDir &&
+    isArchiveFile(fileStore.req.items[fileStore.selected[0]]?.name ?? "");
+
   return {
     upload: authStore.user?.perm.create,
     download: authStore.user?.perm.download,
@@ -484,6 +496,7 @@ const headerButtons = computed(() => {
       authStore.user?.perm.download,
     move: fileStore.selectedCount > 0 && authStore.user?.perm.rename,
     copy: fileStore.selectedCount > 0 && authStore.user?.perm.create,
+    extract: selectedIsArchive && authStore.user?.perm.create,
   };
 });
 
@@ -968,6 +981,44 @@ const windowsResize = throttle(() => {
   // Fill but not fit the window
   fillWindow();
 }, 100);
+
+const archiveExtensions = [
+  ".zip",
+  ".tar",
+  ".tar.gz", ".tgz",
+  ".tar.zst", ".tzst",
+  ".tar.lz4", ".tlz4",
+  ".zst",
+  ".lz4",
+];
+
+const isArchiveFile = (name: string): boolean => {
+  const lower = name.toLowerCase();
+  return archiveExtensions.some((ext) => lower.endsWith(ext));
+};
+
+const archiveBaseName = (name: string): string => {
+  const lower = name.toLowerCase();
+  for (const ext of [".tar.gz", ".tar.zst", ".tar.lz4"]) {
+    if (lower.endsWith(ext)) return name.slice(0, -ext.length);
+  }
+  for (const ext of [".tgz", ".tzst", ".tlz4", ".zip", ".tar", ".zst", ".lz4"]) {
+    if (lower.endsWith(ext)) return name.slice(0, -ext.length);
+  }
+  return name;
+};
+
+const extractArchive = () => {
+  if (fileStore.req === null || fileStore.selectedCount !== 1) return;
+  const item = fileStore.req.items[fileStore.selected[0]];
+  if (!item || item.isDir) return;
+
+  const destination = archiveBaseName(item.name);
+  layoutStore.showHover({
+    prompt: "extract",
+    props: { destination },
+  });
+};
 
 const download = () => {
   if (fileStore.req === null) return;

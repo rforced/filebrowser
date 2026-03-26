@@ -48,6 +48,7 @@
     "stopSearch": "Stop searching",
     "saveChanges": "Save changes",
     "editAsText": "Edit as Text",
+    "extract": "Extract",
     "increaseFontSize": "Increase font size",
     "decreaseFontSize": "Decrease font size",
     "overrideAll": "Replace all files in destination folder",
@@ -183,7 +184,14 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Extract",
+    "extractMessage": "Choose the folder name to extract the archive into.",
+    "extractDestination": "Destination folder name",
+    "extractDeleteAfter": "Delete archive after extraction",
+    "extracting": "Extracting...",
+    "extractFiles": "files extracted",
+    "extractOverwrite": "The destination folder already exists. Do you want to overwrite it?"
   },
   "search": {
     "images": "Images",

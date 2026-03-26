@@ -247,6 +247,85 @@ export function getSubtitlesURL(file: ResourceItem) {
   return file.subtitles?.map((d) => createURL("api/subtitle" + d, params));
 }
 
+export interface ExtractCheckResult {
+  archive: boolean;
+  destination?: string;
+}
+
+export async function extractCheck(url: string): Promise<ExtractCheckResult> {
+  url = removePrefix(url);
+  const res = await fetchURL(`/api/extract${url}`, {});
+  return (await res.json()) as ExtractCheckResult;
+}
+
+export interface ExtractOptions {
+  destination?: string;
+  overwrite?: boolean;
+  deleteAfter?: boolean;
+}
+
+export interface ExtractProgress {
+  total: number;
+  current: number;
+  currentFile: string;
+  done: boolean;
+  error?: string;
+}
+
+export async function extract(
+  url: string,
+  options: ExtractOptions,
+  onProgress?: (progress: ExtractProgress) => void
+): Promise<void> {
+  url = removePrefix(url);
+  const authStore = useAuthStore();
+
+  const res = await fetch(`${baseURL}/api/extract${url}`, {
+    method: "POST",
+    headers: {
+      "X-Auth": authStore.jwt,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(options),
+  });
+
+  if (!res.ok && !res.headers.get("Content-Type")?.includes("text/event-stream")) {
+    const text = await res.text();
+    throw new Error(text || `${res.status} ${res.statusText}`);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const dataLine = line.trim();
+      if (!dataLine.startsWith("data: ")) continue;
+      const json = dataLine.slice(6);
+      try {
+        const progress = JSON.parse(json) as ExtractProgress;
+        if (onProgress) onProgress(progress);
+        if (progress.error) {
+          throw new Error(progress.error);
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) continue;
+        throw e;
+      }
+    }
+  }
+}
+
 export async function usage(url: string, signal: AbortSignal) {
   url = removePrefix(url);
 
