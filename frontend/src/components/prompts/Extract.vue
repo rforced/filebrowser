@@ -13,6 +13,7 @@
         class="input input--block"
         type="text"
         v-model.trim="destination"
+        :placeholder="t('prompts.extractDestinationPlaceholder')"
         @keyup.enter="submit"
       />
 
@@ -57,7 +58,6 @@
         type="submit"
         :aria-label="t('prompts.extract')"
         :title="t('prompts.extract')"
-        :disabled="destination === ''"
       >
         {{ t("prompts.extract") }}
       </button>
@@ -98,7 +98,7 @@ const getFileUrl = (): string => {
 
 const submit = async () => {
   const fileUrl = getFileUrl();
-  if (!fileUrl || destination.value === "") return;
+  if (!fileUrl) return;
 
   extracting.value = true;
   progressPercent.value = 0;

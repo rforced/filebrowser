@@ -83,6 +83,22 @@ func archiveBaseName(name string) string {
 	return name
 }
 
+// resolveDestDir returns the absolute (within the virtual FS) destination
+// directory for an extraction request.
+// An empty destination means extract directly into srcDir (in-place).
+// A non-empty destination is treated as a single folder name appended to srcDir;
+// path traversal attempts are rejected with an error.
+func resolveDestDir(srcDir, destination string) (string, error) {
+	if destination == "" {
+		return srcDir, nil
+	}
+	destName := filepath.Base(filepath.Clean(destination))
+	if destName == "." || destName == ".." || destName == "/" {
+		return "", errors.New("invalid destination name")
+	}
+	return path.Join(srcDir, destName), nil
+}
+
 // extractCheckHandler is a GET handler that returns whether a file is an
 // extractable archive. The file path comes from the URL path.
 var extractCheckHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
@@ -147,24 +163,19 @@ var extractHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *da
 	}
 
 	// Determine the extraction destination directory.
+	// An empty destination means extract directly into the source directory.
 	srcDir := path.Dir(filePath)
-	destName := req.Destination
-	if destName == "" {
-		destName = archiveBaseName(srcInfo.Name())
+	destDir, err := resolveDestDir(srcDir, req.Destination)
+	if err != nil {
+		return http.StatusBadRequest, err
 	}
 
-	// Sanitize destination name - prevent path traversal.
-	destName = filepath.Base(filepath.Clean(destName))
-	if destName == "." || destName == ".." || destName == "/" {
-		return http.StatusBadRequest, errors.New("invalid destination name")
-	}
-
-	destDir := path.Join(srcDir, destName)
-
-	// Check if destination exists.
-	if _, err := d.user.Fs.Stat(destDir); err == nil {
-		if !req.Overwrite {
-			return http.StatusConflict, errors.New("destination already exists")
+	// Check if destination sub-directory exists (only when a name was given).
+	if req.Destination != "" {
+		if _, statErr := d.user.Fs.Stat(destDir); statErr == nil {
+			if !req.Overwrite {
+				return http.StatusConflict, errors.New("destination already exists")
+			}
 		}
 	}
 

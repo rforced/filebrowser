@@ -115,6 +115,7 @@
       <span>
         <a @click="help">{{ $t("sidebar.help") }}</a>
         <br />
+        <br />
         <span v-if="version"> {{ version }}</span>
       </span>
     </p>

@@ -6,6 +6,52 @@ import (
 	"testing"
 )
 
+func TestResolveDestDir(t *testing.T) {
+	tests := []struct {
+		name        string
+		srcDir      string
+		destination string
+		wantDir     string
+		wantErr     bool
+	}{
+		// Empty destination → extract in-place into srcDir.
+		{"empty destination", "/files/docs", "", "/files/docs", false},
+		{"empty destination root", "/", "", "/", false},
+
+		// Valid destination name → sub-directory of srcDir.
+		{"simple name", "/files/docs", "output", "/files/docs/output", false},
+		{"name with spaces", "/files/docs", "my folder", "/files/docs/my folder", false},
+
+		// filepath.Base strips leading path components, so ../evil → "evil" (accepted).
+		{"traversal stripped to name", "/files/docs", "../evil", "/files/docs/evil", false},
+		{"deep traversal stripped", "/files/docs", "../../etc/passwd", "/files/docs/passwd", false},
+
+		// Inputs whose Base collapses to "." or "/" → rejected.
+		{"dot destination", "/files/docs", ".", "", true},
+		{"slash destination", "/files/docs", "/", "", true},
+		{"double dot destination", "/files/docs", "..", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveDestDir(tt.srcDir, tt.destination)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("resolveDestDir(%q, %q) expected error, got %q", tt.srcDir, tt.destination, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("resolveDestDir(%q, %q) unexpected error: %v", tt.srcDir, tt.destination, err)
+				return
+			}
+			if got != tt.wantDir {
+				t.Errorf("resolveDestDir(%q, %q) = %q, want %q", tt.srcDir, tt.destination, got, tt.wantDir)
+			}
+		})
+	}
+}
+
 func TestIsArchiveFile(t *testing.T) {
 	tests := []struct {
 		name     string
