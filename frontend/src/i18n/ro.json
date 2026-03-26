@@ -135,7 +135,7 @@
     "currentlyNavigating": "Navigare curentă în:",
     "deleteMessageMultiple": "Ești sigur că vrei să ștergi aceste {count} fișier(e)?",
     "deleteMessageSingle": "Ești sigur că vrei să ștergi acest fișier/director?",
-    "deleteMessageShare": "Are you sure you wish to delete this share({path})?",
+    "deleteMessageShare": "Are you sure you wish to delete this share?",
     "deleteUser": "Are you sure you want to delete this user?",
     "deleteTitle": "Șterge fișiere",
     "displayName": "Nume afișat:",
