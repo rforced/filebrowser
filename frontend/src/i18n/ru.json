@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Извлечь",
+    "extractMessage": "Введите имя папки для извлечения или оставьте пустым, чтобы извлечь в текущую папку.",
+    "extractDestination": "Имя папки назначения (необязательно)",
+    "extractDeleteAfter": "Удалить архив после извлечения",
+    "extracting": "Извлечение...",
+    "extractFiles": "файлов извлечено",
+    "extractDestinationPlaceholder": "Оставьте пустым для извлечения здесь",
+    "extractOverwrite": "Папка назначения уже существует. Хотите перезаписать её?"
   },
   "search": {
     "images": "Изображения",

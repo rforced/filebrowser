@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Extraer",
+    "extractMessage": "Introduce un nombre de carpeta para extraer o déjalo en blanco para extraer en la carpeta actual.",
+    "extractDestination": "Nombre de la carpeta de destino (opcional)",
+    "extractDeleteAfter": "Eliminar archivo después de la extracción",
+    "extracting": "Extrayendo...",
+    "extractFiles": "archivos extraídos",
+    "extractDestinationPlaceholder": "Dejar en blanco para extraer aquí",
+    "extractOverwrite": "¿La carpeta de destino ya existe. ¿Deseas sobreescribirla?"
   },
   "search": {
     "images": "Imágenes",

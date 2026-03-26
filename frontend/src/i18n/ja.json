@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "展開",
+    "extractMessage": "展開先のフォルダ名を入力するか、現在のフォルダに展開する場合は空白のままにしてください。",
+    "extractDestination": "展開先フォルダ名（任意）",
+    "extractDeleteAfter": "展開後にアーカイブを削除する",
+    "extracting": "展開中...",
+    "extractFiles": "ファイルを展開しました",
+    "extractDestinationPlaceholder": "空白にするとここに展開します",
+    "extractOverwrite": "展開先フォルダはすでに存在します。上書きしますか？"
   },
   "search": {
     "images": "画像",

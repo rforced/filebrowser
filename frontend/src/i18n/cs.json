@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Rozbalit",
+    "extractMessage": "Zadejte název složky pro rozbalení nebo ponechte prázdné pro rozbalení do aktuální složky.",
+    "extractDestination": "Název cílové složky (volitelné)",
+    "extractDeleteAfter": "Smazat archiv po rozbalení",
+    "extracting": "Rozbalování...",
+    "extractFiles": "souborů rozbaleno",
+    "extractDestinationPlaceholder": "Ponechte prázdné pro rozbalení zde",
+    "extractOverwrite": "Cílová složka již existuje. Chcete ji přepsat?"
   },
   "search": {
     "images": "Obrázky",

@@ -181,7 +181,15 @@
     "skip": "Ignorar",
     "forbiddenError": "Erro de Proibido",
     "currentPassword": "A sua palavra-passe",
-    "currentPasswordMessage": "Insira a sua palavra-passe para validar esta acção."
+    "currentPasswordMessage": "Insira a sua palavra-passe para validar esta acção.",
+    "extract": "Extrair",
+    "extractMessage": "Introduza um nome de pasta para extrair ou deixe em branco para extrair na pasta atual.",
+    "extractDestination": "Nome da pasta de destino (opcional)",
+    "extractDeleteAfter": "Eliminar arquivo após a extração",
+    "extracting": "A extrair...",
+    "extractFiles": "ficheiros extraídos",
+    "extractDestinationPlaceholder": "Deixe em branco para extrair aqui",
+    "extractOverwrite": "A pasta de destino já existe. Pretende substituí-la?"
   },
   "search": {
     "images": "Imagens",

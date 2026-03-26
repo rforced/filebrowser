@@ -186,11 +186,12 @@
     "currentPassword": "Your password",
     "currentPasswordMessage": "Enter your password to validate this action.",
     "extract": "Extract",
-    "extractMessage": "Choose the folder name to extract the archive into.",
-    "extractDestination": "Destination folder name",
+    "extractMessage": "Enter a folder name to extract into, or leave blank to extract into the current folder.",
+    "extractDestination": "Destination folder name (optional)",
     "extractDeleteAfter": "Delete archive after extraction",
     "extracting": "Extracting...",
     "extractFiles": "files extracted",
+    "extractDestinationPlaceholder": "Leave blank to extract here",
     "extractOverwrite": "The destination folder already exists. Do you want to overwrite it?"
   },
   "search": {

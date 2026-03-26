@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "解壓縮",
+    "extractMessage": "輸入要解壓縮到的資料夾名稱，或留空以解壓縮到目前資料夾。",
+    "extractDestination": "目標資料夾名稱（選填）",
+    "extractDeleteAfter": "解壓縮後刪除壓縮檔",
+    "extracting": "正在解壓縮...",
+    "extractFiles": "個檔案已解壓縮",
+    "extractDestinationPlaceholder": "留空以在此處解壓縮",
+    "extractOverwrite": "目標資料夾已存在，是否覆蓋？"
   },
   "search": {
     "images": "影像",

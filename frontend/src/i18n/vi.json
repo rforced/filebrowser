@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Giải nén",
+    "extractMessage": "Nhập tên thư mục để giải nén vào, hoặc để trống để giải nén vào thư mục hiện tại.",
+    "extractDestination": "Tên thư mục đích (tùy chọn)",
+    "extractDeleteAfter": "Xóa tệp nén sau khi giải nén",
+    "extracting": "Đang giải nén...",
+    "extractFiles": "tệp đã giải nén",
+    "extractDestinationPlaceholder": "Để trống để giải nén ở đây",
+    "extractOverwrite": "Thư mục đích đã tồn tại. Bạn có muốn ghi đè không?"
   },
   "search": {
     "images": "Hình ảnh",

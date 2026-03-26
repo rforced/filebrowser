@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "استخراج",
+    "extractMessage": "أدخل اسم مجلد للاستخراج إليه، أو اتركه فارغاً للاستخراج في المجلد الحالي.",
+    "extractDestination": "اسم مجلد الوجهة (اختياري)",
+    "extractDeleteAfter": "حذف الأرشيف بعد الاستخراج",
+    "extracting": "جارٍ الاستخراج...",
+    "extractFiles": "ملفات مستخرجة",
+    "extractDestinationPlaceholder": "اتركه فارغاً للاستخراج هنا",
+    "extractOverwrite": "مجلد الوجهة موجود بالفعل. هل تريد الكتابة فوقه؟"
   },
   "search": {
     "images": "الصور",

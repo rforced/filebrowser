@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "解压",
+    "extractMessage": "输入要解压到的文件夹名称，或留空以解压到当前文件夹。",
+    "extractDestination": "目标文件夹名称（可选）",
+    "extractDeleteAfter": "解压后删除压缩包",
+    "extracting": "正在解压...",
+    "extractFiles": "个文件已解压",
+    "extractDestinationPlaceholder": "留空以在此处解压",
+    "extractOverwrite": "目标文件夹已存在，是否覆盖？"
   },
   "search": {
     "images": "图像",

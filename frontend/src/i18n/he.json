@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "חילוץ",
+    "extractMessage": "הזן שם תיקייה לחילוץ אליה, או השאר ריק כדי לחלץ לתיקייה הנוכחית.",
+    "extractDestination": "שם תיקיית היעד (אופציונלי)",
+    "extractDeleteAfter": "מחק ארכיון לאחר החילוץ",
+    "extracting": "מחלץ...",
+    "extractFiles": "קבצים חולצו",
+    "extractDestinationPlaceholder": "השאר ריק לחילוץ כאן",
+    "extractOverwrite": "תיקיית היעד כבר קיימת. האם ברצונך להחליפה?"
   },
   "search": {
     "images": "תמונות",

@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Extrage",
+    "extractMessage": "Introduceți un nume de folder pentru extragere sau lăsați gol pentru a extrage în folderul curent.",
+    "extractDestination": "Numele folderului de destinație (opțional)",
+    "extractDeleteAfter": "Șterge arhiva după extragere",
+    "extracting": "Se extrage...",
+    "extractFiles": "fișiere extrase",
+    "extractDestinationPlaceholder": "Lăsați gol pentru a extrage aici",
+    "extractOverwrite": "Folderul de destinație există deja. Doriți să îl suprascrieți?"
   },
   "search": {
     "images": "Imagini",

@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Izpakot",
+    "extractMessage": "Ievadiet mapes nosaukumu, kurā izpakot, vai atstājiet tukšu, lai izpakotu pašreizējā mapē.",
+    "extractDestination": "Galamērķa mapes nosaukums (neobligāts)",
+    "extractDeleteAfter": "Dzēst arhīvu pēc izpakošanas",
+    "extracting": "Izpako...",
+    "extractFiles": "faili izpakoti",
+    "extractDestinationPlaceholder": "Atstājiet tukšu, lai izpakotu šeit",
+    "extractOverwrite": "Galamērķa mape jau pastāv. Vai vēlaties to pārrakstīt?"
   },
   "search": {
     "images": "Attēli",

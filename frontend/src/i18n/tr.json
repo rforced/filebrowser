@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Çıkar",
+    "extractMessage": "Çıkarmak için bir klasör adı girin veya geçerli klasöre çıkarmak için boş bırakın.",
+    "extractDestination": "Hedef klasör adı (isteğe bağlı)",
+    "extractDeleteAfter": "Çıkarmadan sonra arşivi sil",
+    "extracting": "Çıkarılıyor...",
+    "extractFiles": "dosya çıkarıldı",
+    "extractDestinationPlaceholder": "Buraya çıkarmak için boş bırakın",
+    "extractOverwrite": "Hedef klasör zaten mevcut. Üzerine yazmak istiyor musunuz?"
   },
   "search": {
     "images": "Görseller",

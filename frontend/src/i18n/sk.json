@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Rozbaliť",
+    "extractMessage": "Zadajte názov priečinka na rozbalenie alebo nechajte prázdne na rozbalenie do aktuálneho priečinka.",
+    "extractDestination": "Názov cieľového priečinka (voliteľné)",
+    "extractDeleteAfter": "Odstrániť archív po rozbalení",
+    "extracting": "Rozbaľovanie...",
+    "extractFiles": "súborov rozbalených",
+    "extractDestinationPlaceholder": "Nechajte prázdne na rozbalenie tu",
+    "extractOverwrite": "Cieľový priečinok už existuje. Chcete ho prepísať?"
   },
   "search": {
     "images": "Obrázky",

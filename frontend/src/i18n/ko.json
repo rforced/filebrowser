@@ -181,7 +181,15 @@
     "skip": "건너뛰기",
     "forbiddenError": "권한 오류",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "압축 해제",
+    "extractMessage": "압축을 풀 폴더 이름을 입력하거나 현재 폴더에 압축을 풀려면 비워 두세요.",
+    "extractDestination": "대상 폴더 이름 (선택 사항)",
+    "extractDeleteAfter": "압축 해제 후 아카이브 삭제",
+    "extracting": "압축 해제 중...",
+    "extractFiles": "파일 압축 해제됨",
+    "extractDestinationPlaceholder": "여기에 압축 해제하려면 비워 두세요",
+    "extractOverwrite": "대상 폴더가 이미 존재합니다. 덮어쓰시겠습니까?"
   },
   "search": {
     "images": "이미지",

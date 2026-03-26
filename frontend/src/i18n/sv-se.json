@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Extrahera",
+    "extractMessage": "Ange ett mappnamn att extrahera till eller lämna tomt för att extrahera till den aktuella mappen.",
+    "extractDestination": "Namn på målmapp (valfritt)",
+    "extractDeleteAfter": "Ta bort arkiv efter extrahering",
+    "extracting": "Extraherar...",
+    "extractFiles": "filer extraherade",
+    "extractDestinationPlaceholder": "Lämna tomt för att extrahera här",
+    "extractOverwrite": "Målmappen finns redan. Vill du skriva över den?"
   },
   "search": {
     "images": "Bilder",

@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Þjappa út",
+    "extractMessage": "Sláðu inn nafn möppu til að þjappa út í, eða skildu eftir autt til að þjappa út í núverandi möppu.",
+    "extractDestination": "Nafn á viðtökumöppu (valfrjálst)",
+    "extractDeleteAfter": "Eyða skjalasafni eftir þjöppun",
+    "extracting": "Þjappar út...",
+    "extractFiles": "skrár þjappaðar út",
+    "extractDestinationPlaceholder": "Skildu eftir autt til að þjappa út hér",
+    "extractOverwrite": "Viðtökumappan er þegar til. Viltu skrifa yfir hana?"
   },
   "search": {
     "images": "Myndir",

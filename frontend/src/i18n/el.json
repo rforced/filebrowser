@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Εξαγωγή",
+    "extractMessage": "Εισάγετε ένα όνομα φακέλου για εξαγωγή ή αφήστε κενό για εξαγωγή στον τρέχοντα φάκελο.",
+    "extractDestination": "Όνομα φακέλου προορισμού (προαιρετικό)",
+    "extractDeleteAfter": "Διαγραφή αρχείου μετά την εξαγωγή",
+    "extracting": "Γίνεται εξαγωγή...",
+    "extractFiles": "αρχεία εξήχθησαν",
+    "extractDestinationPlaceholder": "Αφήστε κενό για εξαγωγή εδώ",
+    "extractOverwrite": "Ο φάκελος προορισμού υπάρχει ήδη. Θέλετε να τον αντικαταστήσετε;"
   },
   "search": {
     "images": "Εικόνες",

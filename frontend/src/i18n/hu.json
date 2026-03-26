@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Kicsomagolás",
+    "extractMessage": "Adjon meg egy mappanevet a kicsomagoláshoz, vagy hagyja üresen az aktuális mappába való kicsomagoláshoz.",
+    "extractDestination": "Célmappa neve (nem kötelező)",
+    "extractDeleteAfter": "Archívum törlése a kicsomagolás után",
+    "extracting": "Kicsomagolás...",
+    "extractFiles": "fájl kicsomagolva",
+    "extractDestinationPlaceholder": "Hagyja üresen az ide való kicsomagoláshoz",
+    "extractOverwrite": "A célmappa már létezik. Felül kívánja írni?"
   },
   "search": {
     "images": "Képek",

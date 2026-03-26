@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "استخراج",
+    "extractMessage": "یک نام پوشه برای استخراج وارد کنید یا برای استخراج در پوشه فعلی خالی بگذارید.",
+    "extractDestination": "نام پوشه مقصد (اختیاری)",
+    "extractDeleteAfter": "حذف آرشیو پس از استخراج",
+    "extracting": "در حال استخراج...",
+    "extractFiles": "فایل استخراج شد",
+    "extractDestinationPlaceholder": "برای استخراج اینجا خالی بگذارید",
+    "extractOverwrite": "پوشه مقصد از قبل وجود دارد. آیا می‌خواهید آن را بازنویسی کنید؟"
   },
   "search": {
     "images": "تصاویر",

@@ -181,7 +181,15 @@
     "skip": "Overslaan",
     "forbiddenError": "Verboden Fout",
     "currentPassword": "Uw wachtwoord",
-    "currentPasswordMessage": "Voer uw wachtwoord in om deze actie te valideren."
+    "currentPasswordMessage": "Voer uw wachtwoord in om deze actie te valideren.",
+    "extract": "Uitpakken",
+    "extractMessage": "Voer een mapnaam in om naar uit te pakken of laat leeg om uit te pakken in de huidige map.",
+    "extractDestination": "Naam van de doelmap (optioneel)",
+    "extractDeleteAfter": "Archief verwijderen na het uitpakken",
+    "extracting": "Bezig met uitpakken...",
+    "extractFiles": "bestanden uitgepakt",
+    "extractDestinationPlaceholder": "Leeg laten om hier uit te pakken",
+    "extractOverwrite": "De doelmap bestaat al. Wilt u deze overschrijven?"
   },
   "search": {
     "images": "Afbeeldingen",

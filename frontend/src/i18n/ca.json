@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Extreure",
+    "extractMessage": "Introduïu un nom de carpeta per extreure o deixeu-lo en blanc per extreure a la carpeta actual.",
+    "extractDestination": "Nom de la carpeta de destinació (opcional)",
+    "extractDeleteAfter": "Elimina l'arxiu després de l'extracció",
+    "extracting": "Extraient...",
+    "extractFiles": "fitxers extrets",
+    "extractDestinationPlaceholder": "Deixeu en blanc per extreure aquí",
+    "extractOverwrite": "La carpeta de destinació ja existeix. Voleu sobreescriure-la?"
   },
   "search": {
     "images": "Imatges",

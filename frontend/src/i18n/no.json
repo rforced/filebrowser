@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Pakk ut",
+    "extractMessage": "Skriv inn et mappenavn å pakke ut til, eller la det stå tomt for å pakke ut i gjeldende mappe.",
+    "extractDestination": "Navn på målmappe (valgfritt)",
+    "extractDeleteAfter": "Slett arkiv etter utpakking",
+    "extracting": "Pakker ut...",
+    "extractFiles": "filer pakket ut",
+    "extractDestinationPlaceholder": "La stå tomt for å pakke ut her",
+    "extractOverwrite": "Målmappen finnes allerede. Vil du overskrive den?"
   },
   "search": {
     "images": "Bilde",

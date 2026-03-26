@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Видобути",
+    "extractMessage": "Введіть назву папки для видобування або залиште порожнім, щоб видобути у поточну папку.",
+    "extractDestination": "Назва папки призначення (необов'язково)",
+    "extractDeleteAfter": "Видалити архів після видобування",
+    "extracting": "Видобування...",
+    "extractFiles": "файлів видобуто",
+    "extractDestinationPlaceholder": "Залиште порожнім для видобування тут",
+    "extractOverwrite": "Папка призначення вже існує. Бажаєте перезаписати її?"
   },
   "search": {
     "images": "Зображення",

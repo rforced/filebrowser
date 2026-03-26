@@ -181,7 +181,15 @@
     "skip": "Überspringen",
     "forbiddenError": "Zugriff verweigert",
     "currentPassword": "Dein Passwort",
-    "currentPasswordMessage": "Gib dein Passwort ein, um diese Aktion zu bestätigen."
+    "currentPasswordMessage": "Gib dein Passwort ein, um diese Aktion zu bestätigen.",
+    "extract": "Extrahieren",
+    "extractMessage": "Gib einen Ordnernamen zum Extrahieren ein oder lass das Feld leer, um in den aktuellen Ordner zu extrahieren.",
+    "extractDestination": "Zielordnername (optional)",
+    "extractDeleteAfter": "Archiv nach der Extraktion löschen",
+    "extracting": "Wird extrahiert...",
+    "extractFiles": "Dateien extrahiert",
+    "extractDestinationPlaceholder": "Leer lassen, um hier zu extrahieren",
+    "extractOverwrite": "Der Zielordner existiert bereits. Möchtest du ihn überschreiben?"
   },
   "search": {
     "images": "Bilder",

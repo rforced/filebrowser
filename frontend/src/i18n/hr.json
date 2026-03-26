@@ -181,7 +181,15 @@
     "skip": "Skip",
     "forbiddenError": "Forbidden Error",
     "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action."
+    "currentPasswordMessage": "Enter your password to validate this action.",
+    "extract": "Raspakiraj",
+    "extractMessage": "Unesite naziv mape za raspakiravanje ili ostavite prazno za raspakiravanje u trenutnu mapu.",
+    "extractDestination": "Naziv odredišne mape (neobavezno)",
+    "extractDeleteAfter": "Obriši arhivu nakon raspakiravanja",
+    "extracting": "Raspakiravanje...",
+    "extractFiles": "datoteka raspakirano",
+    "extractDestinationPlaceholder": "Ostavi prazno za raspakiravanje ovdje",
+    "extractOverwrite": "Odredišna mapa već postoji. Želite li je prepisati?"
   },
   "search": {
     "images": "Slike",
