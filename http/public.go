@@ -3,18 +3,90 @@ package fbhttp
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/spf13/afero"
+	"github.com/tomasen/realip"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/rforced/filebrowser/v2/files"
 	"github.com/rforced/filebrowser/v2/share"
 )
+
+const (
+	shareRateLimit  = 10
+	shareRateWindow = time.Minute
+)
+
+type shareAttempts struct {
+	mu    sync.Mutex
+	times []time.Time
+}
+
+var shareRateLimiter sync.Map // map[string]*shareAttempts
+
+func init() {
+	go evictStaleShareEntries()
+}
+
+// evictStaleShareEntries periodically removes rate limiter entries with no
+// recent attempts, preventing unbounded memory growth from many unique IPs.
+func evictStaleShareEntries() {
+	ticker := time.NewTicker(shareRateWindow * 2)
+	defer ticker.Stop()
+	for range ticker.C {
+		cutoff := time.Now().Add(-shareRateWindow)
+		shareRateLimiter.Range(func(key, value any) bool {
+			attempts := value.(*shareAttempts)
+			attempts.mu.Lock()
+			hasRecent := false
+			for _, t := range attempts.times {
+				if t.After(cutoff) {
+					hasRecent = true
+					break
+				}
+			}
+			attempts.mu.Unlock()
+			if !hasRecent {
+				shareRateLimiter.Delete(key)
+			}
+			return true
+		})
+	}
+}
+
+// checkShareRateLimit returns true if the key has exceeded the share auth rate limit.
+func checkShareRateLimit(key string) bool {
+	now := time.Now()
+	val, _ := shareRateLimiter.LoadOrStore(key, &shareAttempts{})
+	attempts := val.(*shareAttempts)
+
+	attempts.mu.Lock()
+	defer attempts.mu.Unlock()
+
+	cutoff := now.Add(-shareRateWindow)
+	valid := attempts.times[:0]
+	for _, t := range attempts.times {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+	attempts.times = valid
+
+	if len(attempts.times) >= shareRateLimit {
+		return true
+	}
+
+	attempts.times = append(attempts.times, now)
+	return false
+}
 
 var withHashFile = func(fn handleFunc) handleFunc {
 	return func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
@@ -22,6 +94,14 @@ var withHashFile = func(fn handleFunc) handleFunc {
 		link, err := d.store.Share.GetByHash(id)
 		if err != nil {
 			return errToStatus(err), err
+		}
+
+		clientIP := realip.FromRequest(r)
+		rateLimitKey := clientIP + ":" + id
+		if checkShareRateLimit(rateLimitKey) {
+			log.Printf("share auth rate limit exceeded for IP %s on share %s", clientIP, id)
+			w.Header().Set("Retry-After", "60")
+			return http.StatusTooManyRequests, nil
 		}
 
 		status, err := authenticateShareRequest(r, link)

@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/asdine/storm/v3"
@@ -16,8 +18,13 @@ import (
 	"github.com/rforced/filebrowser/v2/users"
 )
 
+var testIPCounter atomic.Uint64
+
 func TestPublicShareHandlerAuthentication(t *testing.T) {
 	t.Parallel()
+
+	// Reset the share rate limiter so parallel test runs don't interfere.
+	shareRateLimiter = sync.Map{}
 
 	const passwordBcrypt = "$2y$10$TFAmdCbyd/mEZDe5fUeZJu.MaJQXRTwdqb/IQV.eTn6dWrF58gCSe"
 	testCases := map[string]struct {
@@ -98,6 +105,11 @@ func TestPublicShareHandlerAuthentication(t *testing.T) {
 					Store: storage.Users,
 					fs:    &afero.MemMapFs{},
 				}
+
+				// Assign a unique remote address to each subtest to avoid
+				// hitting the share rate limiter across parallel tests.
+				c := testIPCounter.Add(1)
+				tc.req.RemoteAddr = fmt.Sprintf("10.0.0.%d:12345", c)
 
 				recorder := httptest.NewRecorder()
 				handler := handle(handler, "", storage, &settings.Server{})

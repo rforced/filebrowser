@@ -108,7 +108,7 @@ var sharePostHandler = withPermShare(func(w http.ResponseWriter, r *http.Request
 		return http.StatusBadRequest, fmt.Errorf("expiration date is required for sharing")
 	}
 
-	bytes := make([]byte, 6)
+	bytes := make([]byte, 32)
 	_, err := rand.Read(bytes)
 	if err != nil {
 		return http.StatusInternalServerError, err

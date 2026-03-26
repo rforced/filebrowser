@@ -3,9 +3,11 @@ package fbhttp
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"sync"
 	"time"
 
@@ -20,7 +22,11 @@ const (
 	DefaultTokenExpirationTime = time.Hour * 2
 	loginRateLimit             = 10
 	loginRateWindow            = time.Minute
+	usernameMaxLength          = 64
+	usernameMinLength          = 1
 )
+
+var validUsername = regexp.MustCompile(`^[a-zA-Z0-9@._\-]+$`)
 
 type loginAttempts struct {
 	mu    sync.Mutex
@@ -28,6 +34,36 @@ type loginAttempts struct {
 }
 
 var loginRateLimiter sync.Map // map[string]*loginAttempts
+
+func init() {
+	go evictStaleLoginEntries()
+}
+
+// evictStaleLoginEntries periodically removes rate limiter entries with no
+// recent attempts, preventing unbounded memory growth from many unique IPs.
+func evictStaleLoginEntries() {
+	ticker := time.NewTicker(loginRateWindow * 2)
+	defer ticker.Stop()
+	for range ticker.C {
+		cutoff := time.Now().Add(-loginRateWindow)
+		loginRateLimiter.Range(func(key, value any) bool {
+			attempts := value.(*loginAttempts)
+			attempts.mu.Lock()
+			hasRecent := false
+			for _, t := range attempts.times {
+				if t.After(cutoff) {
+					hasRecent = true
+					break
+				}
+			}
+			attempts.mu.Unlock()
+			if !hasRecent {
+				loginRateLimiter.Delete(key)
+			}
+			return true
+		})
+	}
+}
 
 // checkLoginRateLimit returns true if the IP has exceeded the login rate limit.
 func checkLoginRateLimit(ip string) bool {
@@ -186,6 +222,14 @@ var signupHandler = func(_ http.ResponseWriter, r *http.Request, d *data) (int, 
 
 	if info.Password == "" || info.Username == "" {
 		return http.StatusBadRequest, nil
+	}
+
+	if len(info.Username) < usernameMinLength || len(info.Username) > usernameMaxLength {
+		return http.StatusBadRequest, fmt.Errorf("username must be between %d and %d characters", usernameMinLength, usernameMaxLength)
+	}
+
+	if !validUsername.MatchString(info.Username) {
+		return http.StatusBadRequest, fmt.Errorf("username contains invalid characters; only alphanumeric, @, ., _ and - are allowed")
 	}
 
 	user := &users.User{
