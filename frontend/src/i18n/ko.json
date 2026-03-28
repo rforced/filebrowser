@@ -76,7 +76,7 @@
     "home": "홈",
     "lastModified": "최종 수정",
     "loading": "불러오는 중...",
-    "lonely": "여기에 아무것도 없습니다",
+    "lonely": "외로워요... (비어 있음)",
     "metadata": "메타데이터",
     "multipleSelectionEnabled": "다중 선택 켜짐",
     "name": "이름",
@@ -124,9 +124,7 @@
     "passwordTooShort": "비밀번호는 최소 {min}자 이상이어야 함",
     "logout_reasons": {
       "inactivity": "활동이 없어 로그아웃 되었습니다."
-    },
-    "captchaFailed": "보안 인증에 실패했습니다. 다시 시도하거나 문제가 지속되면 지원팀에 문의하세요.",
-    "rateLimited": "로그인 시도가 너무 많습니다. 1분 후에 다시 시도해 주세요."
+    }
   },
   "permanent": "영구",
   "prompts": {
@@ -166,8 +164,6 @@
     "uploadFiles": "{files}개의 파일 업로드 중...",
     "uploadMessage": "업로드 옵션을 선택하세요.",
     "optionalPassword": "비밀번호 (선택)",
-    "calculateSize": "계산",
-    "calculating": "계산 중...",
     "resolution": "해상도",
     "discardEditorChanges": "변경 사항을 취소하시겠습니까?",
     "replaceOrSkip": "파일 대체 또는 건너뛰기",
@@ -180,16 +176,8 @@
     "override": "덮어쓰기",
     "skip": "건너뛰기",
     "forbiddenError": "권한 오류",
-    "currentPassword": "Your password",
-    "currentPasswordMessage": "Enter your password to validate this action.",
-    "extract": "압축 해제",
-    "extractMessage": "압축을 풀 폴더 이름을 입력하거나 현재 폴더에 압축을 풀려면 비워 두세요.",
-    "extractDestination": "대상 폴더 이름 (선택 사항)",
-    "extractDeleteAfter": "압축 해제 후 아카이브 삭제",
-    "extracting": "압축 해제 중...",
-    "extractFiles": "파일 압축 해제됨",
-    "extractDestinationPlaceholder": "여기에 압축 해제하려면 비워 두세요",
-    "extractOverwrite": "대상 폴더가 이미 존재합니다. 덮어쓰시겠습니까?"
+    "currentPassword": "기존 비밀번호",
+    "currentPasswordMessage": "기존 비밀번호를 입력해 이 동작을 확인하십시오."
   },
   "search": {
     "images": "이미지",
@@ -299,7 +287,6 @@
     "logout": "로그아웃",
     "myFiles": "내 파일",
     "newFile": "새로운 파일",
-    "createJob": "작업 생성",
     "newFolder": "새로운 폴더",
     "preview": "미리보기",
     "settings": "설정",
