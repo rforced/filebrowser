@@ -70,7 +70,7 @@
     "postcss": "^8.5.8",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
-    "vite": "^8.0.3",
+    "vite": "^8.0.5",
     "vite-plugin-compression2": "^2.5.3",
     "vitest": "^4.1.2",
     "vue-tsc": "^3.2.6"
