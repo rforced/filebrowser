@@ -95,7 +95,7 @@ export function download(format: any, ...files: string[]) {
     url += `algo=${format}&`;
   }
 
-  url += `auth=${authStore.jwt}`;
+  url += `auth=${authStore.token}`;
 
   window.open(url);
 }
@@ -144,7 +144,7 @@ async function postResources(
       `${baseURL}/api/resources${url}?override=${overwrite}`,
       true
     );
-    request.setRequestHeader("X-Auth", authStore.jwt);
+    request.setRequestHeader("X-Auth", authStore.token);
 
     if (typeof onupload === "function") {
       request.upload.onprogress = onupload;
@@ -220,7 +220,7 @@ export function getDownloadURL(file: ResourceItem, inline: any) {
   const authStore = useAuthStore();
   const params = {
     ...(inline && { inline: "true" }),
-    auth: authStore.jwt,
+    auth: authStore.token,
   };
 
   return createURL("api/raw" + file.path, params);
@@ -231,7 +231,7 @@ export function getPreviewURL(file: ResourceItem, size: string) {
   const params = {
     inline: "true",
     key: Date.parse(file.modified),
-    auth: authStore.jwt,
+    auth: authStore.token,
   };
 
   return createURL("api/preview/" + size + file.path, params);
@@ -241,7 +241,7 @@ export function getSubtitlesURL(file: ResourceItem) {
   const authStore = useAuthStore();
   const params = {
     inline: "true",
-    auth: authStore.jwt,
+    auth: authStore.token,
   };
 
   return file.subtitles?.map((d) => createURL("api/subtitle" + d, params));
@@ -283,7 +283,7 @@ export async function extract(
   const res = await globalThis.fetch(`${baseURL}/api/extract${url}`, {
     method: "POST",
     headers: {
-      "X-Auth": authStore.jwt,
+      "X-Auth": authStore.token,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(options),

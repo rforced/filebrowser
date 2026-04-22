@@ -123,7 +123,8 @@
     "wrongCredentials": "Błędne dane logowania",
     "passwordTooShort": "Wymagana minimalna liczba znaków hasła: {min}",
     "logout_reasons": {
-      "inactivity": "Wylogowano z powodu braku aktywności."
+      "inactivity": "Wylogowano z powodu braku aktywności.",
+      "session_expired": "Sesja wygasła. Zaloguj się ponownie."
     },
     "captchaFailed": "Weryfikacja bezpieczeństwa nie powiodła się. Spróbuj ponownie lub skontaktuj się z pomocą techniczną, jeśli problem będzie się powtarzał.",
     "rateLimited": "Zbyt wiele prób logowania. Spróbuj ponownie po jednej minucie."

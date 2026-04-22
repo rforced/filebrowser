@@ -123,7 +123,8 @@
     "wrongCredentials": "Nesprávné přihlašovací údaje",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     },
     "captchaFailed": "Ověření zabezpečení selhalo. Zkuste to prosím znovu nebo kontaktujte podporu, pokud problém přetrvává.",
     "rateLimited": "Příliš mnoho pokusů o přihlášení. Zkuste to prosím znovu za jednu minutu."

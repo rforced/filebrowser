@@ -123,7 +123,8 @@
     "wrongCredentials": "Nepareizi akreditācijas dati",
     "passwordTooShort": "Parolei jābūt vismaz {min} rakstzīmju garai",
     "logout_reasons": {
-      "inactivity": "Jūs esat atteicies no sistēmas neaktivitātes dēļ."
+      "inactivity": "Jūs esat atteicies no sistēmas neaktivitātes dēļ.",
+      "session_expired": "Jūsu sesija ir beigusies. Lūdzu, piesakieties vēlreiz."
     },
     "captchaFailed": "Drošības pārbaude neizdevās. Lūdzu, mēģiniet vēlreiz vai sazinieties ar atbalstu, ja problēma turpinās.",
     "rateLimited": "Pārāk daudz pieteikšanās mēģinājumu. Lūdzu, mēģiniet vēlreiz pēc vienas minūtes."

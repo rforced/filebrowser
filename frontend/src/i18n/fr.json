@@ -123,7 +123,8 @@
     "wrongCredentials": "Identifiants incorrects !",
     "passwordTooShort": "Le mot de passe doit contenir au moins {min} caractères",
     "logout_reasons": {
-      "inactivity": "Vous avez été déconnecté(e) en raison d'une inactivité prolongée."
+      "inactivity": "Vous avez été déconnecté(e) en raison d'une inactivité prolongée.",
+      "session_expired": "Votre session a expiré. Veuillez vous reconnecter."
     },
     "captchaFailed": "La vérification de sécurité a échoué. Veuillez réessayer ou contacter le support si le problème persiste.",
     "rateLimited": "Trop de tentatives de connexion. Veuillez réessayer après une minute."

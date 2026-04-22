@@ -127,7 +127,8 @@
     "rateLimited": "Too many login attempts. Please try again after one minute.",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     }
   },
   "permanent": "Permanent",

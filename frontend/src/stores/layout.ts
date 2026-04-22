@@ -22,7 +22,7 @@ export const useLayoutStore = defineStore("layout", {
     currentPromptName(): string | null | undefined {
       return this.currentPrompt?.prompt;
     },
-    // user and jwt getter removed, no longer needed
+    // user and token getter removed, no longer needed
   },
   actions: {
     // no context as first argument, use `this` instead

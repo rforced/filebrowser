@@ -12,7 +12,7 @@ export const useClipboardStore = defineStore("clipboard", {
     path: undefined,
   }),
   getters: {
-    // user and jwt getter removed, no longer needed
+    // user and token getter removed, no longer needed
   },
   actions: {
     // no context as first argument, use `this` instead

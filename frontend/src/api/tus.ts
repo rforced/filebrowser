@@ -35,7 +35,7 @@ export async function upload(
       parallelUploads: 1,
       storeFingerprintForResuming: false,
       headers: {
-        "X-Auth": authStore.jwt,
+        "X-Auth": authStore.token,
       },
       onShouldRetry: function (err) {
         const status = err.originalResponse

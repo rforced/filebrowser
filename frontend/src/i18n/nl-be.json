@@ -123,7 +123,8 @@
     "wrongCredentials": "Verkeerde inloggegevens",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     },
     "captchaFailed": "Beveiligingsverificatie mislukt. Probeer het opnieuw of neem contact op met ondersteuning als dit probleem aanhoudt.",
     "rateLimited": "Te veel inlogpogingen. Probeer het opnieuw na één minuut."

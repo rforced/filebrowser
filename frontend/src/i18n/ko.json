@@ -123,7 +123,8 @@
     "wrongCredentials": "사용자 이름 또는 비밀번호를 확인",
     "passwordTooShort": "비밀번호는 최소 {min}자 이상이어야 함",
     "logout_reasons": {
-      "inactivity": "활동이 없어 로그아웃 되었습니다."
+      "inactivity": "활동이 없어 로그아웃 되었습니다.",
+      "session_expired": "세션이 만료되었습니다. 다시 로그인해 주세요."
     }
   },
   "permanent": "영구",

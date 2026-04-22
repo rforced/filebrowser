@@ -123,7 +123,8 @@
     "wrongCredentials": "Inloggegevens zijn incorrect",
     "passwordTooShort": "Wachtwoord moet minstens {min} tekens bevatten",
     "logout_reasons": {
-      "inactivity": "U bent uitgelogd vanwege inactiviteit."
+      "inactivity": "U bent uitgelogd vanwege inactiviteit.",
+      "session_expired": "Uw sessie is verlopen. Log opnieuw in."
     },
     "captchaFailed": "Beveiligingsverificatie mislukt. Probeer het opnieuw of neem contact op met ondersteuning als dit probleem aanhoudt.",
     "rateLimited": "Te veel inlogpogingen. Probeer het opnieuw na één minuut."

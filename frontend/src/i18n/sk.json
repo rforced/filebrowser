@@ -123,7 +123,8 @@
     "wrongCredentials": "Nesprávne prihlasovacie údaje",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "Boli ste odhlásení z dôvodu nečinnosti."
+      "inactivity": "Boli ste odhlásení z dôvodu nečinnosti.",
+      "session_expired": "Vaša relácia vypršala. Prihláste sa prosím znova."
     },
     "captchaFailed": "Overenie zabezpečenia zlyhalo. Skúste to prosím znova alebo kontaktujte podporu, ak problém pretrváva.",
     "rateLimited": "Príliš veľa pokusov o prihlásenie. Skúste to prosím znova o jednu minútu."

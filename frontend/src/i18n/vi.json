@@ -123,7 +123,8 @@
     "wrongCredentials": "Thông tin đăng nhập không đúng",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     },
     "captchaFailed": "Xác minh bảo mật thất bại. Vui lòng thử lại hoặc liên hệ hỗ trợ nếu sự cố vẫn tiếp diễn.",
     "rateLimited": "Quá nhiều lần thử đăng nhập. Vui lòng thử lại sau một phút."

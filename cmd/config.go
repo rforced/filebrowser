@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -302,6 +303,101 @@ func printSettings(ser *settings.Server, set *settings.Settings, auther auth.Aut
 	}
 	fmt.Printf("\nAuther configuration (raw):\n\n%s\n\n", string(b))
 	return nil
+}
+
+// redactedPresence returns "<set>" when v is non-empty, "<unset>" otherwise.
+// It is used for rendering secret values so the running config can be logged
+// at startup without leaking credentials.
+func redactedPresence(v string) string {
+	if v == "" {
+		return "<unset>"
+	}
+	return "<set>"
+}
+
+// logRunningConfig emits a pretty, secret-redacted view of the effective
+// configuration to the standard logger. Intended to be called once at
+// startup so operators can confirm exactly what settings the running
+// process resolved (flags + env + DB), including tokenExpirationTime.
+//
+// Redacted fields:
+//   - settings.Settings.Key (internal signing key, shown as presence only)
+//   - auth.JSONAuth.ReCaptcha.Secret (shown as presence only)
+//
+// All other fields are printed verbatim.
+func logRunningConfig(ser *settings.Server, set *settings.Settings, auther auth.Auther) {
+	var buf strings.Builder
+	w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
+
+	fmt.Fprintln(w, "==== Running configuration (secrets redacted) ====")
+
+	fmt.Fprintln(w, "\nApplication:")
+	fmt.Fprintf(w, "\tSign up:\t%t\n", set.Signup)
+	fmt.Fprintf(w, "\tHide Login Button:\t%t\n", set.HideLoginButton)
+	fmt.Fprintf(w, "\tCreate User Dir:\t%t\n", set.CreateUserDir)
+	fmt.Fprintf(w, "\tLogout Page:\t%s\n", set.LogoutPage)
+	fmt.Fprintf(w, "\tMinimum Password Length:\t%d\n", set.MinimumPasswordLength)
+	fmt.Fprintf(w, "\tAuth Method:\t%s\n", set.AuthMethod)
+	fmt.Fprintf(w, "\tShell:\t%s\n", strings.Join(set.Shell, " "))
+	fmt.Fprintf(w, "\tSigning Key:\t%s\n", redactedPresence(string(set.Key)))
+
+	fmt.Fprintln(w, "\nBranding:")
+	fmt.Fprintf(w, "\tName:\t%s\n", set.Branding.Name)
+	fmt.Fprintf(w, "\tFiles override:\t%s\n", set.Branding.Files)
+	fmt.Fprintf(w, "\tDisable external links:\t%t\n", set.Branding.DisableExternal)
+	fmt.Fprintf(w, "\tDisable used disk percentage graph:\t%t\n", set.Branding.DisableUsedPercentage)
+	fmt.Fprintf(w, "\tColor:\t%s\n", set.Branding.Color)
+	fmt.Fprintf(w, "\tTheme:\t%s\n", set.Branding.Theme)
+
+	fmt.Fprintln(w, "\nServer:")
+	fmt.Fprintf(w, "\tLog:\t%s\n", ser.Log)
+	fmt.Fprintf(w, "\tPort:\t%s\n", ser.Port)
+	fmt.Fprintf(w, "\tBase URL:\t%s\n", ser.BaseURL)
+	fmt.Fprintf(w, "\tRoot:\t%s\n", ser.Root)
+	fmt.Fprintf(w, "\tSocket:\t%s\n", ser.Socket)
+	fmt.Fprintf(w, "\tAddress:\t%s\n", ser.Address)
+	fmt.Fprintf(w, "\tTLS Cert:\t%s\n", ser.TLSCert)
+	fmt.Fprintf(w, "\tTLS Key:\t%s\n", ser.TLSKey)
+	fmt.Fprintf(w, "\tToken Expiration Time:\t%s\n", ser.TokenExpirationTime)
+	fmt.Fprintf(w, "\tExec Enabled:\t%t\n", ser.EnableExec)
+	fmt.Fprintf(w, "\tThumbnails Enabled:\t%t\n", ser.EnableThumbnails)
+	fmt.Fprintf(w, "\tResize Preview:\t%t\n", ser.ResizePreview)
+	fmt.Fprintf(w, "\tType Detection by Header:\t%t\n", ser.TypeDetectionByHeader)
+	fmt.Fprintf(w, "\tAuth Hook:\t%s\n", ser.AuthHook)
+	fmt.Fprintf(w, "\tDomain:\t%s\n", ser.Domain)
+	fmt.Fprintf(w, "\tTeam ID:\t%s\n", ser.TeamID)
+	fmt.Fprintf(w, "\tFilesystem ID:\t%s\n", ser.FilesystemID)
+
+	fmt.Fprintln(w, "\nTUS:")
+	fmt.Fprintf(w, "\tChunk size:\t%d\n", set.Tus.ChunkSize)
+	fmt.Fprintf(w, "\tRetry count:\t%d\n", set.Tus.RetryCount)
+
+	fmt.Fprintln(w, "\nAuther:")
+	fmt.Fprintf(w, "\tType:\t%T\n", auther)
+	switch a := auther.(type) {
+	case *auth.JSONAuth:
+		if a.ReCaptcha != nil {
+			fmt.Fprintf(w, "\treCAPTCHA Key:\t%s\n", a.ReCaptcha.Key)
+			fmt.Fprintf(w, "\treCAPTCHA Secret:\t%s\n", redactedPresence(a.ReCaptcha.Secret))
+			fmt.Fprintf(w, "\treCAPTCHA Project ID:\t%s\n", a.ReCaptcha.ProjectID)
+			if len(a.ReCaptcha.AllowedHostnames) > 0 {
+				fmt.Fprintf(w, "\treCAPTCHA Allowed Hostnames:\t%s\n", strings.Join(a.ReCaptcha.AllowedHostnames, ","))
+			}
+		} else {
+			fmt.Fprintln(w, "\treCAPTCHA:\tdisabled")
+		}
+	case *auth.ProxyAuth:
+		fmt.Fprintf(w, "\tHeader:\t%s\n", a.Header)
+	case *auth.HookAuth:
+		fmt.Fprintf(w, "\tCommand:\t%s\n", a.Command)
+	}
+
+	fmt.Fprintln(w, "==================================================")
+	_ = w.Flush()
+
+	// Emit as a single multi-line log entry so the tabwriter alignment is
+	// preserved (log.Println prefixes every call with a timestamp).
+	log.Print("\n" + buf.String())
 }
 
 func getSettings(flags *pflag.FlagSet, set *settings.Settings, ser *settings.Server, auther auth.Auther, all bool) (auth.Auther, error) {

@@ -123,7 +123,8 @@
     "wrongCredentials": "Dados errados",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     },
     "captchaFailed": "A verificação de segurança falhou. Por favor, tente novamente ou contacte o suporte se o problema persistir.",
     "rateLimited": "Demasiadas tentativas de início de sessão. Por favor, tente novamente após um minuto."

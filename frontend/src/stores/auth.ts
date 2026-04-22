@@ -6,15 +6,13 @@ export const useAuthStore = defineStore("auth", {
   // convert to a function
   state: (): {
     user: IUser | null;
-    jwt: string;
-    logoutTimer: number | null;
+    token: string;
   } => ({
     user: null,
-    jwt: "",
-    logoutTimer: null,
+    token: "",
   }),
   getters: {
-    // user and jwt getter removed, no longer needed
+    // user and token getter removed, no longer needed
     isLoggedIn: (state) => state.user !== null,
   },
   actions: {
@@ -38,9 +36,6 @@ export const useAuthStore = defineStore("auth", {
     // easily reset state using `$reset`
     clearUser() {
       this.$reset();
-    },
-    setLogoutTimer(logoutTimer: number | null) {
-      this.logoutTimer = logoutTimer;
     },
   },
 });

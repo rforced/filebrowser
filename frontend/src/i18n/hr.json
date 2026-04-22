@@ -123,7 +123,8 @@
     "wrongCredentials": "Neispravno korisničko ime/lozinka",
     "passwordTooShort": "Lozinka mora sadržavati minimalno {min} znakova",
     "logout_reasons": {
-      "inactivity": "Odjavljeni ste zbog neaktivnosti."
+      "inactivity": "Odjavljeni ste zbog neaktivnosti.",
+      "session_expired": "Vaša sesija je istekla. Molimo prijavite se ponovno."
     }
   },
   "permanent": "Trajan",

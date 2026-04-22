@@ -123,7 +123,8 @@
     "wrongCredentials": "Feil legitimasjon",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "Du har blitt logget ut på grunn av inaktivitet"
+      "inactivity": "Du har blitt logget ut på grunn av inaktivitet",
+      "session_expired": "Økten din er utløpt. Logg inn på nytt"
     },
     "captchaFailed": "Sikkerhetsverifisering mislyktes. Vennligst prøv igjen eller kontakt brukerstøtte hvis problemet vedvarer.",
     "rateLimited": "For mange innloggingsforsøk. Vennligst prøv igjen etter ett minutt."

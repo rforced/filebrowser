@@ -123,7 +123,8 @@
     "wrongCredentials": "Fel inloggning",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "Du har blivit utloggad på grund av inaktivitet."
+      "inactivity": "Du har blivit utloggad på grund av inaktivitet.",
+      "session_expired": "Din session har gått ut. Logga in igen."
     },
     "captchaFailed": "Säkerhetsverifieringen misslyckades. Försök igen eller kontakta support om problemet kvarstår.",
     "rateLimited": "För många inloggningsförsök. Försök igen efter en minut."

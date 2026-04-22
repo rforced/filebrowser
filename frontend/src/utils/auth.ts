@@ -1,14 +1,13 @@
 import { useAuthStore } from "@/stores/auth";
 import router from "@/router";
-import { authMethod, baseURL, noAuth, logoutPage } from "./constants";
+import { baseURL, noAuth, logoutPage } from "./constants";
 import { StatusError } from "@/api/utils";
-import { setSafeTimeout } from "@/api/utils";
 
 export async function saveToken(token: string) {
   const authStore = useAuthStore();
 
   localStorage.setItem("token", token);
-  authStore.jwt = token;
+  authStore.token = token;
 
   const res = await fetch(`${baseURL}/api/me`, {
     headers: {
@@ -23,23 +22,9 @@ export async function saveToken(token: string) {
   const user = await res.json();
   authStore.setUser(user);
 
-  // proxy auth with custom logout subject to unknown external timeout
-  if (logoutPage !== "/login" && authMethod === "proxy") {
-    console.warn("idle timeout disabled with proxy auth and custom logout");
-    return;
-  }
-
-  if (authStore.logoutTimer) {
-    clearTimeout(authStore.logoutTimer);
-  }
-
-  // Default session timeout: 2 hours (matches server default)
-  const timeout = 2 * 60 * 60 * 1000;
-  authStore.setLogoutTimer(
-    setSafeTimeout(() => {
-      logout("inactivity");
-    }, timeout)
-  );
+  // Session validity is governed solely by the server's tokenExpirationTime.
+  // On expiry, the next authenticated request returns 401 and the shared
+  // fetch wrapper in api/utils.ts calls logout(), which redirects to /login.
 }
 
 export async function validateLogin() {
@@ -127,12 +112,12 @@ export async function signup(username: string, password: string) {
 export async function logout(reason?: string) {
   const authStore = useAuthStore();
 
-  if (authStore.jwt) {
+  if (authStore.token) {
     try {
       await fetch(`${baseURL}/api/logout`, {
         method: "POST",
         headers: {
-          "X-Auth": authStore.jwt,
+          "X-Auth": authStore.token,
         },
       });
     } catch {}

@@ -123,7 +123,8 @@
     "wrongCredentials": "ユーザー名またはパスワードが間違っています",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     },
     "captchaFailed": "セキュリティ検証に失敗しました。再試行するか、問題が解決しない場合はサポートにお問い合わせください。",
     "rateLimited": "ログイン試行回数が多すぎます。1分後にもう一度お試しください。"

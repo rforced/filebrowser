@@ -123,7 +123,8 @@
     "wrongCredentials": "Rangar notendaupplýsingar",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     },
     "captchaFailed": "Öryggisstaðfesting mistókst. Vinsamlegast reyndu aftur eða hafðu samband við þjónustuver ef vandamálið er viðvarandi.",
     "rateLimited": "Of margar innskráningartilraunir. Vinsamlegast reyndu aftur eftir eina mínútu."

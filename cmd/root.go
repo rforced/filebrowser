@@ -201,6 +201,16 @@ user created with the credentials from options "username" and "password".`,
 		}
 		setupLog(server.Log)
 
+		if appSettings, err := st.Settings.Get(); err != nil {
+			log.Printf("[WARN] failed to load settings for startup log: %v", err)
+		} else {
+			auther, err := st.Auth.Get(appSettings.AuthMethod)
+			if err != nil {
+				log.Printf("[WARN] failed to load auther for startup log: %v", err)
+			}
+			logRunningConfig(server, appSettings, auther)
+		}
+
 		root, err := filepath.Abs(server.Root)
 		if err != nil {
 			return err

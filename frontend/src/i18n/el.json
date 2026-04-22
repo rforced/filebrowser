@@ -123,7 +123,8 @@
     "wrongCredentials": "Λάθος όνομα ή/και κωδικός πρόσβασης",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     },
     "captchaFailed": "Η επαλήθευση ασφαλείας απέτυχε. Παρακαλώ δοκιμάστε ξανά ή επικοινωνήστε με την υποστήριξη εάν το πρόβλημα παραμένει.",
     "rateLimited": "Πάρα πολλές προσπάθειες σύνδεσης. Παρακαλώ δοκιμάστε ξανά μετά από ένα λεπτό."

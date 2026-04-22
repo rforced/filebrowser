@@ -30,7 +30,7 @@ export async function fetchURL(
   try {
     res = await fetch(`${baseURL}${url}`, {
       headers: {
-        "X-Auth": authStore.jwt,
+        "X-Auth": authStore.token,
         ...headers,
       },
       ...rest,
@@ -44,7 +44,7 @@ export async function fetchURL(
   }
 
   if (auth && res.headers.get("X-Renew-Token") === "true") {
-    await renew(authStore.jwt);
+    await renew(authStore.token);
   }
 
   if (res.status < 200 || res.status > 299) {
@@ -55,7 +55,7 @@ export async function fetchURL(
     );
 
     if (auth && res.status == 401) {
-      logout();
+      logout("session_expired");
     }
 
     throw error;
@@ -91,22 +91,4 @@ export function createURL(endpoint: string, searchParams = {}): string {
   url.search = new URLSearchParams(searchParams).toString();
 
   return url.toString();
-}
-
-export function setSafeTimeout(callback: () => void, delay: number): number {
-  const MAX_DELAY = 86_400_000;
-  let remaining = delay;
-
-  function scheduleNext(): number {
-    if (remaining <= MAX_DELAY) {
-      return window.setTimeout(callback, remaining);
-    } else {
-      return window.setTimeout(() => {
-        remaining -= MAX_DELAY;
-        scheduleNext();
-      }, MAX_DELAY);
-    }
-  }
-
-  return scheduleNext();
 }

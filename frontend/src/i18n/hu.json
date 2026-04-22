@@ -123,7 +123,8 @@
     "wrongCredentials": "Hibás hitelesítő adatok",
     "passwordTooShort": "Password must be at least {min} characters",
     "logout_reasons": {
-      "inactivity": "You have been logged out due to inactivity."
+      "inactivity": "You have been logged out due to inactivity.",
+      "session_expired": "Your session has expired. Please log in again."
     },
     "captchaFailed": "A biztonsági ellenőrzés sikertelen. Kérjük, próbálja újra, vagy lépjen kapcsolatba az ügyfélszolgálattal, ha a probléma továbbra is fennáll.",
     "rateLimited": "Túl sok bejelentkezési kísérlet. Kérjük, próbálja újra egy perc múlva."
