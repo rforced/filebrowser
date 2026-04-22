@@ -25,7 +25,7 @@
     "ace-builds": "^1.43.6",
     "csv-parse": "^6.2.1",
     "dayjs": "^1.11.20",
-    "dompurify": "^3.4.0",
+    "dompurify": "^3.4.1",
     "epubjs": "^0.3.93",
     "filesize": "^11.0.15",
     "js-base64": "^3.7.8",
@@ -75,5 +75,11 @@
     "vitest": "^4.1.4",
     "vue-tsc": "^3.2.6"
   },
-  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be"
+  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",
+  "pnpm": {
+    "overrides": {
+      "@xmldom/xmldom@^0.7.0": "^0.8.11",
+      "glob@^10.0.0": "^12.0.0"
+    }
+  }
 }
