@@ -21,18 +21,20 @@ import (
 const MethodHookAuth settings.AuthMethod = "hook"
 
 type hookCred struct {
-	Password string `json:"password"`
-	Username string `json:"username"`
+	Password  string `json:"password"`
+	Username  string `json:"username"`
+	ReCaptcha string `json:"recaptcha"`
 }
 
 // HookAuth is a hook implementation of an Auther.
 type HookAuth struct {
-	Users    users.Store        `json:"-"`
-	Settings *settings.Settings `json:"-"`
-	Server   *settings.Server   `json:"-"`
-	Cred     hookCred           `json:"-"`
-	Fields   hookFields         `json:"-"`
-	Command  string             `json:"command"`
+	Users     users.Store        `json:"-"`
+	Settings  *settings.Settings `json:"-"`
+	Server    *settings.Server   `json:"-"`
+	Cred      hookCred           `json:"-"`
+	Fields    hookFields         `json:"-"`
+	Command   string             `json:"command"`
+	ReCaptcha *ReCaptcha         `json:"recaptcha" yaml:"recaptcha"`
 }
 
 // Auth authenticates the user via a json in content body.
@@ -46,6 +48,17 @@ func (a *HookAuth) Auth(r *http.Request, usr users.Store, stg *settings.Settings
 	err := json.NewDecoder(r.Body).Decode(&cred)
 	if err != nil {
 		return nil, os.ErrPermission
+	}
+
+	if a.ReCaptcha != nil && a.ReCaptcha.Secret != "" {
+		ok, err := a.ReCaptcha.Ok(cred.ReCaptcha)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			return nil, ErrCaptchaFailed
+		}
 	}
 
 	a.Users = usr
@@ -151,7 +164,10 @@ func (a *HookAuth) SaveUser() (*users.User, error) {
 	}
 
 	if u == nil {
-		pass, err := users.ValidateAndHashPwd(a.Cred.Password, a.Settings.MinimumPasswordLength)
+		// When the hook auth is enabled, the external command is the source of
+		// truth for credentials, so local password policies (minimum length and
+		// common-password checks) do not apply.
+		pass, err := users.HashPwd(a.Cred.Password)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +205,9 @@ func (a *HookAuth) SaveUser() (*users.User, error) {
 
 		// update the password when it doesn't match the current
 		if p {
-			pass, err := users.ValidateAndHashPwd(a.Cred.Password, a.Settings.MinimumPasswordLength)
+			// Hook auth bypasses local password policies (minimum length and
+			// common-password checks).
+			pass, err := users.HashPwd(a.Cred.Password)
 			if err != nil {
 				return nil, err
 			}

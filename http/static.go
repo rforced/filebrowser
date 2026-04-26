@@ -68,18 +68,25 @@ func handleWithStaticData(w http.ResponseWriter, _ *http.Request, d *data, fSys 
 		}
 	}
 
-	if d.settings.AuthMethod == auth.MethodJSONAuth {
+	var recaptcha *auth.ReCaptcha
+	switch d.settings.AuthMethod {
+	case auth.MethodJSONAuth:
 		raw, err := d.store.Auth.Get(d.settings.AuthMethod)
 		if err != nil {
 			return http.StatusInternalServerError, err
 		}
-
-		auther := raw.(*auth.JSONAuth)
-
-		if auther.ReCaptcha != nil {
-			data["ReCaptcha"] = auther.ReCaptcha.Key != "" && auther.ReCaptcha.Secret != "" && auther.ReCaptcha.ProjectID != ""
-			data["ReCaptchaKey"] = auther.ReCaptcha.Key
+		recaptcha = raw.(*auth.JSONAuth).ReCaptcha
+	case auth.MethodHookAuth:
+		raw, err := d.store.Auth.Get(d.settings.AuthMethod)
+		if err != nil {
+			return http.StatusInternalServerError, err
 		}
+		recaptcha = raw.(*auth.HookAuth).ReCaptcha
+	}
+
+	if recaptcha != nil {
+		data["ReCaptcha"] = recaptcha.Key != "" && recaptcha.Secret != "" && recaptcha.ProjectID != ""
+		data["ReCaptchaKey"] = recaptcha.Key
 	}
 
 	b, err := json.Marshal(data)

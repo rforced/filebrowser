@@ -73,20 +73,21 @@ func getAuthMethod(flags *pflag.FlagSet, defaults ...interface{}) (settings.Auth
 
 	var defaultAuther map[string]interface{}
 	if len(defaults) > 0 {
-		if hasAuth := defaults[0]; hasAuth != true {
-			for _, arg := range defaults {
-				switch def := arg.(type) {
-				case *settings.Settings:
+		hasAuth, _ := defaults[0].(bool)
+		for _, arg := range defaults {
+			switch def := arg.(type) {
+			case *settings.Settings:
+				if !hasAuth {
 					method = def.AuthMethod
-				case auth.Auther:
-					ms, err := json.Marshal(def)
-					if err != nil {
-						return "", nil, err
-					}
-					err = json.Unmarshal(ms, &defaultAuther)
-					if err != nil {
-						return "", nil, err
-					}
+				}
+			case auth.Auther:
+				ms, err := json.Marshal(def)
+				if err != nil {
+					return "", nil, err
+				}
+				err = json.Unmarshal(ms, &defaultAuther)
+				if err != nil {
+					return "", nil, err
 				}
 			}
 		}
@@ -102,7 +103,9 @@ func getProxyAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (a
 	}
 
 	if header == "" && defaultAuther != nil {
-		header = defaultAuther["header"].(string)
+		if h, ok := defaultAuther["header"].(string); ok {
+			header = h
+		}
 	}
 
 	if header == "" {
@@ -116,9 +119,7 @@ func getNoAuth() auth.Auther {
 	return &auth.NoAuth{}
 }
 
-func getJSONAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (auth.Auther, error) {
-	jsonAuth := &auth.JSONAuth{}
-
+func getReCaptcha(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (*auth.ReCaptcha, error) {
 	key, err := flags.GetString("recaptcha.key")
 	if err != nil {
 		return nil, err
@@ -177,13 +178,24 @@ func getJSONAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (au
 	}
 
 	if key != "" && secret != "" && project != "" {
-		jsonAuth.ReCaptcha = &auth.ReCaptcha{
+		return &auth.ReCaptcha{
 			Key:              key,
 			Secret:           secret,
 			ProjectID:        project,
 			AllowedHostnames: allowedHostnames,
-		}
+		}, nil
 	}
+	return nil, nil
+}
+
+func getJSONAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (auth.Auther, error) {
+	jsonAuth := &auth.JSONAuth{}
+
+	recaptcha, err := getReCaptcha(flags, defaultAuther)
+	if err != nil {
+		return nil, err
+	}
+	jsonAuth.ReCaptcha = recaptcha
 	return jsonAuth, nil
 }
 
@@ -192,15 +204,22 @@ func getHookAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (au
 	if err != nil {
 		return nil, err
 	}
-	if command == "" {
-		command = defaultAuther["command"].(string)
+	if command == "" && defaultAuther != nil {
+		if c, ok := defaultAuther["command"].(string); ok {
+			command = c
+		}
 	}
 
 	if command == "" {
 		return nil, errors.New("you must set the flag 'auth.command' for method 'hook'")
 	}
 
-	return &auth.HookAuth{Command: command}, nil
+	recaptcha, err := getReCaptcha(flags, defaultAuther)
+	if err != nil {
+		return nil, err
+	}
+
+	return &auth.HookAuth{Command: command, ReCaptcha: recaptcha}, nil
 }
 
 func getAuthentication(flags *pflag.FlagSet, defaults ...interface{}) (settings.AuthMethod, auth.Auther, error) {
@@ -374,22 +393,26 @@ func logRunningConfig(ser *settings.Server, set *settings.Settings, auther auth.
 
 	fmt.Fprintln(w, "\nAuther:")
 	fmt.Fprintf(w, "\tType:\t%T\n", auther)
-	switch a := auther.(type) {
-	case *auth.JSONAuth:
-		if a.ReCaptcha != nil {
-			fmt.Fprintf(w, "\treCAPTCHA Key:\t%s\n", a.ReCaptcha.Key)
-			fmt.Fprintf(w, "\treCAPTCHA Secret:\t%s\n", redactedPresence(a.ReCaptcha.Secret))
-			fmt.Fprintf(w, "\treCAPTCHA Project ID:\t%s\n", a.ReCaptcha.ProjectID)
-			if len(a.ReCaptcha.AllowedHostnames) > 0 {
-				fmt.Fprintf(w, "\treCAPTCHA Allowed Hostnames:\t%s\n", strings.Join(a.ReCaptcha.AllowedHostnames, ","))
+	printReCaptcha := func(rc *auth.ReCaptcha) {
+		if rc != nil {
+			fmt.Fprintf(w, "\treCAPTCHA Key:\t%s\n", rc.Key)
+			fmt.Fprintf(w, "\treCAPTCHA Secret:\t%s\n", redactedPresence(rc.Secret))
+			fmt.Fprintf(w, "\treCAPTCHA Project ID:\t%s\n", rc.ProjectID)
+			if len(rc.AllowedHostnames) > 0 {
+				fmt.Fprintf(w, "\treCAPTCHA Allowed Hostnames:\t%s\n", strings.Join(rc.AllowedHostnames, ","))
 			}
 		} else {
 			fmt.Fprintln(w, "\treCAPTCHA:\tdisabled")
 		}
+	}
+	switch a := auther.(type) {
+	case *auth.JSONAuth:
+		printReCaptcha(a.ReCaptcha)
 	case *auth.ProxyAuth:
 		fmt.Fprintf(w, "\tHeader:\t%s\n", a.Header)
 	case *auth.HookAuth:
 		fmt.Fprintf(w, "\tCommand:\t%s\n", a.Command)
+		printReCaptcha(a.ReCaptcha)
 	}
 
 	fmt.Fprintln(w, "==================================================")
