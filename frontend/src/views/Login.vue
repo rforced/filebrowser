@@ -41,6 +41,7 @@
         {{ createMode ? t("login.loginInstead") : t("login.createAnAccount") }}
       </p>
     </form>
+    <span v-if="version" class="version">{{ version }}</span>
   </div>
 </template>
 
@@ -53,6 +54,7 @@ import {
   recaptcha,
   recaptchaKey,
   signup,
+  version,
 } from "@/utils/constants";
 import { inject, ref, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
