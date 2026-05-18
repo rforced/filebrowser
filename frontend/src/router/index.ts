@@ -16,6 +16,7 @@ import { baseURL, name } from "@/utils/constants";
 import i18n from "@/i18n";
 import { loginPage } from "@/utils/constants";
 import { login, validateLogin } from "@/utils/auth";
+import { catchAllRedirect } from "./catchAll";
 
 const titles = {
   Login: "sidebar.login",
@@ -144,9 +145,8 @@ const routes = [
     },
   },
   {
-    path: "/:catchAll(.*)*",
-    redirect: (to: RouteLocation) =>
-      `/files/${[...to.params.catchAll].join("/")}`,
+    path: "/:catchAll(.*)",
+    redirect: (to: RouteLocation) => catchAllRedirect(to.params.catchAll),
   },
 ];
 
