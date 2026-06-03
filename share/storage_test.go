@@ -44,7 +44,7 @@ func (m *mockBackend) Delete(hash string) error {
 	return nil
 }
 
-func (m *mockBackend) DeleteWithPathPrefix(_ string) error {
+func (m *mockBackend) DeleteWithPathPrefix(_ string, _ uint) error {
 	return nil
 }
 

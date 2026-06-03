@@ -24,6 +24,7 @@ const (
 	loginRateWindow            = time.Minute
 	usernameMaxLength          = 64
 	usernameMinLength          = 1
+	maxAuthBodySize            = 1 << 20 // 1 MiB
 )
 
 var validUsername = regexp.MustCompile(`^[a-zA-Z0-9@._\-]+$`)
@@ -173,6 +174,10 @@ func withAdmin(fn handleFunc) handleFunc {
 
 func loginHandler(tokenExpireTime time.Duration) handleFunc {
 	return func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxAuthBodySize)
+		}
+
 		// Check rate limit before any auth or recaptcha logic
 		clientIP := realip.FromRequest(r)
 		if checkLoginRateLimit(clientIP) {
@@ -205,7 +210,7 @@ type signupBody struct {
 	Password string `json:"password"`
 }
 
-var signupHandler = func(_ http.ResponseWriter, r *http.Request, d *data) (int, error) {
+var signupHandler = func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 	if !d.settings.Signup {
 		return http.StatusMethodNotAllowed, nil
 	}
@@ -213,6 +218,8 @@ var signupHandler = func(_ http.ResponseWriter, r *http.Request, d *data) (int, 
 	if r.Body == nil {
 		return http.StatusBadRequest, nil
 	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxAuthBodySize)
 
 	info := &signupBody{}
 	err := json.NewDecoder(r.Body).Decode(info)

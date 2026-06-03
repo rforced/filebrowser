@@ -77,6 +77,9 @@ func setContentDisposition(w http.ResponseWriter, r *http.Request, file *files.F
 	} else {
 		// As per RFC6266 section 4.3
 		w.Header().Set("Content-Disposition", "attachment; filename*=utf-8''"+url.PathEscape(file.Name))
+		// Force a non-renderable type so the browser always downloads the file
+		// instead of sniffing it and potentially executing it inline.
+		w.Header().Set("Content-Type", "application/octet-stream")
 	}
 }
 
@@ -125,6 +128,12 @@ func getFiles(d *data, path, commonPath string) ([]archives.FileInfo, error) {
 		nameInArchive := strings.TrimPrefix(path, commonPath)
 		nameInArchive = strings.TrimPrefix(nameInArchive, string(filepath.Separator))
 		nameInArchive = filepath.ToSlash(nameInArchive)
+		// filepath.ToSlash only rewrites the host separator, so on a Linux
+		// host a stored backslash survives and is emitted verbatim into the
+		// archive. Windows extractors then treat "\" as a path separator,
+		// allowing the entry to escape the extraction directory (zip-slip).
+		// Strip Windows separators regardless of host OS.
+		nameInArchive = strings.ReplaceAll(nameInArchive, "\\", "/")
 
 		archiveFiles = append(archiveFiles, archives.FileInfo{
 			FileInfo:      info,
@@ -218,6 +227,7 @@ func rawFileHandler(w http.ResponseWriter, r *http.Request, file *files.FileInfo
 
 	setContentDisposition(w, r, file)
 	w.Header().Add("Content-Security-Policy", `script-src 'none';`)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private")
 	http.ServeContent(w, r, file.Name, file.ModTime, fd)
 	return 0, nil
