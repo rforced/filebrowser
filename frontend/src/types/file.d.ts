@@ -58,6 +58,7 @@ interface ClipItem {
   from: string;
   name: string;
   size?: number;
+  isDir?: boolean;
   modified?: string;
 }
 
@@ -77,6 +78,15 @@ interface ConflictingResource {
   origin: ConflictingItem;
   dest: ConflictingItem;
   checked: Array<"origin" | "dest">;
+  isSmallerOnServer?: boolean;
+}
+
+interface RecursiveEntry {
+  path: string;
+  name: string;
+  size: number;
+  modified: string;
+  isDir: boolean;
 }
 
 interface CsvData {

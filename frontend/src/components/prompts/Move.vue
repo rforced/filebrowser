@@ -93,6 +93,7 @@ const move = async (event: Event) => {
     to: string;
     name: string;
     size: number;
+    isDir: boolean;
     modified: string;
     overwrite: boolean;
     rename: boolean;
@@ -104,6 +105,7 @@ const move = async (event: Event) => {
       to: dest.value + encodeURIComponent(fileStore.req!.items[item].name),
       name: fileStore.req!.items[item].name,
       size: fileStore.req!.items[item].size,
+      isDir: fileStore.req!.items[item].isDir,
       modified: fileStore.req!.items[item].modified,
       overwrite: false,
       rename: false,
@@ -128,8 +130,7 @@ const move = async (event: Event) => {
       });
   };
 
-  const dstItems = (await api.fetch(dest.value!)).items;
-  const conflict = upload.checkConflict(items, dstItems);
+  const conflict = await upload.checkConflict(items, dest.value!, true);
 
   if (conflict.length > 0) {
     layoutStore.showHover({
