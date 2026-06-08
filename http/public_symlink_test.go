@@ -15,6 +15,7 @@ import (
 	"github.com/asdine/storm/v3"
 	"github.com/spf13/afero"
 
+	"github.com/rforced/filebrowser/v2/files"
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/share"
 	"github.com/rforced/filebrowser/v2/storage"
@@ -79,7 +80,7 @@ func symlinkShareStorage(t *testing.T) *storage.Storage {
 	}
 	st.Users = &customFSUser{
 		Store: st.Users,
-		fs:    afero.NewBasePathFs(afero.NewOsFs(), scope),
+		fs:    files.NewScopedFs(afero.NewOsFs(), scope),
 	}
 	return st
 }

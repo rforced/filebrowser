@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/afero"
 
 	"github.com/rforced/filebrowser/v2/auth"
+	"github.com/rforced/filebrowser/v2/files"
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/storage/bolt"
 	"github.com/rforced/filebrowser/v2/users"
@@ -57,7 +58,7 @@ func TestTusHandlersRejectSymlinkScopeEscape(t *testing.T) {
 	}
 	st.Users = &customFSUser{
 		Store: st.Users,
-		fs:    afero.NewBasePathFs(afero.NewOsFs(), userScope),
+		fs:    files.NewScopedFs(afero.NewOsFs(), userScope),
 	}
 
 	// Issue a valid auth token for the user.

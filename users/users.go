@@ -20,23 +20,23 @@ const (
 
 // User describes a user.
 type User struct {
-	ID                    uint          `storm:"id,increment" json:"id"`
-	Username              string        `storm:"unique" json:"username"`
-	Password              string        `json:"password"`
-	Scope                 string        `json:"scope"`
-	Locale                string        `json:"locale"`
-	LockPassword          bool          `json:"lockPassword"`
-	ViewMode              ViewMode      `json:"viewMode"`
-	SingleClick           bool          `json:"singleClick"`
-	RedirectAfterCopyMove bool          `json:"redirectAfterCopyMove"`
-	Perm                  Permissions   `json:"perm"`
-	Commands              []string      `json:"commands"`
-	Sorting               files.Sorting `json:"sorting"`
-	Fs                    afero.Fs      `json:"-" yaml:"-"`
-	Rules                 []rules.Rule  `json:"rules"`
-	HideDotfiles          bool          `json:"hideDotfiles"`
-	DateFormat            bool          `json:"dateFormat"`
-	AceEditorTheme        string        `json:"aceEditorTheme"`
+	ID                    uint            `storm:"id,increment" json:"id"`
+	Username              string          `storm:"unique" json:"username"`
+	Password              string          `json:"password"`
+	Scope                 string          `json:"scope"`
+	Locale                string          `json:"locale"`
+	LockPassword          bool            `json:"lockPassword"`
+	ViewMode              ViewMode        `json:"viewMode"`
+	SingleClick           bool            `json:"singleClick"`
+	RedirectAfterCopyMove bool            `json:"redirectAfterCopyMove"`
+	Perm                  Permissions     `json:"perm"`
+	Commands              []string        `json:"commands"`
+	Sorting               files.Sorting   `json:"sorting"`
+	Fs                    *files.ScopedFs `json:"-" yaml:"-"`
+	Rules                 []rules.Rule    `json:"rules"`
+	HideDotfiles          bool            `json:"hideDotfiles"`
+	DateFormat            bool            `json:"dateFormat"`
+	AceEditorTheme        string          `json:"aceEditorTheme"`
 }
 
 // GetRules implements rules.Provider.
@@ -93,7 +93,7 @@ func (u *User) Clean(baseScope string, fields ...string) error {
 	if u.Fs == nil {
 		scope := u.Scope
 		scope = filepath.Join(baseScope, filepath.Join("/", scope))
-		u.Fs = afero.NewBasePathFs(afero.NewOsFs(), scope)
+		u.Fs = files.NewScopedFs(afero.NewOsFs(), scope)
 	}
 
 	return nil
@@ -101,5 +101,5 @@ func (u *User) Clean(baseScope string, fields ...string) error {
 
 // FullPath gets the full path for a user's relative path.
 func (u *User) FullPath(path string) string {
-	return afero.FullBaseFsPath(u.Fs.(*afero.BasePathFs), path)
+	return afero.FullBaseFsPath(u.Fs.Base(), path)
 }

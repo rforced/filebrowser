@@ -236,19 +236,10 @@ func resourcePatchHandler(fileCache FileCache) handleFunc {
 			return http.StatusForbidden, nil
 		}
 
-		// Refuse to copy/move through a symlink that escapes the user's scope,
-		// for either the source (read escape) or the destination (write
-		// escape). fileutils.Copy/MoveFile operate on the raw afero FS and
-		// follow symlinks, so they bypass the guards in stat()/writeFile().
-		for _, p := range []string{src, dst} {
-			if ok, scopeErr := files.WithinScope(d.user.Fs, p); scopeErr != nil || !ok {
-				if scopeErr != nil {
-					return errToStatus(scopeErr), scopeErr
-				}
-				return http.StatusForbidden, nil
-			}
-		}
-
+		// Copying/moving through a symlink that escapes the user's scope is
+		// rejected by the scoped filesystem itself: fileutils.Copy/MoveFile run
+		// every operation (including each file of a recursive directory copy)
+		// through d.user.Fs, which refuses to dereference an escaping link.
 		err = checkParent(src, dst)
 		if err != nil {
 			return http.StatusBadRequest, err
@@ -316,13 +307,9 @@ func addVersionSuffix(source string, afs afero.Fs) string {
 }
 
 func writeFile(afs afero.Fs, dst string, in io.Reader, fileMode, dirMode fs.FileMode) (os.FileInfo, error) {
-	// Refuse to write through a symlink that escapes the user's scope, so an
-	// overwrite of an existing escaping symlink cannot modify a file outside
-	// the boundary.
-	if ok, err := files.WithinScope(afs, dst); err != nil || !ok {
-		return nil, os.ErrPermission
-	}
-
+	// Writing through a symlink that escapes the scope is refused by the scoped
+	// filesystem: the MkdirAll/OpenFile calls below go through afs, which
+	// rejects an escaping destination with a permission error.
 	dir, _ := path.Split(dst)
 	err := afs.MkdirAll(dir, dirMode)
 	if err != nil {
@@ -453,9 +440,11 @@ var resourceGetRecursiveHandler = withUser(func(w http.ResponseWriter, r *http.R
 		}
 
 		// Consistent with readListing: never leak a symlink whose on-disk target
-		// escapes the user's scoped root.
+		// escapes the user's scoped root. afero.Walk hands us the link's own
+		// (lstat) info, so check the target explicitly — the scoped filesystem
+		// reports an escaping target with a permission error.
 		if files.IsSymlink(info.Mode()) {
-			if ok, scopeErr := files.WithinScope(d.user.Fs, fPath); scopeErr != nil || !ok {
+			if _, statErr := d.user.Fs.Stat(fPath); errors.Is(statErr, os.ErrPermission) {
 				if info.IsDir() {
 					return filepath.SkipDir
 				}

@@ -11,6 +11,7 @@ import (
 	"github.com/asdine/storm/v3"
 	"github.com/spf13/afero"
 
+	"github.com/rforced/filebrowser/v2/files"
 	"github.com/rforced/filebrowser/v2/rules"
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/share"
@@ -103,7 +104,7 @@ func TestPublicShareHandlerAuthentication(t *testing.T) {
 
 				storage.Users = &customFSUser{
 					Store: storage.Users,
-					fs:    &afero.MemMapFs{},
+					fs:    files.NewScopedFs(&afero.MemMapFs{}, "/"),
 				}
 
 				// Assign a unique remote address to each subtest to avoid
@@ -208,7 +209,7 @@ func TestPublicShareHandlerRules(t *testing.T) {
 				t.Fatalf("failed to save settings: %v", err)
 			}
 
-			fs := afero.NewBasePathFs(afero.NewOsFs(), t.TempDir())
+			fs := files.NewScopedFs(afero.NewOsFs(), t.TempDir())
 			if err := fs.MkdirAll("/projects/private", 0o755); err != nil {
 				t.Fatalf("failed to create private dir: %v", err)
 			}
@@ -264,7 +265,7 @@ func newHTTPRequest(t *testing.T, requestModifiers ...func(*http.Request)) *http
 
 type customFSUser struct {
 	users.Store
-	fs afero.Fs
+	fs *files.ScopedFs
 }
 
 func (cu *customFSUser) Get(baseScope string, id interface{}) (*users.User, error) {

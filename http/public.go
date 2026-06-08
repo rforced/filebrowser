@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/afero"
 	"github.com/tomasen/realip"
 	"golang.org/x/crypto/bcrypt"
 
@@ -141,7 +140,7 @@ var withHashFile = func(fn handleFunc) handleFunc {
 		}
 
 		// set fs root to the shared file/folder
-		d.user.Fs = afero.NewBasePathFs(d.user.Fs, basePath)
+		d.user.Fs = files.NewScopedFs(d.user.Fs, basePath)
 
 		// the filesystem is now rebased onto basePath, so paths handed to the
 		// rule checker are relative to it. Resolve them back to the user's

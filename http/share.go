@@ -91,9 +91,12 @@ var shareDeleteHandler = withPermShare(func(_ http.ResponseWriter, r *http.Reque
 })
 
 var sharePostHandler = withPermShare(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
-	// Only allow sharing paths that currently exist. Otherwise a share could be
-	// created for a non-existent path and would silently start exposing
-	// whatever file later appears there.
+	// Only allow sharing paths that currently exist, and — because d.user.Fs is
+	// a scoped filesystem — that resolve inside the user's scope. A path whose
+	// on-disk target escapes the scope (e.g. via a symlink) is rejected here
+	// with a permission error, so a share can never be created for it. Otherwise
+	// a share could be created for a non-existent path and would silently start
+	// exposing whatever file later appears there.
 	if _, err := d.user.Fs.Stat(r.URL.Path); err != nil {
 		return errToStatus(err), err
 	}

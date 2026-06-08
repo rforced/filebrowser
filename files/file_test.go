@@ -1,6 +1,7 @@
 package files
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -139,22 +140,15 @@ func TestDirSize_OnlySubdirectories(t *testing.T) {
 	}
 }
 
-func TestWithinScope(t *testing.T) {
-	t.Run("non-scoped filesystem is a no-op", func(t *testing.T) {
-		ok, err := WithinScope(afero.NewOsFs(), "/anything")
-		if err != nil || !ok {
-			t.Fatalf("expected (true, nil), got (%v, %v)", ok, err)
-		}
-	})
-
+func TestScopedFsWithin(t *testing.T) {
 	t.Run("path inside a nested scope is allowed", func(t *testing.T) {
 		scope := t.TempDir()
 		if err := os.WriteFile(filepath.Join(scope, "file.txt"), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		bfs := afero.NewBasePathFs(afero.NewOsFs(), scope)
+		sfs := NewScopedFs(afero.NewOsFs(), scope)
 
-		ok, err := WithinScope(bfs, "/file.txt")
+		ok, err := sfs.within("/file.txt")
 		if err != nil || !ok {
 			t.Fatalf("expected (true, nil), got (%v, %v)", ok, err)
 		}
@@ -162,9 +156,9 @@ func TestWithinScope(t *testing.T) {
 
 	t.Run("new file inside scope is allowed", func(t *testing.T) {
 		scope := t.TempDir()
-		bfs := afero.NewBasePathFs(afero.NewOsFs(), scope)
+		sfs := NewScopedFs(afero.NewOsFs(), scope)
 
-		ok, err := WithinScope(bfs, "/does-not-exist-yet.txt")
+		ok, err := sfs.within("/does-not-exist-yet.txt")
 		if err != nil || !ok {
 			t.Fatalf("expected (true, nil), got (%v, %v)", ok, err)
 		}
@@ -178,9 +172,9 @@ func TestWithinScope(t *testing.T) {
 		if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		bfs := afero.NewBasePathFs(afero.NewOsFs(), "/")
+		sfs := NewScopedFs(afero.NewOsFs(), "/")
 
-		ok, err := WithinScope(bfs, f)
+		ok, err := sfs.within(f)
 		if err != nil || !ok {
 			t.Fatalf("expected (true, nil) for a path under root scope, got (%v, %v)", ok, err)
 		}
@@ -201,9 +195,9 @@ func TestWithinScope(t *testing.T) {
 		if err := os.Symlink(sibling, link); err != nil {
 			t.Fatal(err)
 		}
-		bfs := afero.NewBasePathFs(afero.NewOsFs(), scope)
+		sfs := NewScopedFs(afero.NewOsFs(), scope)
 
-		ok, err := WithinScope(bfs, "/escape")
+		ok, err := sfs.within("/escape")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -223,11 +217,34 @@ func TestWithinScope(t *testing.T) {
 		if err := os.Symlink(filepath.Join(scope, "real"), filepath.Join(scope, "link")); err != nil {
 			t.Skipf("cannot create symlink: %v", err)
 		}
-		bfs := afero.NewBasePathFs(afero.NewOsFs(), scope)
+		sfs := NewScopedFs(afero.NewOsFs(), scope)
 
-		ok, err := WithinScope(bfs, "/link/f.txt")
+		ok, err := sfs.within("/link/f.txt")
 		if err != nil || !ok {
 			t.Fatalf("expected (true, nil) for an in-scope symlink target, got (%v, %v)", ok, err)
+		}
+	})
+
+	// The escaping symlink must also be rejected at the operation layer, not
+	// only by the internal within() check: a guarded call (Stat) returns a
+	// permission error so callers that don't pre-check are still protected.
+	t.Run("guarded operation rejects escaping symlink", func(t *testing.T) {
+		base := t.TempDir()
+		scope := filepath.Join(base, "srv")
+		secret := filepath.Join(base, "secret.txt")
+		if err := os.MkdirAll(scope, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(secret, []byte("OUT-OF-SCOPE"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(secret, filepath.Join(scope, "escape")); err != nil {
+			t.Skipf("cannot create symlink: %v", err)
+		}
+		sfs := NewScopedFs(afero.NewOsFs(), scope)
+
+		if _, err := sfs.Stat("/escape"); !errors.Is(err, os.ErrPermission) {
+			t.Fatalf("expected os.ErrPermission stating an escaping symlink, got %v", err)
 		}
 	})
 }
@@ -253,12 +270,12 @@ func TestStatRejectsLinkedAncestorEscape(t *testing.T) {
 	}
 
 	// Filesystem scoped to the shared directory, as a public share would be.
-	bfs := afero.NewBasePathFs(afero.NewOsFs(), filepath.Join(scope, "shared"))
+	sfs := NewScopedFs(afero.NewOsFs(), filepath.Join(scope, "shared"))
 
-	if _, err := stat(&FileOptions{Fs: bfs, Path: "/link/secret.txt"}); !os.IsPermission(err) {
+	if _, err := stat(&FileOptions{Fs: sfs, Path: "/link/secret.txt"}); !os.IsPermission(err) {
 		t.Fatalf("expected permission error for linked-ancestor escape, got %v", err)
 	}
-	if _, err := stat(&FileOptions{Fs: bfs, Path: "/ok.txt"}); err != nil {
+	if _, err := stat(&FileOptions{Fs: sfs, Path: "/ok.txt"}); err != nil {
 		t.Fatalf("expected in-scope file to be served, got %v", err)
 	}
 }

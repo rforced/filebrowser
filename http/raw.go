@@ -117,10 +117,10 @@ func getFiles(d *data, path, commonPath string) ([]archives.FileInfo, error) {
 		return nil, nil
 	}
 
-	if ok, err := files.WithinScope(d.user.Fs, path); err != nil || !ok {
-		return nil, nil
-	}
-
+	// The scoped filesystem refuses to dereference a symlink whose target
+	// escapes the user's scope: Stat (and the Open calls below) return a
+	// permission error, so an escaping entry is skipped by the recursive caller
+	// rather than being added to the archive.
 	info, err := d.user.Fs.Stat(path)
 	if err != nil {
 		return nil, err
