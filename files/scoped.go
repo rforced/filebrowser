@@ -35,6 +35,14 @@ func NewScopedFs(source afero.Fs, path string) *ScopedFs {
 // Base returns the underlying *afero.BasePathFs.
 func (s *ScopedFs) Base() *afero.BasePathFs { return s.base }
 
+// RealPath forwards to the underlying *afero.BasePathFs so callers can map a
+// scoped path back to its absolute on-disk location. Without this, the
+// RealPath() detection in FileInfo silently falls back to the scoped path,
+// which (for example) makes disk-usage statfs run against the wrong filesystem.
+func (s *ScopedFs) RealPath(name string) (string, error) {
+	return s.base.RealPath(name)
+}
+
 // guard returns an error if name's on-disk target resolves outside the scope.
 func (s *ScopedFs) guard(name string) error {
 	ok, err := s.within(name)
