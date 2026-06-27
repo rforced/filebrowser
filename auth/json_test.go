@@ -201,11 +201,12 @@ func (m *mockUserStore) Get(_ string, id interface{}) (*users.User, error) {
 	return nil, os.ErrNotExist
 }
 
-func (m *mockUserStore) Gets(_ string) ([]*users.User, error)    { return nil, nil }
-func (m *mockUserStore) Save(_ *users.User) error                { return nil }
-func (m *mockUserStore) Update(_ *users.User, _ ...string) error { return nil }
-func (m *mockUserStore) Delete(_ interface{}) error              { return nil }
-func (m *mockUserStore) LastUpdate(_ uint) int64                 { return 0 }
+func (m *mockUserStore) GetByScope(_ string) (*users.User, error) { return nil, os.ErrNotExist }
+func (m *mockUserStore) Gets(_ string) ([]*users.User, error)     { return nil, nil }
+func (m *mockUserStore) Save(_ *users.User) error                 { return nil }
+func (m *mockUserStore) Update(_ *users.User, _ ...string) error  { return nil }
+func (m *mockUserStore) Delete(_ interface{}) error               { return nil }
+func (m *mockUserStore) LastUpdate(_ uint) int64                  { return 0 }
 
 func makeTestUser(username, password string) *users.User {
 	u := &users.User{Username: username}

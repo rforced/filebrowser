@@ -26,6 +26,7 @@ interface Share {
   expire?: any;
   userID?: number;
   username?: string;
+  hasPassword?: boolean;
 }
 
 interface SearchParams {
