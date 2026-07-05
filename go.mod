@@ -17,7 +17,7 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/samber/lo v1.53.0
-	github.com/shirou/gopsutil/v4 v4.26.5
+	github.com/shirou/gopsutil/v4 v4.26.6
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -34,7 +34,7 @@ require (
 
 require (
 	github.com/STARRY-S/zip v0.2.3 // indirect
-	github.com/andybalholm/brotli v1.2.1 // indirect
+	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/asticode/go-astikit v0.59.0 // indirect
 	github.com/asticode/go-astits v1.15.0 // indirect
 	github.com/bodgit/plumbing v1.3.0 // indirect
@@ -51,17 +51,17 @@ require (
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/golang/geo v0.0.0-20260612074446-f1a45663b0f3 // indirect
+	github.com/golang/geo v0.0.0-20260625163123-7c0e84413537 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/klauspost/compress v1.18.6 // indirect
+	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/mikelolasagasti/xz v1.0.1 // indirect
 	github.com/minio/minlz v1.1.1 // indirect
 	github.com/nwaples/rardecode/v2 v2.2.5 // indirect
-	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
+	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
