@@ -76,6 +76,10 @@ var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 	}
 
 	if checksum := r.URL.Query().Get("checksum"); checksum != "" {
+		if !d.user.Perm.Download {
+			return http.StatusAccepted, nil
+		}
+
 		err := file.Checksum(checksum)
 		if errors.Is(err, fberrors.ErrInvalidOption) {
 			return http.StatusBadRequest, nil
@@ -139,7 +143,9 @@ func resourcePostHandler(fileCache FileCache) handleFunc {
 
 		// Directories creation on POST.
 		if strings.HasSuffix(r.URL.Path, "/") {
-			err := d.user.Fs.MkdirAll(r.URL.Path, d.settings.DirMode)
+			err := d.RunHook(func() error {
+				return d.user.Fs.MkdirAll(r.URL.Path, d.settings.DirMode)
+			}, "upload", r.URL.Path, "", d.user)
 			return errToStatus(err), err
 		}
 
