@@ -251,6 +251,23 @@ func (i *FileInfo) RealPath() string {
 	return i.Path
 }
 
+// modelExtensions lists the 3D model formats the frontend can preview. Kept as
+// an explicit set rather than a "model/" mime prefix check because the mime map
+// also assigns model/* to formats without a previewer (VRML, POV-Ray).
+var modelExtensions = map[string]struct{}{
+	".3mf":  {},
+	".glb":  {},
+	".gltf": {},
+	".obj":  {},
+	".ply":  {},
+	".stl":  {},
+}
+
+func isModelExtension(ext string) bool {
+	_, ok := modelExtensions[strings.ToLower(ext)]
+	return ok
+}
+
 func (i *FileInfo) detectType(modify, saveContent, readHeader bool, calcImgRes bool) error {
 	if IsNamedPipe(i.Mode) {
 		i.Type = "blob"
@@ -293,6 +310,12 @@ func (i *FileInfo) detectType(modify, saveContent, readHeader bool, calcImgRes b
 		return nil
 	case strings.HasSuffix(mimetype, "pdf"):
 		i.Type = "pdf"
+		return nil
+	case isModelExtension(i.Extension):
+		// Must be checked before the text case below: ASCII variants of these
+		// formats (STL, OBJ, PLY, glTF) are valid UTF-8 and would otherwise be
+		// detected as text, opening the editor instead of the 3D previewer.
+		i.Type = "model"
 		return nil
 	case (strings.HasPrefix(mimetype, "text") || !isBinary(buffer)) && i.Size <= 10*1024*1024: // 10 MB
 		i.Type = "text"

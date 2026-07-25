@@ -18,6 +18,9 @@
 .file-icons [data-type="image"] i::before {
   content: "image";
 }
+.file-icons [data-type="model"] i::before {
+  content: "view_in_ar";
+}
 .file-icons [data-type="pdf"] i::before {
   content: "description";
 }

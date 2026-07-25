@@ -6,7 +6,7 @@
     @mousemove="toggleNavigation"
     @touchstart="toggleNavigation"
   >
-    <header-bar v-if="isPdf || isEpub || isCsv || showNav">
+    <header-bar v-if="isPdf || isEpub || isCsv || is3d || showNav">
       <action icon="close" :label="$t('buttons.close')" @action="close()" />
       <title>{{ name }}</title>
       <action
@@ -104,6 +104,12 @@
           </div>
         </div>
         <CsvViewer v-else-if="isCsv" :content="csvContent" :error="csvError" />
+        <ModelViewer
+          v-else-if="is3d && fileStore.req"
+          :src="previewUrl"
+          :extension="fileStore.req.extension"
+          :size="fileStore.req.size"
+        />
         <ExtendedImage
           v-else-if="fileStore.req?.type == 'image'"
           :src="previewUrl"
@@ -195,7 +201,15 @@ import ExtendedImage from "@/components/files/ExtendedImage.vue";
 import VideoPlayer from "@/components/files/VideoPlayer.vue";
 import CsvViewer from "@/components/files/CsvViewer.vue";
 import { VueReader } from "vue-reader";
-import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  inject,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { Rendition } from "epubjs";
 import { getTheme } from "@/utils/theme";
@@ -204,6 +218,12 @@ import { useI18n } from "vue-i18n";
 // CSV file size limit for preview (5MB)
 // Prevents browser memory issues with large files
 const CSV_MAX_SIZE = 5 * 1024 * 1024;
+
+// three.js and its loaders are sizeable, so only fetch them when a 3D model is
+// actually opened.
+const ModelViewer = defineAsyncComponent(
+  () => import("@/components/files/ModelViewer.vue")
+);
 
 const location = useStorage("book-progress", 0, undefined, {
   serializer: {
@@ -249,7 +269,7 @@ const getRendition = (_rendition: Rendition) => {
   rendition.themes.override("background-color", "transparent", true);
 };
 
-const mediaTypes: ResourceType[] = ["image", "video", "audio", "blob"];
+const mediaTypes: ResourceType[] = ["image", "video", "audio", "blob", "model"];
 
 const previousLink = ref<string>("");
 const nextLink = ref<string>("");
@@ -315,6 +335,8 @@ const isCsv = computed(
     fileStore.req?.extension.toLowerCase() == ".csv" &&
     fileStore.req.size <= CSV_MAX_SIZE
 );
+
+const is3d = computed(() => fileStore.req?.type === "model");
 
 const isResizeEnabled = computed(() => resizePreview);
 

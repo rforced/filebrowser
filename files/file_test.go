@@ -398,3 +398,51 @@ func TestStatRejectsLinkedAncestorEscape(t *testing.T) {
 		t.Fatalf("expected in-scope file to be served, got %v", err)
 	}
 }
+
+func TestDetectType_Model(t *testing.T) {
+	t.Parallel()
+
+	// ASCII and binary variants of the same format must resolve to the same
+	// type: the ASCII ones are valid UTF-8 and would otherwise be typed "text",
+	// which routes them to the editor instead of the 3D previewer.
+	cases := []struct {
+		name     string
+		contents []byte
+		want     string
+	}{
+		{"ascii.stl", []byte("solid cube\nfacet normal 0 0 1\nendsolid cube\n"), "model"},
+		{"binary.stl", append([]byte("STL binary header"), 0x00, 0x01, 0x02, 0xff), "model"},
+		{"mesh.obj", []byte("v 0.0 0.0 0.0\nv 1.0 0.0 0.0\nf 1 2 3\n"), "model"},
+		{"scene.gltf", []byte(`{"asset":{"version":"2.0"}}`), "model"},
+		{"scene.glb", append([]byte("glTF"), 0x02, 0x00, 0x00, 0x00), "model"},
+		{"cloud.ply", []byte("ply\nformat ascii 1.0\nend_header\n"), "model"},
+		{"print.3mf", []byte("PK\x03\x04binary-ish"), "model"},
+		{"UPPER.STL", []byte("solid cube\nendsolid cube\n"), "model"},
+		{"notes.txt", []byte("just text\n"), "text"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fs := afero.NewMemMapFs()
+			if err := afero.WriteFile(fs, "/"+tc.name, tc.contents, 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			fi := &FileInfo{
+				Fs:        fs,
+				Path:      "/" + tc.name,
+				Name:      tc.name,
+				Extension: filepath.Ext(tc.name),
+				Size:      int64(len(tc.contents)),
+			}
+
+			if err := fi.detectType(true, false, true, false); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if fi.Type != tc.want {
+				t.Errorf("expected type %q, got %q", tc.want, fi.Type)
+			}
+		})
+	}
+}

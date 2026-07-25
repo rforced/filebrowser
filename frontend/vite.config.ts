@@ -55,6 +55,10 @@ export default defineConfig(({ command }) => {
                 // bundle i18n in a separate chunk
               } else if (id.includes("i18n/")) {
                 return "i18n";
+                // keep three's core out of the entry chunk: it is only needed
+                // when a 3D model is previewed
+              } else if (id.includes("node_modules/three/build/")) {
+                return "three";
               }
             },
           },
