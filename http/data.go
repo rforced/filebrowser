@@ -6,8 +6,7 @@ import (
 	gopath "path"
 	"strconv"
 
-	"github.com/tomasen/realip"
-
+	fbAuth "github.com/rforced/filebrowser/v2/auth"
 	"github.com/rforced/filebrowser/v2/rules"
 	"github.com/rforced/filebrowser/v2/runner"
 	"github.com/rforced/filebrowser/v2/settings"
@@ -24,6 +23,13 @@ type data struct {
 	store    *storage.Storage
 	user     *users.User
 	raw      interface{}
+
+	// token is the session the request authenticated with, and tokenStr the
+	// bearer string it arrived as. Both are set by withUser: handlers need the
+	// former to enforce the absolute session lifetime, and the latter to spare
+	// the caller's own session when revoking a user's others.
+	token    *fbAuth.Token
+	tokenStr string
 
 	// checkerPrefix is prepended to every path before evaluating rules. It is
 	// set when the user's filesystem has been rebased onto a subdirectory (as
@@ -104,8 +110,7 @@ func handle(fn handleFunc, prefix string, store *storage.Storage, server *settin
 		})
 
 		if status >= 400 || err != nil {
-			clientIP := realip.FromRequest(r)
-			log.Printf("%s: %v %s %v", r.URL.Path, status, clientIP, err)
+			log.Printf("%s: %v %s %v", r.URL.Path, status, clientIP(r, server.TrustedProxyNets), err)
 		}
 
 		if status != 0 {

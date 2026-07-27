@@ -278,6 +278,8 @@ func printSettings(ser *settings.Server, set *settings.Settings, auther auth.Aut
 	fmt.Fprintf(w, "\tTLS Cert:\t%s\n", ser.TLSCert)
 	fmt.Fprintf(w, "\tTLS Key:\t%s\n", ser.TLSKey)
 	fmt.Fprintf(w, "\tToken Expiration Time:\t%s\n", ser.TokenExpirationTime)
+	fmt.Fprintf(w, "\tSession Max Lifetime:\t%s\n", ser.SessionMaxLifetime)
+	fmt.Fprintf(w, "\tTrusted Proxies:\t%s\n", strings.Join(ser.TrustedProxies, " "))
 	fmt.Fprintf(w, "\tExec Enabled:\t%t\n", ser.EnableExec)
 	fmt.Fprintf(w, "\tThumbnails Enabled:\t%t\n", ser.EnableThumbnails)
 	fmt.Fprintf(w, "\tResize Preview:\t%t\n", ser.ResizePreview)
@@ -378,6 +380,8 @@ func logRunningConfig(ser *settings.Server, set *settings.Settings, auther auth.
 	fmt.Fprintf(w, "\tTLS Cert:\t%s\n", ser.TLSCert)
 	fmt.Fprintf(w, "\tTLS Key:\t%s\n", ser.TLSKey)
 	fmt.Fprintf(w, "\tToken Expiration Time:\t%s\n", ser.TokenExpirationTime)
+	fmt.Fprintf(w, "\tSession Max Lifetime:\t%s\n", ser.SessionMaxLifetime)
+	fmt.Fprintf(w, "\tTrusted Proxies:\t%s\n", strings.Join(ser.TrustedProxies, " "))
 	fmt.Fprintf(w, "\tExec Enabled:\t%t\n", ser.EnableExec)
 	fmt.Fprintf(w, "\tThumbnails Enabled:\t%t\n", ser.EnableThumbnails)
 	fmt.Fprintf(w, "\tResize Preview:\t%t\n", ser.ResizePreview)
@@ -450,6 +454,12 @@ func getSettings(flags *pflag.FlagSet, set *settings.Settings, ser *settings.Ser
 			ser.BaseURL, err = flags.GetString(flag.Name)
 		case "tokenExpirationTime":
 			ser.TokenExpirationTime, err = flags.GetString(flag.Name)
+		case "sessionMaxLifetime":
+			ser.SessionMaxLifetime, err = flags.GetString(flag.Name)
+		case "trustedProxies":
+			var trusted string
+			trusted, err = flags.GetString(flag.Name)
+			ser.TrustedProxies = splitList(trusted)
 		case "disableThumbnails":
 			ser.EnableThumbnails, err = flags.GetBool(flag.Name)
 			ser.EnableThumbnails = !ser.EnableThumbnails

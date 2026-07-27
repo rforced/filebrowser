@@ -18,6 +18,8 @@ import (
 	"github.com/rforced/filebrowser/v2/users"
 )
 
+var testTokenPolicy = tokenPolicy{expiration: 2 * time.Hour, maxLifetime: 24 * time.Hour}
+
 func setupTestStorage(t *testing.T) *httpTestEnv {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
@@ -86,12 +88,11 @@ func createTestToken(t *testing.T, env *httpTestEnv, userID uint, expiry time.Du
 		t.Fatalf("failed to generate token: %v", err)
 	}
 	tok := &auth.Token{
-		Token:     tokenStr,
 		UserID:    userID,
 		ExpiresAt: time.Now().Add(expiry),
 		CreatedAt: time.Now(),
 	}
-	if err := env.storage.Tokens.Save(tok); err != nil {
+	if err := env.storage.Tokens.Save(tokenStr, tok); err != nil {
 		t.Fatalf("failed to save token: %v", err)
 	}
 	return tokenStr
@@ -271,7 +272,7 @@ func TestLoginHandler(t *testing.T) {
 	t.Parallel()
 	env := setupTestStorage(t)
 
-	handler := handle(loginHandler(2*time.Hour), "", env.storage, env.server)
+	handler := handle(loginHandler(testTokenPolicy), "", env.storage, env.server)
 
 	body := `{"username":"testuser","password":"S3cur3P@ssw0rd!xyz"}`
 	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -302,7 +303,7 @@ func TestLoginHandler_WrongPassword(t *testing.T) {
 	t.Parallel()
 	env := setupTestStorage(t)
 
-	handler := handle(loginHandler(2*time.Hour), "", env.storage, env.server)
+	handler := handle(loginHandler(testTokenPolicy), "", env.storage, env.server)
 
 	body := `{"username":"testuser","password":"wrongpassword"}`
 	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -361,7 +362,7 @@ func TestRenewHandler(t *testing.T) {
 
 	oldToken := createTestToken(t, env, env.user.ID, 1*time.Hour)
 
-	handler := handle(renewHandler(2*time.Hour), "", env.storage, env.server)
+	handler := handle(renewHandler(testTokenPolicy), "", env.storage, env.server)
 
 	r, _ := http.NewRequest(http.MethodPost, "/", http.NoBody)
 	r.Header.Set("X-Auth", oldToken)
@@ -397,7 +398,7 @@ func TestRenewHandler_InvalidToken(t *testing.T) {
 	t.Parallel()
 	env := setupTestStorage(t)
 
-	handler := handle(renewHandler(2*time.Hour), "", env.storage, env.server)
+	handler := handle(renewHandler(testTokenPolicy), "", env.storage, env.server)
 
 	r, _ := http.NewRequest(http.MethodPost, "/", http.NoBody)
 	r.Header.Set("X-Auth", "nonexistent-token")
@@ -521,9 +522,9 @@ func TestLoginHandler_RateLimited(t *testing.T) {
 	t.Parallel()
 	env := setupTestStorage(t)
 
-	handler := handle(loginHandler(2*time.Hour), "", env.storage, env.server)
+	handler := handle(loginHandler(testTokenPolicy), "", env.storage, env.server)
 
-	// Use a unique X-Forwarded-For IP for this test
+	// Use a unique peer address for this test
 	testIP := "198.51.100.1"
 	loginRateLimiter.Delete(testIP)
 
@@ -532,7 +533,7 @@ func TestLoginHandler_RateLimited(t *testing.T) {
 		body := `{"username":"testuser","password":"wrongpassword"}`
 		r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("X-Forwarded-For", testIP)
+		r.RemoteAddr = testIP + ":12345"
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, r)
 
@@ -545,7 +546,7 @@ func TestLoginHandler_RateLimited(t *testing.T) {
 	body := `{"username":"testuser","password":"wrongpassword"}`
 	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("X-Forwarded-For", testIP)
+	r.RemoteAddr = testIP + ":12345"
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, r)
 
@@ -563,7 +564,7 @@ func TestLoginHandler_RateLimitCheckedBeforeAuth(t *testing.T) {
 	t.Parallel()
 	env := setupTestStorage(t)
 
-	handler := handle(loginHandler(2*time.Hour), "", env.storage, env.server)
+	handler := handle(loginHandler(testTokenPolicy), "", env.storage, env.server)
 
 	// Use a unique IP
 	testIP := "198.51.100.2"
@@ -574,7 +575,7 @@ func TestLoginHandler_RateLimitCheckedBeforeAuth(t *testing.T) {
 		body := `{"username":"testuser","password":"S3cur3P@ssw0rd!xyz"}`
 		r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
-		r.Header.Set("X-Forwarded-For", testIP)
+		r.RemoteAddr = testIP + ":12345"
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, r)
 	}
@@ -583,7 +584,7 @@ func TestLoginHandler_RateLimitCheckedBeforeAuth(t *testing.T) {
 	body := `{"username":"testuser","password":"S3cur3P@ssw0rd!xyz"}`
 	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
-	r.Header.Set("X-Forwarded-For", testIP)
+	r.RemoteAddr = testIP + ":12345"
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, r)
 

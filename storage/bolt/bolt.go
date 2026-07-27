@@ -23,6 +23,9 @@ func NewStorage(db *storm.DB) (*storage.Storage, error) {
 	}
 
 	tokenStore := tokenBackend{db: db}
+	if err := tokenStore.purgeLegacy(); err != nil {
+		return nil, err
+	}
 
 	return &storage.Storage{
 		Auth:     authStore,

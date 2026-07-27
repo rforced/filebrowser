@@ -134,4 +134,57 @@ describe("fetchURL", () => {
       expect(renew).toHaveBeenCalledOnce();
     });
   });
+
+  describe("when the server discloses why a request failed", () => {
+    it("lifts the code and params off a structured body so callers can localize it", async () => {
+      globalThis.fetch = mockResponse({
+        status: 400,
+        body: JSON.stringify({
+          code: "passwordTooShort",
+          message: "password is too short, minimum length is 12",
+          params: { min: "12" },
+        }),
+      });
+
+      try {
+        await fetchURL("/api/share/f.txt", { method: "POST" });
+        throw new Error("expected rejection");
+      } catch (e) {
+        const error = e as StatusError;
+        expect(error.code).toBe("passwordTooShort");
+        expect(error.params).toEqual({ min: "12" });
+        // Callers that just display the error must not be shown raw JSON.
+        expect(error.message).toBe(
+          "password is too short, minimum length is 12"
+        );
+      }
+    });
+
+    it("leaves a plain-text failure body as the message", async () => {
+      globalThis.fetch = mockResponse({ status: 400, body: "400 Bad Request" });
+
+      try {
+        await fetchURL("/api/share/f.txt", { method: "POST" });
+        throw new Error("expected rejection");
+      } catch (e) {
+        const error = e as StatusError;
+        expect(error.code).toBeUndefined();
+        expect(error.message).toBe("400 Bad Request");
+      }
+    });
+
+    it("keeps a JSON body that names no code as the raw message", async () => {
+      const body = JSON.stringify({ something: "else" });
+      globalThis.fetch = mockResponse({ status: 500, body });
+
+      try {
+        await fetchURL("/api/share/f.txt", { method: "POST" });
+        throw new Error("expected rejection");
+      } catch (e) {
+        const error = e as StatusError;
+        expect(error.code).toBeUndefined();
+        expect(error.message).toBe(body);
+      }
+    });
+  });
 });

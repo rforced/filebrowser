@@ -8,6 +8,7 @@ import (
 	"os"
 	gopath "path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	libErrors "github.com/rforced/filebrowser/v2/errors"
@@ -72,6 +73,64 @@ func renderJSON(w http.ResponseWriter, _ *http.Request, data interface{}) (int, 
 	}
 
 	return 0, nil
+}
+
+// clientError is a machine-readable explanation of a failure, for the cases
+// where the cause is both safe to disclose and something the requester can act
+// on. Code names the cause for the UI to localize, Params carries whatever the
+// message needs to interpolate, and Message is an English rendering for clients
+// that have no translations of their own.
+//
+// Handlers opt in per response. The default path in handle() answers with a bare
+// status line, so that no handler can leak the text of an internal error simply
+// by returning it.
+type clientError struct {
+	Code    string            `json:"code"`
+	Message string            `json:"message"`
+	Params  map[string]string `json:"params,omitempty"`
+}
+
+// renderClientError writes detail as the body of a failed response.
+//
+// It reports status 0 so that handle() leaves the response alone: this body
+// replaces the status line handle() would otherwise write, rather than trailing
+// it.
+func renderClientError(w http.ResponseWriter, status int, detail clientError) (int, error) {
+	marsh, err := json.Marshal(detail)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	if _, err := w.Write(marsh); err != nil {
+		// The status line is already on the wire; a failed write means the
+		// client hung up. Report it for the log only.
+		return 0, err
+	}
+
+	return 0, nil
+}
+
+// passwordPolicyError describes a rejection by users.ValidateAndHashPwd, and
+// reports whether err was one of those. Callers keep the bare status line for
+// anything else, so a password check that fails for an unexpected reason still
+// says nothing about itself.
+func passwordPolicyError(err error) (clientError, bool) {
+	var short libErrors.ErrShortPassword
+
+	switch {
+	case errors.As(err, &short):
+		return clientError{
+			Code:    "passwordTooShort",
+			Message: err.Error(),
+			Params:  map[string]string{"min": strconv.FormatUint(uint64(short.MinimumLength), 10)},
+		}, true
+	case errors.Is(err, libErrors.ErrEasyPassword):
+		return clientError{Code: "passwordTooCommon", Message: err.Error()}, true
+	}
+
+	return clientError{}, false
 }
 
 func errToStatus(err error) int {

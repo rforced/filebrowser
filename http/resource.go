@@ -436,7 +436,19 @@ func patchAction(ctx context.Context, action, src, dst string, d *data, fileCach
 			return err
 		}
 
-		return fileutils.MoveFile(d.user.Fs, src, dst, d.settings.FileMode, d.settings.DirMode)
+		if err := fileutils.MoveFile(d.user.Fs, src, dst, d.settings.FileMode, d.settings.DirMode); err != nil {
+			return err
+		}
+
+		// Shares record the path they were created for, so they have to follow
+		// the file. Deleting drops them (resourceDeleteHandler); leaving a rename
+		// to strand them would re-create exactly the dangling share that
+		// sharePostHandler refuses to issue in the first place.
+		if err := d.store.Share.UpdatePathPrefix(src, dst, d.user.ID); err != nil {
+			log.Printf("WARNING: Error(s) occurred while moving shares of %s to %s: %v", src, dst, err)
+		}
+
+		return nil
 	default:
 		return fmt.Errorf("unsupported action %s: %w", action, fberrors.ErrInvalidRequestParams)
 	}

@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tomasen/realip"
-
 	fbAuth "github.com/rforced/filebrowser/v2/auth"
 	fberrors "github.com/rforced/filebrowser/v2/errors"
 	"github.com/rforced/filebrowser/v2/users"
@@ -26,6 +24,14 @@ const (
 	usernameMinLength          = 1
 	maxAuthBodySize            = 1 << 20 // 1 MiB
 )
+
+// tokenPolicy bounds how long a session lives: expiration is how long any single
+// token is good for, and maxLifetime how far renewals may carry the session as a
+// whole from the login that started it.
+type tokenPolicy struct {
+	expiration  time.Duration
+	maxLifetime time.Duration
+}
 
 var validUsername = regexp.MustCompile(`^[a-zA-Z0-9@._\-]+$`)
 
@@ -158,6 +164,9 @@ func withUser(fn handleFunc) handleFunc {
 			return http.StatusInternalServerError, err
 		}
 
+		d.token = token
+		d.tokenStr = tokenStr
+
 		canonicalizeRequestPath(r)
 		return fn(w, r, d)
 	}
@@ -173,16 +182,16 @@ func withAdmin(fn handleFunc) handleFunc {
 	})
 }
 
-func loginHandler(tokenExpireTime time.Duration) handleFunc {
+func loginHandler(policy tokenPolicy) handleFunc {
 	return func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 		if r.Body != nil {
 			r.Body = http.MaxBytesReader(w, r.Body, maxAuthBodySize)
 		}
 
 		// Check rate limit before any auth or recaptcha logic
-		clientIP := realip.FromRequest(r)
-		if checkLoginRateLimit(clientIP) {
-			log.Printf("login rate limit exceeded for IP %s", clientIP)
+		ip := clientIP(r, d.server.TrustedProxyNets)
+		if checkLoginRateLimit(ip) {
+			log.Printf("login rate limit exceeded for IP %s", ip)
 			w.Header().Set("Retry-After", "60")
 			return http.StatusTooManyRequests, nil
 		}
@@ -202,7 +211,7 @@ func loginHandler(tokenExpireTime time.Duration) handleFunc {
 			return http.StatusInternalServerError, err
 		}
 
-		return createAndReturnToken(w, d, user, tokenExpireTime)
+		return createAndReturnToken(w, d, user, policy, time.Now())
 	}
 }
 
@@ -280,23 +289,24 @@ var signupHandler = func(w http.ResponseWriter, r *http.Request, d *data) (int, 
 	return http.StatusOK, nil
 }
 
-func renewHandler(tokenExpireTime time.Duration) handleFunc {
-	return withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+func renewHandler(policy tokenPolicy) handleFunc {
+	return withUser(func(w http.ResponseWriter, _ *http.Request, d *data) (int, error) {
+		// Renewal slides the expiry forward, but only within the session's
+		// absolute lifetime. Without that ceiling a stolen token could be walked
+		// forward indefinitely and would outlive any password change.
+		startedAt := d.token.CreatedAt
+		_ = d.store.Tokens.Delete(d.tokenStr)
 
-		oldToken := extractToken(r)
-		if oldToken != "" {
-			_ = d.store.Tokens.Delete(oldToken)
+		if time.Since(startedAt) >= policy.maxLifetime {
+			return http.StatusUnauthorized, nil
 		}
 
-		return createAndReturnToken(w, d, d.user, tokenExpireTime)
+		return createAndReturnToken(w, d, d.user, policy, startedAt)
 	})
 }
 
-var logoutHandler = withUser(func(_ http.ResponseWriter, r *http.Request, d *data) (int, error) {
-	tokenStr := extractToken(r)
-	if tokenStr != "" {
-		_ = d.store.Tokens.Delete(tokenStr)
-	}
+var logoutHandler = withUser(func(_ http.ResponseWriter, _ *http.Request, d *data) (int, error) {
+	_ = d.store.Tokens.Delete(d.tokenStr)
 	return http.StatusOK, nil
 })
 
@@ -305,20 +315,28 @@ var meHandler = withUser(func(w http.ResponseWriter, _ *http.Request, d *data) (
 	return renderJSON(w, nil, info)
 })
 
-func createAndReturnToken(w http.ResponseWriter, d *data, user *users.User, tokenExpirationTime time.Duration) (int, error) {
+// createAndReturnToken issues a session token for user and writes the bearer
+// string to the response. startedAt is when the session began: time.Now() for a
+// fresh login, and the original login time for a renewal, so that the absolute
+// lifetime is measured from the login rather than from the last renewal.
+func createAndReturnToken(w http.ResponseWriter, d *data, user *users.User, policy tokenPolicy, startedAt time.Time) (int, error) {
 	tokenStr, err := fbAuth.GenerateToken()
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
 
-	token := &fbAuth.Token{
-		Token:     tokenStr,
-		UserID:    user.ID,
-		ExpiresAt: time.Now().Add(tokenExpirationTime),
-		CreatedAt: time.Now(),
+	expiresAt := time.Now().Add(policy.expiration)
+	if limit := startedAt.Add(policy.maxLifetime); expiresAt.After(limit) {
+		expiresAt = limit
 	}
 
-	if err := d.store.Tokens.Save(token); err != nil {
+	token := &fbAuth.Token{
+		UserID:    user.ID,
+		ExpiresAt: expiresAt,
+		CreatedAt: startedAt,
+	}
+
+	if err := d.store.Tokens.Save(tokenStr, token); err != nil {
 		return http.StatusInternalServerError, err
 	}
 

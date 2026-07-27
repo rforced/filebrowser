@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -169,5 +171,109 @@ func TestShareListHandlerDoesNotLeakPasswordHash(t *testing.T) {
 	}
 	if stored.PasswordHash == "" {
 		t.Fatal("server-side password hash was not persisted")
+	}
+}
+
+// A share password is the only thing between the link and the file, so it has to
+// clear the same bar as an account password rather than merely being non-empty.
+func TestSharePostEnforcesPasswordPolicy(t *testing.T) {
+	t.Parallel()
+
+	testCases := map[string]struct {
+		password     string
+		expectedCode int
+		// wantCode is the machine-readable reason the response must carry, so
+		// that the UI can tell the sharer which rule they broke.
+		wantCode   string
+		wantParams map[string]string
+	}{
+		"single character is rejected": {
+			password:     "x",
+			expectedCode: http.StatusBadRequest,
+			wantCode:     "passwordTooShort",
+			wantParams:   map[string]string{"min": "12"},
+		},
+		"just under the minimum": {
+			password:     "elevenchars",
+			expectedCode: http.StatusBadRequest,
+			wantCode:     "passwordTooShort",
+			wantParams:   map[string]string{"min": "12"},
+		},
+		"common password is rejected": {
+			password:     "123456789012",
+			expectedCode: http.StatusBadRequest,
+			wantCode:     "passwordTooCommon",
+		},
+		"long enough and not common": {
+			password:     "sh4re-P@ssw0rd-x",
+			expectedCode: http.StatusOK,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			env := setupTestStorage(t)
+			env.user.Perm.Share = true
+			env.user.Perm.Download = true
+			if err := env.storage.Users.Update(env.user, "Perm"); err != nil {
+				t.Fatalf("failed to update user permissions: %v", err)
+			}
+
+			set, err := env.storage.Settings.Get()
+			if err != nil {
+				t.Fatalf("failed to read settings: %v", err)
+			}
+			set.MinimumPasswordLength = 12
+			if err := env.storage.Settings.Save(set); err != nil {
+				t.Fatalf("failed to save settings: %v", err)
+			}
+
+			if err := os.WriteFile(filepath.Join(env.server.Root, "shared.txt"), []byte("data"), 0o600); err != nil {
+				t.Fatalf("failed to create file: %v", err)
+			}
+
+			body, err := json.Marshal(share.CreateBody{Password: tc.password, Expires: "1", Unit: "hours"})
+			if err != nil {
+				t.Fatalf("failed to build body: %v", err)
+			}
+
+			handler := handle(sharePostHandler, "", env.storage, env.server)
+			req, _ := http.NewRequest(http.MethodPost, "/shared.txt", strings.NewReader(string(body)))
+			req.Header.Set("X-Auth", createTestToken(t, env, env.user.ID, time.Hour))
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+
+			if recorder.Code != tc.expectedCode {
+				t.Fatalf("status = %d, want %d, body: %s", recorder.Code, tc.expectedCode, recorder.Body.String())
+			}
+
+			if tc.wantCode == "" {
+				return
+			}
+
+			var detail struct {
+				Code    string            `json:"code"`
+				Message string            `json:"message"`
+				Params  map[string]string `json:"params"`
+			}
+			if err := json.Unmarshal(recorder.Body.Bytes(), &detail); err != nil {
+				t.Fatalf("rejection body is not a structured error: %v (body: %s)", err, recorder.Body.String())
+			}
+
+			if detail.Code != tc.wantCode {
+				t.Errorf("code = %q, want %q", detail.Code, tc.wantCode)
+			}
+			// The English rendering is what a client with no translations shows.
+			if detail.Message == "" {
+				t.Error("rejection carries no message")
+			}
+			for k, want := range tc.wantParams {
+				if detail.Params[k] != want {
+					t.Errorf("params[%q] = %q, want %q", k, detail.Params[k], want)
+				}
+			}
+		})
 	}
 }

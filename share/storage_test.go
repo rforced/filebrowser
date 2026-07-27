@@ -48,6 +48,10 @@ func (m *mockBackend) DeleteWithPathPrefix(_ string, _ uint) error {
 	return nil
 }
 
+func (m *mockBackend) UpdatePathPrefix(_, _ string, _ uint) error {
+	return nil
+}
+
 func TestFilterExpired_SkipsValidLinksAfterExpired(t *testing.T) {
 	now := time.Now().Unix()
 	expired := now - 3600 // 1 hour ago

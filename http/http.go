@@ -29,6 +29,13 @@ func NewHandler(
 	server.Clean()
 	server.CaseInsensitiveFs = files.CaseInsensitive(afero.NewOsFs(), server.Root)
 
+	// Fail startup on a bad trusted-proxy list rather than serving with a
+	// silently shorter one: every rate limit is keyed on the client address it
+	// decides.
+	if err := server.ParseTrustedProxies(); err != nil {
+		return nil, err
+	}
+
 	r := mux.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,10 +55,13 @@ func NewHandler(
 
 	api := r.PathPrefix("/api").Subrouter()
 
-	tokenExpirationTime := server.GetTokenExpirationTime(DefaultTokenExpirationTime)
-	api.Handle("/login", monkey(loginHandler(tokenExpirationTime), ""))
+	policy := tokenPolicy{
+		expiration:  server.GetTokenExpirationTime(DefaultTokenExpirationTime),
+		maxLifetime: server.GetSessionMaxLifetime(settings.DefaultSessionMaxLifetime),
+	}
+	api.Handle("/login", monkey(loginHandler(policy), ""))
 	api.Handle("/signup", monkey(signupHandler, ""))
-	api.Handle("/renew", monkey(renewHandler(tokenExpirationTime), ""))
+	api.Handle("/renew", monkey(renewHandler(policy), ""))
 	api.Handle("/logout", monkey(logoutHandler, ""))
 	api.Handle("/me", monkey(meHandler, ""))
 

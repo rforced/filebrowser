@@ -77,6 +77,41 @@ func (s shareBackend) Delete(hash string) error {
 	return err
 }
 
+func (s shareBackend) UpdatePathPrefix(oldPath, newPath string, userID uint) error {
+	// Share paths are stored without a trailing slash
+	from := strings.TrimRight(oldPath, "/")
+	to := strings.TrimRight(newPath, "/")
+
+	if from == "" || from == to {
+		return nil
+	}
+
+	var links []share.Link
+	if err := s.db.Prefix("Path", from, &links); err != nil {
+		if errors.Is(err, storm.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+
+	var err error
+	for _, link := range links {
+		if link.UserID != userID {
+			continue
+		}
+
+		// Prefix matches on the raw string, so a move of "/a/b" also returns
+		// "/a/bc". Only the moved entry itself and its children have relocated.
+		if link.Path != from && !strings.HasPrefix(link.Path, from+"/") {
+			continue
+		}
+
+		link.Path = to + strings.TrimPrefix(link.Path, from)
+		err = errors.Join(err, s.db.Save(&link))
+	}
+	return err
+}
+
 func (s shareBackend) DeleteWithPathPrefix(pathPrefix string, userID uint) error {
 	// Share paths are stored without a trailing slash
 	prefix := strings.TrimRight(pathPrefix, "/")

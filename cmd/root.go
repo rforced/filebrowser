@@ -114,6 +114,8 @@ func addServerFlags(flags *pflag.FlagSet) {
 	flags.String("socket", "", "socket to listen to (cannot be used with address, port, cert nor key flags)")
 	flags.StringP("baseURL", "b", "", "base url")
 	flags.String("tokenExpirationTime", "2h", "user session timeout")
+	flags.String("sessionMaxLifetime", "24h", "maximum age of a session before re-login is required, however often it is renewed")
+	flags.String("trustedProxies", "", "comma-separated IPs or CIDR blocks of reverse proxies whose X-Forwarded-For may be believed")
 	flags.Bool("disableThumbnails", false, "disable image thumbnails")
 	flags.Bool("disablePreviewResize", false, "disable resize of image previews")
 	flags.Bool("disableExec", true, "disables Command Runner feature")
@@ -122,6 +124,18 @@ func addServerFlags(flags *pflag.FlagSet) {
 	flags.String("domain", "", "Job platform domain (e.g. app.job.io)")
 	flags.String("teamId", "", "Job platform team ID")
 	flags.String("filesystemId", "", "Job platform filesystem ID")
+}
+
+// splitList turns a comma-separated flag value into the slice it stands for,
+// dropping empty entries so that a trailing comma is not a setting.
+func splitList(value string) []string {
+	var out []string
+	for item := range strings.SplitSeq(value, ",") {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 var rootCmd = &cobra.Command{
@@ -373,6 +387,14 @@ func getServerSettings(v *viper.Viper, st *storage.Storage) (*settings.Server, e
 		server.TokenExpirationTime = v.GetString("tokenExpirationTime")
 	}
 
+	if v.IsSet("sessionMaxLifetime") {
+		server.SessionMaxLifetime = v.GetString("sessionMaxLifetime")
+	}
+
+	if v.IsSet("trustedProxies") {
+		server.TrustedProxies = splitList(v.GetString("trustedProxies"))
+	}
+
 	if v.IsSet("disableThumbnails") {
 		server.EnableThumbnails = !v.GetBool("disableThumbnails")
 	}
@@ -543,6 +565,8 @@ func quickSetup(v *viper.Viper, s *storage.Storage) error {
 		Address:               v.GetString("address"),
 		Root:                  v.GetString("root"),
 		TokenExpirationTime:   v.GetString("tokenExpirationTime"),
+		SessionMaxLifetime:    v.GetString("sessionMaxLifetime"),
+		TrustedProxies:        splitList(v.GetString("trustedProxies")),
 		EnableThumbnails:      !v.GetBool("disableThumbnails"),
 		ResizePreview:         !v.GetBool("disablePreviewResize"),
 		EnableExec:            !v.GetBool("disableExec"),

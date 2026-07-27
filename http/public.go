@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tomasen/realip"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/rforced/filebrowser/v2/files"
@@ -95,10 +94,10 @@ var withHashFile = func(fn handleFunc) handleFunc {
 			return errToStatus(err), err
 		}
 
-		clientIP := realip.FromRequest(r)
-		rateLimitKey := clientIP + ":" + id
+		ip := clientIP(r, d.server.TrustedProxyNets)
+		rateLimitKey := ip + ":" + id
 		if checkShareRateLimit(rateLimitKey) {
-			log.Printf("share auth rate limit exceeded for IP %s on share %s", clientIP, id)
+			log.Printf("share auth rate limit exceeded for IP %s on share %s", ip, id)
 			w.Header().Set("Retry-After", "60")
 			return http.StatusTooManyRequests, nil
 		}

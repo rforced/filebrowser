@@ -5,6 +5,11 @@ import { encodePath } from "@/utils/url";
 
 export class StatusError extends Error {
   retryAfter?: number;
+  // code names a cause the server chose to disclose, and params carries the
+  // values its message interpolates. Both are absent unless the handler opted
+  // into a structured failure; see applyErrorDetail.
+  code?: string;
+  params?: Record<string, string>;
   constructor(
     message: any,
     public status?: number,
@@ -12,6 +17,29 @@ export class StatusError extends Error {
   ) {
     super(message);
     this.name = "StatusError";
+  }
+}
+
+// applyErrorDetail lifts a structured failure body onto the error it describes.
+//
+// Most failures answer with a bare status line, but a handler may instead send
+// JSON naming a cause the requester can act on. Callers that want to localize it
+// read `code`/`params`; callers that simply display the error get the server's
+// English rendering as the message rather than raw JSON.
+function applyErrorDetail(error: StatusError, body: string) {
+  if (!body.startsWith("{")) return;
+
+  try {
+    const detail = JSON.parse(body);
+    if (typeof detail?.code !== "string") return;
+
+    error.code = detail.code;
+    error.params = detail.params;
+    if (typeof detail.message === "string" && detail.message !== "") {
+      error.message = detail.message;
+    }
+  } catch {
+    // Not JSON after all — the raw body is already the message.
   }
 }
 
@@ -53,6 +81,7 @@ export async function fetchURL(
       body || `${res.status} ${res.statusText}`,
       res.status
     );
+    applyErrorDetail(error, body);
 
     if (auth && res.status == 401) {
       logout("session_expired");

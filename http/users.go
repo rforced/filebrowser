@@ -128,6 +128,14 @@ var userDeleteHandler = withSelfOrAdmin(func(_ http.ResponseWriter, r *http.Requ
 		return errToStatus(err), err
 	}
 
+	// The user is gone, so its sessions must go too — a token that outlives its
+	// owner would otherwise sit in the database until it expired. Report a
+	// failure here rather than failing the request: the deletion itself already
+	// succeeded, and the orphaned tokens no longer resolve to a user.
+	if err := d.store.Tokens.DeleteByUser(d.raw.(uint)); err != nil {
+		log.Printf("WARNING: failed to revoke sessions of deleted user %d: %v", d.raw.(uint), err)
+	}
+
 	return http.StatusOK, nil
 })
 
@@ -204,23 +212,38 @@ var userPutHandler = withSelfOrAdmin(func(w http.ResponseWriter, r *http.Request
 		return http.StatusBadRequest, nil
 	}
 
+	stored, err := d.store.Users.Get(d.server.Root, d.raw.(uint))
+	if errors.Is(err, fberrors.ErrNotExist) {
+		return http.StatusNotFound, err
+	}
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	// Sessions are bound to the user, not to the credential or the scope they
+	// were issued under, so a change to either has to end the ones already out
+	// there. Otherwise changing a password does nothing to an attacker holding a
+	// live token, and moving a user's scope leaves their open sessions pointed at
+	// the tree they used to have.
+	revokeSessions := false
+
 	if len(req.Which) == 0 || (len(req.Which) == 1 && req.Which[0] == "all") {
 		if !d.user.Perm.Admin {
 			return http.StatusForbidden, nil
 		}
 
 		if req.Data.Password != "" {
+			revokeSessions = true
 			req.Data.Password, err = users.ValidateAndHashPwd(req.Data.Password, d.settings.MinimumPasswordLength)
 			if err != nil {
 				return http.StatusBadRequest, err
 			}
 		} else {
-			var suser *users.User
-			suser, err = d.store.Users.Get(d.server.Root, d.raw.(uint))
-			if err != nil {
-				return http.StatusInternalServerError, err
-			}
-			req.Data.Password = suser.Password
+			req.Data.Password = stored.Password
+		}
+
+		if req.Data.Scope != stored.Scope {
+			revokeSessions = true
 		}
 
 		req.Which = []string{}
@@ -235,10 +258,15 @@ var userPutHandler = withSelfOrAdmin(func(w http.ResponseWriter, r *http.Request
 				return http.StatusForbidden, nil
 			}
 
+			revokeSessions = true
 			req.Data.Password, err = users.ValidateAndHashPwd(req.Data.Password, d.settings.MinimumPasswordLength)
 			if err != nil {
 				return http.StatusBadRequest, err
 			}
+		}
+
+		if v == "Scope" && req.Data.Scope != stored.Scope {
+			revokeSessions = true
 		}
 
 		for _, f := range NonModifiableFieldsForNonAdmin {
@@ -251,6 +279,14 @@ var userPutHandler = withSelfOrAdmin(func(w http.ResponseWriter, r *http.Request
 	err = d.store.Users.Update(req.Data, req.Which...)
 	if err != nil {
 		return http.StatusInternalServerError, err
+	}
+
+	if revokeSessions {
+		// Keep the session this request was made from, so that changing your own
+		// password logs out every other session rather than yourself.
+		if err := d.store.Tokens.DeleteByUser(req.Data.ID, d.tokenStr); err != nil {
+			return http.StatusInternalServerError, err
+		}
 	}
 
 	return http.StatusOK, nil

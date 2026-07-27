@@ -137,10 +137,11 @@ import { useRoute } from "vue-router";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import * as api from "@/api/index";
+import { StatusError } from "@/api/utils";
 import dayjs from "dayjs";
 import { copy } from "@/utils/clipboard";
 
-const { t } = useI18n();
+const { t, te } = useI18n();
 const route = useRoute();
 const fileStore = useFileStore();
 const layoutStore = useLayoutStore();
@@ -209,6 +210,29 @@ function copyToClipboard(text: string) {
   );
 }
 
+// Message keys for the failure codes the API discloses. passwordTooShort reuses
+// the login key: that string already says exactly the right thing and is
+// translated in every locale, where a new errors.* key would read as English to
+// everyone until the translations caught up.
+const errorMessageKeys: Record<string, string> = {
+  passwordTooShort: "login.passwordTooShort",
+  passwordTooCommon: "errors.passwordTooCommon",
+};
+
+// localizeError turns a disclosed failure code into a translated message. Codes
+// we have no key for fall through to the error itself, which already carries the
+// server's English rendering.
+function localizeError(e: unknown): Error | string {
+  const error = e as StatusError;
+  const key = error.code ? errorMessageKeys[error.code] : undefined;
+
+  if (key && te(key)) {
+    return t(key, error.params ?? {});
+  }
+
+  return error as Error;
+}
+
 async function submit() {
   if (!password.value) {
     $showError(t("prompts.passwordRequired"));
@@ -235,7 +259,7 @@ async function submit() {
 
     listing.value = true;
   } catch (e) {
-    $showError(e as Error);
+    $showError(localizeError(e));
   }
 }
 

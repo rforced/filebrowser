@@ -1,6 +1,9 @@
 package bolt
 
 import (
+	"bytes"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -31,13 +34,12 @@ func TestTokenStore_SaveAndGet(t *testing.T) {
 	store := newTestTokenStore(t)
 
 	token := &auth.Token{
-		Token:     "test-token-123",
 		UserID:    1,
 		ExpiresAt: time.Now().Add(1 * time.Hour),
 		CreatedAt: time.Now(),
 	}
 
-	if err := store.Save(token); err != nil {
+	if err := store.Save("test-token-123", token); err != nil {
 		t.Fatalf("Save() error: %v", err)
 	}
 
@@ -46,8 +48,8 @@ func TestTokenStore_SaveAndGet(t *testing.T) {
 		t.Fatalf("Get() error: %v", err)
 	}
 
-	if got.Token != token.Token {
-		t.Errorf("Token = %q, want %q", got.Token, token.Token)
+	if got.Hash != auth.HashToken("test-token-123") {
+		t.Errorf("Hash = %q, want %q", got.Hash, auth.HashToken("test-token-123"))
 	}
 	if got.UserID != token.UserID {
 		t.Errorf("UserID = %d, want %d", got.UserID, token.UserID)
@@ -69,12 +71,11 @@ func TestTokenStore_Delete(t *testing.T) {
 	store := newTestTokenStore(t)
 
 	token := &auth.Token{
-		Token:     "to-delete",
 		UserID:    1,
 		ExpiresAt: time.Now().Add(1 * time.Hour),
 		CreatedAt: time.Now(),
 	}
-	if err := store.Save(token); err != nil {
+	if err := store.Save("to-delete", token); err != nil {
 		t.Fatalf("Save() error: %v", err)
 	}
 
@@ -103,12 +104,13 @@ func TestTokenStore_DeleteByUser(t *testing.T) {
 	store := newTestTokenStore(t)
 
 	// Save tokens for two different users
-	for _, tok := range []*auth.Token{
-		{Token: "user1-tok1", UserID: 1, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()},
-		{Token: "user1-tok2", UserID: 1, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()},
-		{Token: "user2-tok1", UserID: 2, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()},
+	for raw, userID := range map[string]uint{
+		"user1-tok1": 1,
+		"user1-tok2": 1,
+		"user2-tok1": 2,
 	} {
-		if err := store.Save(tok); err != nil {
+		tok := &auth.Token{UserID: userID, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()}
+		if err := store.Save(raw, tok); err != nil {
 			t.Fatalf("Save() error: %v", err)
 		}
 	}
@@ -146,13 +148,13 @@ func TestTokenStore_DeleteExpired(t *testing.T) {
 	t.Parallel()
 	store := newTestTokenStore(t)
 
-	for _, tok := range []*auth.Token{
-		{Token: "expired1", UserID: 1, ExpiresAt: time.Now().Add(-1 * time.Hour), CreatedAt: time.Now()},
-		{Token: "expired2", UserID: 2, ExpiresAt: time.Now().Add(-1 * time.Minute), CreatedAt: time.Now()},
-		{Token: "valid1", UserID: 1, ExpiresAt: time.Now().Add(1 * time.Hour), CreatedAt: time.Now()},
-		{Token: "valid2", UserID: 3, ExpiresAt: time.Now().Add(2 * time.Hour), CreatedAt: time.Now()},
+	for raw, tok := range map[string]*auth.Token{
+		"expired1": {UserID: 1, ExpiresAt: time.Now().Add(-1 * time.Hour), CreatedAt: time.Now()},
+		"expired2": {UserID: 2, ExpiresAt: time.Now().Add(-1 * time.Minute), CreatedAt: time.Now()},
+		"valid1":   {UserID: 1, ExpiresAt: time.Now().Add(1 * time.Hour), CreatedAt: time.Now()},
+		"valid2":   {UserID: 3, ExpiresAt: time.Now().Add(2 * time.Hour), CreatedAt: time.Now()},
 	} {
-		if err := store.Save(tok); err != nil {
+		if err := store.Save(raw, tok); err != nil {
 			t.Fatalf("Save() error: %v", err)
 		}
 	}
@@ -185,5 +187,109 @@ func TestTokenStore_DeleteExpiredNoExpired(t *testing.T) {
 	// Should not error when no expired tokens exist
 	if err := store.DeleteExpired(); err != nil {
 		t.Errorf("DeleteExpired() with no expired tokens error: %v", err)
+	}
+}
+
+// The bearer token must not be recoverable from the database. Before hashing at
+// rest, read access to the file — a backup, a snapshot, a copy that ended up
+// under a served root — handed over every live session verbatim.
+func TestTokenStoreDoesNotPersistBearerToken(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := storm.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	store := tokenBackend{db: db}
+
+	const raw = "b8f1c0de5a2947e6b3d18f70c95a4e21b8f1c0de5a2947e6b3d18f70c95a4e21"
+	if err := store.Save(raw, &auth.Token{UserID: 1, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()}); err != nil {
+		t.Fatalf("Save() error: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("failed to close db: %v", err)
+	}
+
+	contents, err := os.ReadFile(dbPath)
+	if err != nil {
+		t.Fatalf("failed to read db: %v", err)
+	}
+
+	if bytes.Contains(contents, []byte(raw)) {
+		t.Error("the bearer token was written to the database in the clear")
+	}
+	if !bytes.Contains(contents, []byte(auth.HashToken(raw))) {
+		t.Error("the token hash was not written to the database")
+	}
+}
+
+func TestTokenStore_DeleteByUserKeepsListedTokens(t *testing.T) {
+	t.Parallel()
+	store := newTestTokenStore(t)
+
+	for raw := range map[string]struct{}{"keep-me": {}, "revoke-me": {}} {
+		if err := store.Save(raw, &auth.Token{UserID: 1, ExpiresAt: time.Now().Add(time.Hour), CreatedAt: time.Now()}); err != nil {
+			t.Fatalf("Save() error: %v", err)
+		}
+	}
+
+	if err := store.DeleteByUser(1, "keep-me"); err != nil {
+		t.Fatalf("DeleteByUser() error: %v", err)
+	}
+
+	if _, err := store.Get("keep-me"); err != nil {
+		t.Errorf("kept token was deleted: %v", err)
+	}
+	if _, err := store.Get("revoke-me"); err != fberrors.ErrNotExist {
+		t.Errorf("revoke-me should be deleted, got err: %v", err)
+	}
+}
+
+// Token mirrors the pre-hashing record layout. Storm derives its bucket from the
+// type name, so declaring it here writes into the same bucket the real store
+// uses, which is what makes the upgrade path testable.
+type Token struct {
+	Token     string    `json:"token" storm:"id"`
+	UserID    uint      `json:"userID" storm:"index"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func TestNewStorageDropsPreHashingTokens(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := storm.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	// A session from before the upgrade, keyed by the bearer token itself.
+	if err := db.Save(&Token{
+		Token:     "legacy-plaintext-token",
+		UserID:    1,
+		ExpiresAt: time.Now().Add(-time.Hour),
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+	}); err != nil {
+		t.Fatalf("failed to save legacy token: %v", err)
+	}
+
+	if _, err := NewStorage(db); err != nil {
+		t.Fatalf("NewStorage() error: %v", err)
+	}
+
+	var remaining []auth.Token
+	if err := db.All(&remaining); err != nil && !errors.Is(err, storm.ErrNotFound) {
+		t.Fatalf("All() error: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Errorf("%d pre-hashing token(s) survived the upgrade", len(remaining))
+	}
+
+	// The sweep that could not key those records must now run clean.
+	if err := (tokenBackend{db: db}).DeleteExpired(); err != nil {
+		t.Errorf("DeleteExpired() error after purge: %v", err)
 	}
 }

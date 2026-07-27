@@ -67,7 +67,7 @@ func TestTokenIsExpired(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			token := &Token{
-				Token:     "test",
+				Hash:      HashToken("test"),
 				UserID:    1,
 				ExpiresAt: tc.expiresAt,
 				CreatedAt: time.Now(),

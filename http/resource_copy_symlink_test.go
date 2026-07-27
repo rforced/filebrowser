@@ -87,8 +87,7 @@ func TestResourceCopyDoesNotDereferenceEscapingSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
-	if err := st.Tokens.Save(&auth.Token{
-		Token:     tokenStr,
+	if err := st.Tokens.Save(tokenStr, &auth.Token{
 		UserID:    user.ID,
 		ExpiresAt: time.Now().Add(time.Hour),
 		CreatedAt: time.Now(),

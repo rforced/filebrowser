@@ -12,10 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
-
 	fberrors "github.com/rforced/filebrowser/v2/errors"
 	"github.com/rforced/filebrowser/v2/share"
+	"github.com/rforced/filebrowser/v2/users"
 )
 
 // shareResponse is the client-facing representation of a share. It deliberately
@@ -179,9 +178,17 @@ var sharePostHandler = withPermShare(func(w http.ResponseWriter, r *http.Request
 
 	expire := time.Now().Add(add).Unix()
 
-	hash, status, err := getSharePasswordHash(body)
+	// A share password is the only thing standing between a link and the file
+	// behind it, so it is held to the same policy as an account password rather
+	// than merely being non-empty. Which rule it broke is reported back: the
+	// policy is not published anywhere the sharer can see, so a bare rejection
+	// leaves them guessing at a password they are required to choose.
+	passwordHash, err := users.ValidateAndHashPwd(body.Password, d.settings.MinimumPasswordLength)
 	if err != nil {
-		return status, err
+		if detail, ok := passwordPolicyError(err); ok {
+			return renderClientError(w, http.StatusBadRequest, detail)
+		}
+		return http.StatusBadRequest, err
 	}
 
 	s = &share.Link{
@@ -189,7 +196,7 @@ var sharePostHandler = withPermShare(func(w http.ResponseWriter, r *http.Request
 		Hash:         str,
 		Expire:       expire,
 		UserID:       d.user.ID,
-		PasswordHash: string(hash),
+		PasswordHash: passwordHash,
 	}
 
 	if err := d.store.Share.Save(s); err != nil {
@@ -198,12 +205,3 @@ var sharePostHandler = withPermShare(func(w http.ResponseWriter, r *http.Request
 
 	return renderJSON(w, r, toShareResponse(s))
 })
-
-func getSharePasswordHash(body share.CreateBody) (data []byte, statuscode int, err error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, http.StatusInternalServerError, fmt.Errorf("failed to hash password: %w", err)
-	}
-
-	return hash, 0, nil
-}

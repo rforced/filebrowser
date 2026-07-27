@@ -16,6 +16,7 @@ type StorageBackend interface {
 	Save(s *Link) error
 	Delete(hash string) error
 	DeleteWithPathPrefix(path string, userID uint) error
+	UpdatePathPrefix(oldPath, newPath string, userID uint) error
 }
 
 // Storage is a storage.
@@ -114,4 +115,14 @@ func (s *Storage) filterExpired(links []*Link) ([]*Link, error) {
 
 func (s *Storage) DeleteWithPathPrefix(path string, userID uint) error {
 	return s.back.DeleteWithPathPrefix(path, userID)
+}
+
+// UpdatePathPrefix rewrites the recorded path of every link of userID at or
+// below oldPath so that it follows a file or directory that has been moved.
+//
+// A link records the path it was created for, so without this a rename leaves it
+// aimed at a path that no longer exists — and that anything written there later
+// would silently inherit.
+func (s *Storage) UpdatePathPrefix(oldPath, newPath string, userID uint) error {
+	return s.back.UpdatePathPrefix(oldPath, newPath, userID)
 }
