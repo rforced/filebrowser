@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	fberrors "github.com/rforced/filebrowser/v2/errors"
@@ -32,9 +33,10 @@ func (m *provisionStore) Get(_ string, id interface{}) (*users.User, error) {
 
 // GetByScope reflects the users that have actually been saved, so a scope
 // collision between two provisioned users is detected rather than assumed away.
+// The match is case-insensitive, like the bolt backend's.
 func (m *provisionStore) GetByScope(scope string) (*users.User, error) {
 	for _, u := range m.users {
-		if u.Scope == scope {
+		if strings.EqualFold(u.Scope, scope) {
 			return u, nil
 		}
 	}
@@ -47,6 +49,16 @@ func (m *provisionStore) Save(user *users.User) error {
 	m.users[user.Username] = user
 	return nil
 }
+
+func (m *provisionStore) SaveProvisioned(user *users.User, derivedScope bool) error {
+	if derivedScope {
+		if _, err := m.GetByScope(user.Scope); err == nil {
+			return fberrors.ErrExist
+		}
+	}
+	return m.Save(user)
+}
+
 func (m *provisionStore) Delete(_ interface{}) error { return nil }
 func (m *provisionStore) LastUpdate(_ uint) int64    { return 0 }
 

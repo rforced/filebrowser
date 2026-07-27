@@ -18,13 +18,6 @@ import (
 	"github.com/rforced/filebrowser/v2/users"
 )
 
-func slashClean(name string) string {
-	if name == "" || name[0] != '/' {
-		name = "/" + name
-	}
-	return gopath.Clean(name)
-}
-
 func parseQueryFiles(r *http.Request, f *files.FileInfo, _ *users.User) ([]string, error) {
 	var fileSlice []string
 	names := strings.Split(r.URL.Query().Get("files"), ",")

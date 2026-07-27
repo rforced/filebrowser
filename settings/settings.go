@@ -65,6 +65,11 @@ type Server struct {
 	Domain                string `json:"domain"`
 	TeamID                string `json:"teamId"`
 	FilesystemID          string `json:"filesystemId"`
+
+	// CaseInsensitiveFs is detected from Root at startup rather than
+	// configured, and tells the rule checker to match paths case-insensitively.
+	// It is never persisted.
+	CaseInsensitiveFs bool `json:"-"`
 }
 
 // Clean cleans any variables that might need cleaning.
