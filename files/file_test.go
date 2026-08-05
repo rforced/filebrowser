@@ -1,9 +1,14 @@
 package files
 
 import (
+	"bytes"
 	"errors"
+	"image"
+	"image/png"
+	"mime"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -445,4 +450,91 @@ func TestDetectType_Model(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDetectType_Image(t *testing.T) {
+	t.Parallel()
+
+	// Only formats a browser can draw — or that img.Service can re-encode into
+	// one, i.e. TIFF — should be typed "image". Everything else the mime tables
+	// call an image has no decoder on either side and would render as a broken
+	// <img>, so it must fall back to "blob" and get the download panel.
+	//
+	// The raw camera extensions resolve through the system /etc/mime.types,
+	// which the Docker image ships via mailcap; skipped where absent so this
+	// does not fail on a bare host.
+	cases := []struct {
+		name       string
+		contents   []byte
+		want       string
+		needsMime  bool
+		readHeader bool
+	}{
+		{name: "photo.png", contents: pngBytes(t), want: "image", readHeader: true},
+		{name: "photo.jpg", contents: []byte("\xff\xd8\xff\xe0stub"), want: "image", readHeader: true},
+		{name: "anim.gif", contents: []byte("GIF89astub"), want: "image", readHeader: true},
+		{name: "photo.webp", contents: []byte("RIFF\x00\x00\x00\x00WEBPstub"), want: "image", readHeader: true},
+		{name: "icon.svg", contents: []byte("<svg xmlns=\"http://www.w3.org/2000/svg\"/>"), want: "image", readHeader: true},
+		{name: "scan.tif", contents: []byte("II*\x00stub"), want: "image", readHeader: true},
+		{name: "scan.tiff", contents: []byte("II*\x00stub"), want: "image", readHeader: true},
+		{name: "UPPER.TIFF", contents: []byte("II*\x00stub"), want: "image", readHeader: true},
+
+		// Raw camera files: TIFF containers, but nothing in the stack decodes them.
+		{name: "shot.dng", contents: []byte("II*\x00raw"), want: "blob", needsMime: true, readHeader: true},
+		{name: "shot.cr2", contents: []byte("II*\x00raw"), want: "blob", needsMime: true, readHeader: true},
+		{name: "shot.nef", contents: []byte("II*\x00raw"), want: "blob", needsMime: true, readHeader: true},
+		{name: "shot.arw", contents: []byte("II*\x00raw"), want: "blob", needsMime: true, readHeader: true},
+
+		// Legacy image/* entries from mime.go that no browser renders.
+		{name: "old.pcx", contents: []byte("\x0a\x05\x01\x08stub"), want: "blob", readHeader: true},
+		{name: "old.xwd", contents: []byte("\x00\x00\x00\x07stub"), want: "blob", readHeader: true},
+		{name: "old.ppm", contents: []byte("P6 1 1 255 \x00\x00\x00"), want: "blob", readHeader: true},
+
+		// Regression guard: with readHeader off the sniff buffer is empty and
+		// isBinary reports false for it, so a non-previewable image must not
+		// fall through to the text case and get its contents inlined.
+		{name: "noheader.dng", contents: []byte("II*\x00raw"), want: "blob", needsMime: true},
+		{name: "noheader.pcx", contents: []byte("\x0a\x05\x01\x08stub"), want: "blob"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.needsMime && !strings.HasPrefix(mime.TypeByExtension(filepath.Ext(tc.name)), "image/") {
+				t.Skipf("no system mime entry for %s", filepath.Ext(tc.name))
+			}
+
+			fs := afero.NewMemMapFs()
+			if err := afero.WriteFile(fs, "/"+tc.name, tc.contents, 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			fi := &FileInfo{
+				Fs:        fs,
+				Path:      "/" + tc.name,
+				Name:      tc.name,
+				Extension: filepath.Ext(tc.name),
+				Size:      int64(len(tc.contents)),
+			}
+
+			if err := fi.detectType(true, true, tc.readHeader, false); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if fi.Type != tc.want {
+				t.Errorf("expected type %q, got %q", tc.want, fi.Type)
+			}
+			if fi.Type == "blob" && fi.Content != "" {
+				t.Errorf("blob must not carry inlined content, got %d bytes", len(fi.Content))
+			}
+		})
+	}
+}
+
+func pngBytes(t *testing.T) []byte {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	if err := png.Encode(buf, image.NewGray(image.Rect(0, 0, 2, 2))); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }

@@ -145,7 +145,7 @@ import {
 } from "@/utils/constants";
 import { files as api } from "@/api";
 import ProgressBar from "@/components/ProgressBar.vue";
-import prettyBytes from "pretty-bytes";
+import { filesize } from "@/utils";
 
 const USAGE_DEFAULT = { used: "0 B", total: "0 B", usedPercentage: 0 };
 
@@ -197,8 +197,8 @@ export default {
         this.usageAbortController = new AbortController();
         const usage = await api.usage(path, this.usageAbortController.signal);
         usageStats = {
-          used: prettyBytes(usage.used, { binary: true }),
-          total: prettyBytes(usage.total, { binary: true }),
+          used: filesize(usage.used),
+          total: filesize(usage.total),
           usedPercentage: Math.round((usage.used / usage.total) * 100),
         };
       } finally {

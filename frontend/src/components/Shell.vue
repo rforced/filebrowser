@@ -50,7 +50,7 @@ import { useRoute } from "vue-router";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { commands } from "@/api";
-import { throttle } from "lodash-es";
+import { throttle } from "@/utils/throttle";
 import { theme } from "@/utils/constants";
 
 interface ShellResult {

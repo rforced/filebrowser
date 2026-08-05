@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { detectLocale, setLocale } from "@/i18n";
-import { cloneDeep } from "lodash-es";
+import { deepClone } from "@/utils";
 
 export const useAuthStore = defineStore("auth", {
   // convert to a function
@@ -31,7 +31,7 @@ export const useAuthStore = defineStore("auth", {
         setLocale(user.locale);
       }
 
-      this.user = { ...this.user, ...cloneDeep(user) } as IUser;
+      this.user = { ...this.user, ...deepClone(user) } as IUser;
     },
     // easily reset state using `$reset`
     clearUser() {

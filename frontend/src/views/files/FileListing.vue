@@ -355,8 +355,8 @@ import { enableExec } from "@/utils/constants";
 import * as upload from "@/utils/upload";
 import buttons from "@/utils/buttons";
 import css from "@/utils/css";
-import { throttle } from "lodash-es";
-import { Base64 } from "js-base64";
+import { throttle } from "@/utils/throttle";
+import { base64url } from "@/utils";
 
 import HeaderBar from "@/components/header/HeaderBar.vue";
 import Action from "@/components/header/Action.vue";
@@ -560,7 +560,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("drop", drop);
 });
 
-const base64 = (name: string) => Base64.encodeURI(name);
+const base64 = (name: string) => base64url(name);
 
 const keyEvent = (event: KeyboardEvent) => {
   // No prompts are shown

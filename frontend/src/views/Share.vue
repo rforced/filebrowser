@@ -301,9 +301,8 @@
 
 <script setup lang="ts">
 import { pub as api } from "@/api";
-import { filesize } from "@/utils";
+import { base64url, filesize } from "@/utils";
 import dayjs from "dayjs";
-import { Base64 } from "js-base64";
 import { createURL } from "@/api/utils";
 import HeaderBar from "@/components/header/HeaderBar.vue";
 import Action from "@/components/header/Action.vue";
@@ -384,7 +383,7 @@ const modTime = computed(() =>
 );
 
 // Functions
-const base64 = (name: any) => Base64.encodeURI(name);
+const base64 = (name: string) => base64url(name);
 const play = () => {
   if (tag.value) {
     audio.value?.pause();

@@ -14,8 +14,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { throttle } from "lodash-es";
-import UTIF from "utif";
+import { throttle } from "@/utils/throttle";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 interface IProps {
@@ -55,12 +54,7 @@ const imgex = ref<HTMLImageElement | null>(null);
 const container = ref<HTMLDivElement | null>(null);
 
 onMounted(() => {
-  if (!decodeUTIF() && imgex.value !== null) {
-    imgex.value.src = props.src;
-    imgex.value.alt = decodeURIComponent(
-      props.src.split("/").pop() || "preview"
-    );
-  }
+  setImage();
 
   props.classList.forEach((className) =>
     container.value !== null ? container.value.classList.add(className) : ""
@@ -89,12 +83,7 @@ onBeforeUnmount(() => {
 watch(
   () => props.src,
   () => {
-    if (!decodeUTIF() && imgex.value !== null) {
-      imgex.value.src = props.src;
-      imgex.value.alt = decodeURIComponent(
-        props.src.split("/").pop() || "preview"
-      );
-    }
+    setImage();
 
     scale.value = 1;
     setZoom();
@@ -102,24 +91,13 @@ watch(
   }
 );
 
-// Modified from UTIF.replaceIMG
-const decodeUTIF = () => {
-  const sufs = ["tif", "tiff", "dng", "cr2", "nef"];
-  if (document?.location?.pathname === undefined) {
+const setImage = () => {
+  if (imgex.value === null) {
     return;
   }
-  const suff =
-    document.location.pathname.split(".")?.pop()?.toLowerCase() ?? "";
 
-  if (sufs.indexOf(suff) == -1) return false;
-  const xhr = new XMLHttpRequest();
-  UTIF._xhrs.push(xhr);
-  UTIF._imgs.push(imgex.value);
-  xhr.open("GET", props.src);
-  xhr.responseType = "arraybuffer";
-  xhr.onload = UTIF._imgLoaded;
-  xhr.send();
-  return true;
+  imgex.value.src = props.src;
+  imgex.value.alt = decodeURIComponent(props.src.split("/").pop() || "preview");
 };
 
 const onLoad = () => {

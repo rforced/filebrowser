@@ -14,7 +14,7 @@ tasks:
     desc: Build frontend assets
     dir: frontend
     cmds:
-      - pnpm install --frozen-lockfile
+      - pnpm install --frozen-lockfile --ignore-scripts
       - pnpm run build
 
   build:backend:
@@ -37,12 +37,12 @@ tasks:
     internal: true
     prompt: Do you wish to proceed?
     cmds:
-      - pnpm dlx commit-and-tag-version -s
+      - pnpm dlx commit-and-tag-version@13.1.2 -s
 
   release:dry-run:
     internal: true
     cmds:
-      - pnpm dlx commit-and-tag-version --dry-run --skip
+      - pnpm dlx commit-and-tag-version@13.1.2 --dry-run --skip
 
   release:
     desc: Create a new release

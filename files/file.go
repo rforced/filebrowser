@@ -268,6 +268,43 @@ func isModelExtension(ext string) bool {
 	return ok
 }
 
+// previewableImageTypes lists the image media types that actually reach the
+// user as a picture: either the browser draws them natively, or img.Service can
+// re-encode them into something it does (TIFF, converted to JPEG by the big
+// preview handler).
+//
+// Everything else the mime tables call an image has no decoder on either side
+// and would render as a broken <img>: raw camera files (image/x-adobe-dng,
+// image/x-canon-cr2, image/x-nikon-nef — these come from the system
+// /etc/mime.types, which the Docker image ships via mailcap), image/heic, and
+// the long tail of legacy formats in mime.go (image/x-pcx, image/x-xwd,
+// image/x-portable-pixmap, image/pict, ...). Those are typed "blob" so the
+// frontend offers a download instead.
+//
+// Matched on the media type rather than the extension so that header-sniffed
+// files — a PNG named photo.xyz — are classified the same way.
+var previewableImageTypes = map[string]struct{}{
+	"image/apng":               {},
+	"image/avif":               {},
+	"image/bmp":                {},
+	"image/gif":                {},
+	"image/jpeg":               {},
+	"image/png":                {},
+	"image/svg+xml":            {},
+	"image/tiff":               {},
+	"image/vnd.microsoft.icon": {},
+	"image/webp":               {},
+	"image/x-icon":             {},
+}
+
+func isPreviewableImage(mimetype string) bool {
+	if idx := strings.IndexByte(mimetype, ';'); idx >= 0 {
+		mimetype = mimetype[:idx]
+	}
+	_, ok := previewableImageTypes[strings.ToLower(strings.TrimSpace(mimetype))]
+	return ok
+}
+
 func (i *FileInfo) detectType(modify, saveContent, readHeader bool, calcImgRes bool) error {
 	if IsNamedPipe(i.Mode) {
 		i.Type = "blob"
@@ -298,6 +335,14 @@ func (i *FileInfo) detectType(modify, saveContent, readHeader bool, calcImgRes b
 		i.Type = "audio"
 		return nil
 	case strings.HasPrefix(mimetype, "image"):
+		if !isPreviewableImage(mimetype) {
+			// Must return here rather than fall through to the cases below:
+			// with readHeader off the sniff buffer is empty and isBinary
+			// reports false for it, which would type the file "text" and, when
+			// saveContent is set, inline its entire contents into the listing.
+			i.Type = "blob"
+			return nil
+		}
 		i.Type = "image"
 		if calcImgRes {
 			resolution, err := calculateImageResolution(i.Fs, i.Path)

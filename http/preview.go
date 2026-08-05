@@ -100,7 +100,7 @@ func handleImagePreview(
 		return errToStatus(err), err
 	}
 	if !ok {
-		resizedImage, err = createPreview(imgSvc, fileCache, file, previewSize)
+		resizedImage, err = createPreview(imgSvc, fileCache, file, previewSize, format)
 		if err != nil {
 			return errToStatus(err), err
 		}
@@ -113,7 +113,7 @@ func handleImagePreview(
 }
 
 func createPreview(imgSvc ImgService, fileCache FileCache,
-	file *files.FileInfo, previewSize PreviewSize) ([]byte, error) {
+	file *files.FileInfo, previewSize PreviewSize, format img.Format) ([]byte, error) {
 	fd, err := file.Fs.Open(file.Path)
 	if err != nil {
 		return nil, err
@@ -131,6 +131,13 @@ func createPreview(imgSvc ImgService, fileCache FileCache,
 		width = 1080
 		height = 1080
 		options = append(options, img.WithMode(img.ResizeModeFit), img.WithQuality(img.QualityMedium))
+		if format == img.FormatTiff {
+			// Without this the resize keeps the source format, so a TIFF comes
+			// back as a smaller TIFF that no mainstream browser can draw.
+			// Scoped to TIFF rather than forced for every big preview, which
+			// would flatten the alpha channel on PNGs.
+			options = append(options, img.WithFormat(img.FormatJpeg))
+		}
 	case PreviewSizeThumb:
 		width = 256
 		height = 256
@@ -154,6 +161,13 @@ func createPreview(imgSvc ImgService, fileCache FileCache,
 	return buf.Bytes(), nil
 }
 
+// previewCacheVersion is mixed into the cache key so that a change to how
+// previews are encoded invalidates entries written by an older build — the rest
+// of the key is only path, mtime and size, so an unchanged file would otherwise
+// keep serving its stale rendition. Bump it whenever createPreview's output for
+// the same input would differ.
+const previewCacheVersion = 2
+
 func previewCacheKey(f *files.FileInfo, previewSize PreviewSize) string {
-	return fmt.Sprintf("%x%x%x", f.RealPath(), f.ModTime.Unix(), previewSize)
+	return fmt.Sprintf("%x%x%x%x", f.RealPath(), f.ModTime.Unix(), previewSize, previewCacheVersion)
 }
