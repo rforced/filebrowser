@@ -34,8 +34,11 @@ jobs:
           cache-dependency-path: "frontend/pnpm-lock.yaml"
       - working-directory: frontend
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --ignore-scripts
           pnpm run lint
+      - name: Audit dependencies
+        working-directory: frontend
+        run: pnpm audit --audit-level=high
 
   test-frontend:
     name: Test Frontend
@@ -55,7 +58,7 @@ jobs:
           cache-dependency-path: "frontend/pnpm-lock.yaml"
       - working-directory: frontend
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --ignore-scripts
           pnpm run test
 
   lint-backend:
