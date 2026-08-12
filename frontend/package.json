@@ -23,7 +23,7 @@
     "ace-builds": "^1.44.0",
     "csv-parse": "^7.0.1",
     "dayjs": "^1.11.21",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.13",
     "filesize": "^11.0.22",
     "marked": "^18.0.7",
     "marked-katex-extension": "^5.1.10",
