@@ -51,6 +51,7 @@
     "saveChanges": "変更を保存",
     "editAsText": "テキストとして編集",
     "extract": "展開",
+    "cleanConvergeOutput": "CONVERGE の出力を削除",
     "increaseFontSize": "文字を大きくする",
     "decreaseFontSize": "文字を小さくする",
     "overrideAll": "展開先フォルダーのファイルをすべて置き換える",
@@ -199,7 +200,22 @@
     "extracting": "展開中…",
     "extractFiles": "ファイルを展開しました",
     "extractDestinationPlaceholder": "空白にするとここに展開します",
-    "extractOverwrite": "展開先フォルダーはすでに存在します。上書きしますか？"
+    "extractOverwrite": "展開先フォルダーはすでに存在します。上書きしますか？",
+    "convergeClean": "CONVERGE の出力を削除",
+    "convergeCleanMessage": "このケースフォルダーと、その outputs_* フォルダーにある CONVERGE の出力ファイルを完全に削除します。ほかのフォルダーには影響せず、入力ファイルはそのまま残ります。",
+    "convergeCleanScanning": "出力ファイルを検索しています…",
+    "convergeCleaning": "出力ファイルを削除しています…",
+    "convergeCleanEmpty": "CONVERGE の出力ファイルは見つかりませんでした。",
+    "convergeCleanTotal": "{count} 件のファイルを削除し、{size} を解放します。",
+    "convergeCleanDone": "{count} 件のファイルを削除し、{size} を解放しました。",
+    "convergeCleanPartial": "{count} 件のファイルを削除できませんでした。",
+    "convergeKinds": {
+      "echo": "エコー",
+      "restart": "リスタート",
+      "map": "マップ",
+      "out": "セル平均出力",
+      "post": "セルごとのポスト出力"
+    }
   },
   "search": {
     "images": "画像",

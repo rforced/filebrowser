@@ -51,6 +51,7 @@
     "saveChanges": "Save changes",
     "editAsText": "Edit as Text",
     "extract": "Extract",
+    "cleanConvergeOutput": "Clean CONVERGE output",
     "increaseFontSize": "Increase font size",
     "decreaseFontSize": "Decrease font size",
     "overrideAll": "Replace all files in destination folder",
@@ -199,7 +200,22 @@
     "extracting": "Extracting...",
     "extractFiles": "files extracted",
     "extractDestinationPlaceholder": "Leave blank to extract here",
-    "extractOverwrite": "The destination folder already exists. Do you want to overwrite it?"
+    "extractOverwrite": "The destination folder already exists. Do you want to overwrite it?",
+    "convergeClean": "Clean CONVERGE output",
+    "convergeCleanMessage": "This permanently deletes the CONVERGE output files in this case folder and in its outputs_* folders. No other folder is touched, and the input deck is left alone.",
+    "convergeCleanScanning": "Looking for output files...",
+    "convergeCleaning": "Deleting output files...",
+    "convergeCleanEmpty": "No CONVERGE output files were found here.",
+    "convergeCleanTotal": "{count} file(s) will be deleted, freeing {size}.",
+    "convergeCleanDone": "Deleted {count} file(s), freeing {size}.",
+    "convergeCleanPartial": "{count} file(s) could not be deleted.",
+    "convergeKinds": {
+      "echo": "Echo",
+      "restart": "Restart",
+      "map": "Map",
+      "out": "Cell-averaged output",
+      "post": "Cell-by-cell post"
+    }
   },
   "search": {
     "images": "Images",

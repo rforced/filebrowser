@@ -11,6 +11,14 @@
       />
 
       <template #actions>
+        <action
+          v-if="headerButtons.convergeClean"
+          id="converge-clean-button"
+          icon="cleaning_services"
+          :label="t('buttons.cleanConvergeOutput')"
+          show="converge-clean"
+        />
+
         <template v-if="!isMobile">
           <action
             v-if="headerButtons.share"
@@ -478,6 +486,13 @@ const viewIcon = computed(() => {
     ? icons["list"]
     : icons[authStore.user.viewMode];
 });
+
+const isConvergeCase = computed(
+  () =>
+    fileStore.req?.isDir === true &&
+    fileStore.req.items.some((item) => !item.isDir && item.name === "inputs.in")
+);
+
 const headerButtons = computed(() => {
   const selectedIsArchive =
     fileStore.selectedCount === 1 &&
@@ -498,6 +513,7 @@ const headerButtons = computed(() => {
     move: fileStore.selectedCount > 0 && authStore.user?.perm.rename,
     copy: fileStore.selectedCount > 0 && authStore.user?.perm.create,
     extract: selectedIsArchive && authStore.user?.perm.create,
+    convergeClean: isConvergeCase.value && authStore.user?.perm.delete,
   };
 });
 

@@ -97,6 +97,9 @@ func NewHandler(
 	api.PathPrefix("/extract").Handler(monkey(extractCheckHandler, "/api/extract")).Methods("GET")
 	api.PathPrefix("/extract").Handler(monkey(extractHandler, "/api/extract")).Methods("POST")
 
+	api.PathPrefix("/converge").Handler(monkey(convergeScanHandler, "/api/converge")).Methods("GET")
+	api.PathPrefix("/converge").Handler(monkey(convergeCleanHandler, "/api/converge")).Methods("POST")
+
 	api.PathPrefix("/raw").Handler(monkey(rawHandler, "/api/raw")).Methods("GET")
 	api.PathPrefix("/preview/{size}/{path:.*}").
 		Handler(monkey(previewHandler(imgSvc, fileCache, server.EnableThumbnails, server.ResizePreview), "/api/preview")).Methods("GET")

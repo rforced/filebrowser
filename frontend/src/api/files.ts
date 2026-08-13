@@ -335,6 +335,42 @@ export async function extract(
   }
 }
 
+export type ConvergeKind = "echo" | "restart" | "map" | "out" | "post";
+
+export interface ConvergeGroup {
+  kind: ConvergeKind;
+  count: number;
+  size: number;
+}
+
+export interface ConvergeScan {
+  isCase: boolean;
+  groups: ConvergeGroup[];
+  count: number;
+  size: number;
+}
+
+export async function convergeScan(
+  url: string,
+  signal?: AbortSignal
+): Promise<ConvergeScan> {
+  url = removePrefix(url);
+  const res = await fetchURL(`/api/converge${url}`, { signal });
+  return (await res.json()) as ConvergeScan;
+}
+
+export interface ConvergeCleanResult {
+  deleted: number;
+  size: number;
+  failed: number;
+}
+
+export async function convergeClean(url: string): Promise<ConvergeCleanResult> {
+  url = removePrefix(url);
+  const res = await fetchURL(`/api/converge${url}`, { method: "POST" });
+  return (await res.json()) as ConvergeCleanResult;
+}
+
 export async function usage(url: string, signal: AbortSignal) {
   url = removePrefix(url);
 

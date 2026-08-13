@@ -51,6 +51,7 @@
     "saveChanges": "Änderungen speichern",
     "editAsText": "Als Text bearbeiten",
     "extract": "Entpacken",
+    "cleanConvergeOutput": "CONVERGE-Ausgabe bereinigen",
     "increaseFontSize": "Schrift vergrößern",
     "decreaseFontSize": "Schrift verkleinern",
     "overrideAll": "Alle Dateien im Zielordner ersetzen",
@@ -199,7 +200,22 @@
     "extracting": "Wird entpackt …",
     "extractFiles": "Dateien entpackt",
     "extractDestinationPlaceholder": "Leer lassen, um hier zu entpacken",
-    "extractOverwrite": "Der Zielordner existiert bereits. Möchtest du ihn überschreiben?"
+    "extractOverwrite": "Der Zielordner existiert bereits. Möchtest du ihn überschreiben?",
+    "convergeClean": "CONVERGE-Ausgabe bereinigen",
+    "convergeCleanMessage": "Dies löscht die CONVERGE-Ausgabedateien in diesem Case-Ordner und in seinen outputs_*-Ordnern endgültig. Kein anderer Ordner wird angerührt, und das Input-Deck bleibt erhalten.",
+    "convergeCleanScanning": "Ausgabedateien werden gesucht …",
+    "convergeCleaning": "Ausgabedateien werden gelöscht …",
+    "convergeCleanEmpty": "Hier wurden keine CONVERGE-Ausgabedateien gefunden.",
+    "convergeCleanTotal": "{count} Datei(en) werden gelöscht und geben {size} frei.",
+    "convergeCleanDone": "{count} Datei(en) gelöscht, {size} freigegeben.",
+    "convergeCleanPartial": "{count} Datei(en) konnten nicht gelöscht werden.",
+    "convergeKinds": {
+      "echo": "Echo",
+      "restart": "Restart",
+      "map": "Map",
+      "out": "Zellgemittelte Ausgabe",
+      "post": "Zellweise Post-Ausgabe"
+    }
   },
   "search": {
     "images": "Bilder",

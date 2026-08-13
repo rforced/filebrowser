@@ -51,6 +51,7 @@
     "saveChanges": "保存更改",
     "editAsText": "以文本模式编辑",
     "extract": "解压",
+    "cleanConvergeOutput": "清理 CONVERGE 输出",
     "increaseFontSize": "放大字体",
     "decreaseFontSize": "缩小字体",
     "overrideAll": "替换目标文件夹中的所有文件",
@@ -199,7 +200,22 @@
     "extracting": "正在解压…",
     "extractFiles": "个文件已解压",
     "extractDestinationPlaceholder": "留空以在此处解压",
-    "extractOverwrite": "目标文件夹已存在，是否覆盖？"
+    "extractOverwrite": "目标文件夹已存在，是否覆盖？",
+    "convergeClean": "清理 CONVERGE 输出",
+    "convergeCleanMessage": "此操作将永久删除该算例文件夹及其 outputs_* 文件夹中的 CONVERGE 输出文件。不会影响其他文件夹，输入文件也会保留。",
+    "convergeCleanScanning": "正在查找输出文件…",
+    "convergeCleaning": "正在删除输出文件…",
+    "convergeCleanEmpty": "此处未找到 CONVERGE 输出文件。",
+    "convergeCleanTotal": "将删除 {count} 个文件，释放 {size}。",
+    "convergeCleanDone": "已删除 {count} 个文件，释放 {size}。",
+    "convergeCleanPartial": "有 {count} 个文件无法删除。",
+    "convergeKinds": {
+      "echo": "回显文件",
+      "restart": "重启文件",
+      "map": "映射文件",
+      "out": "单元平均输出",
+      "post": "逐单元后处理"
+    }
   },
   "search": {
     "images": "图像",

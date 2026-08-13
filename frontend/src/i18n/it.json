@@ -51,6 +51,7 @@
     "saveChanges": "Salva le modifiche",
     "editAsText": "Modifica come testo",
     "extract": "Estrai",
+    "cleanConvergeOutput": "Pulisci l'output di CONVERGE",
     "increaseFontSize": "Aumenta la dimensione del carattere",
     "decreaseFontSize": "Riduci la dimensione del carattere",
     "overrideAll": "Sostituisci tutti i file nella cartella di destinazione",
@@ -199,7 +200,22 @@
     "extracting": "Estrazione in corso…",
     "extractFiles": "file estratti",
     "extractDestinationPlaceholder": "Lascia vuoto per estrarre qui",
-    "extractOverwrite": "La cartella di destinazione esiste già. Vuoi sovrascriverla?"
+    "extractOverwrite": "La cartella di destinazione esiste già. Vuoi sovrascriverla?",
+    "convergeClean": "Pulisci l'output di CONVERGE",
+    "convergeCleanMessage": "Questa operazione elimina definitivamente i file di output di CONVERGE in questa cartella del caso e nelle sue cartelle outputs_*. Nessun'altra cartella viene toccata e il file di input resta al suo posto.",
+    "convergeCleanScanning": "Ricerca dei file di output in corso…",
+    "convergeCleaning": "Eliminazione dei file di output in corso…",
+    "convergeCleanEmpty": "Nessun file di output di CONVERGE trovato qui.",
+    "convergeCleanTotal": "Verranno eliminati {count} file, liberando {size}.",
+    "convergeCleanDone": "Eliminati {count} file, liberati {size}.",
+    "convergeCleanPartial": "Non è stato possibile eliminare {count} file.",
+    "convergeKinds": {
+      "echo": "Echo",
+      "restart": "Restart",
+      "map": "Map",
+      "out": "Output mediato per cella",
+      "post": "Post cella per cella"
+    }
   },
   "search": {
     "images": "Immagini",
