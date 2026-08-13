@@ -77,15 +77,34 @@ import { filesize } from "@/utils";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 
-// The families of CONVERGE output the cleanup removes, in the order the server
-// reports them. The globs are the patterns themselves, so they stay verbatim in
-// every locale — only the description beside them is translated.
+// Every family the server can report, so each tally it sends has a slot to land
+// in whether or not the prompt lists it.
+const allConvergeKinds: ConvergeKind[] = [
+  "echo",
+  "restart",
+  "map",
+  "out",
+  "post",
+  "log",
+  "nfs",
+  "outputs",
+];
+
+// The rows the prompt shows, in the order the server reports them. The globs are
+// the patterns themselves, so they stay verbatim in every locale — only the
+// description beside them is translated.
+//
+// "nfs" is missing on purpose: the .nfs* stubs are an NFS implementation detail,
+// and naming them here raises more questions than it answers. They are still
+// swept, and still counted in the total below.
 const convergeKinds: { key: ConvergeKind; glob: string }[] = [
   { key: "echo", glob: "*.echo" },
   { key: "restart", glob: "restart*.rst" },
   { key: "map", glob: "map_*.h5" },
   { key: "out", glob: "*.out" },
   { key: "post", glob: "post*.h5, post*.cgns" },
+  { key: "log", glob: "*.log" },
+  { key: "outputs", glob: "outputs_*/" },
 ];
 
 const $showError = inject<IToastError>("$showError")!;
@@ -100,13 +119,13 @@ const scanning = ref(false);
 const cleaning = ref(false);
 const total = ref(0);
 const size = ref(0);
-const counts = ref<Record<ConvergeKind, number>>({
-  echo: 0,
-  restart: 0,
-  map: 0,
-  out: 0,
-  post: 0,
-});
+const emptyCounts = (): Record<ConvergeKind, number> =>
+  Object.fromEntries(allConvergeKinds.map((k) => [k, 0])) as Record<
+    ConvergeKind,
+    number
+  >;
+
+const counts = ref<Record<ConvergeKind, number>>(emptyCounts());
 
 let scanController = new AbortController();
 
@@ -135,7 +154,7 @@ const scan = async () => {
   scanning.value = true;
   total.value = 0;
   size.value = 0;
-  counts.value = { echo: 0, restart: 0, map: 0, out: 0, post: 0 };
+  counts.value = emptyCounts();
 
   scanController.abort();
   scanController = new AbortController();

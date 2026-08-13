@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/rforced/filebrowser/v2/settings"
@@ -38,6 +38,20 @@ func TestConvergeOutputKind(t *testing.T) {
 
 		// out: *.out
 		{"out file", "thermo.out", "out", true},
+
+		// log: *.log
+		{"log file", "converge.log", "log", true},
+		{"log with path-ish name", "job.12345.log", "log", true},
+		{"log wrong extension", "converge.logs", "", false},
+
+		// nfs: .nfs* — a prefix-only pattern, and the one that matches dotfiles.
+		{"nfs stub", ".nfs00000000012a4b5c00000001", "nfs", true},
+		{"nfs bare", ".nfs", "nfs", true},
+		{"uppercase nfs stub", ".NFS0000ABCD", "nfs", true},
+		{"nfs without leading dot", "nfs0000abcd", "", false},
+		// ".nfs*" is taken literally, so anything under that prefix goes. Kept
+		// as written rather than narrowed to the hex stubs NFS actually emits.
+		{"anything under the nfs prefix", ".nfsrc", "nfs", true},
 
 		// post: post*.h5 / post*.cgns
 		{"post h5", "post00100.h5", "post", true},
@@ -75,9 +89,12 @@ func TestConvergeOutputKind(t *testing.T) {
 	}
 }
 
-// convergeCase builds a case directory holding one of every output family, an
-// outputs_* directory of its own, and a pile of files that must survive.
-func convergeCase(t *testing.T, dir string) {
+// convergeCase builds a case directory holding one of every output family, two
+// outputs_* directories, and a pile of files that must survive.
+//
+// It returns the count of entries a cleanup should remove: each surface-level
+// output file, plus each outputs_* directory as one entry.
+func convergeCase(t *testing.T, dir string) int {
 	t.Helper()
 
 	write := func(parts ...string) {
@@ -95,24 +112,31 @@ func convergeCase(t *testing.T, dir string) {
 	write("surface.dat")
 	write("combust.in")
 
-	// One of every output family, at the top level.
+	// One of every output family, at the top level. 8 entries.
 	write("run.echo")
 	write("restart0100.rst")
 	write("map_00001.h5")
 	write("thermo.out")
 	write("post00100.h5")
 	write("post00100.cgns")
+	write("converge.log")
+	write(".nfs00000000012a4b5c00000001")
 
-	// CONVERGE's own output directories, one level down.
-	write("outputs_a", "post00200.h5")
-	write("outputs_a", "thermo.out")
-	write("outputs_b", "restart0200.rst")
+	// CONVERGE's own output directories. Each counts as a single entry, since
+	// the whole tree goes — including the nested directory and the file inside
+	// it that matches nothing.
+	write("outputs_original", "post00200.h5")
+	write("outputs_original", "thermo.out")
+	write("outputs_original", "notes.txt")
+	write("outputs_original", "nested", "post00300.h5")
+	write("outputs_restart0100", "restart0200.rst")
 
-	// A nested case and an archive of a previous run: both hold matching names
-	// and must be left alone, since neither is this case's surface level.
-	write("outputs_a", "nested", "post00300.h5")
+	// An archive of a previous run: it holds matching names and an outputs_*
+	// directory of its own, but it is not this case's surface level.
 	write("archive", "run.echo")
 	write("archive", "outputs_c", "thermo.out")
+
+	return 8 + 2
 }
 
 func convergeHandlers(t *testing.T, st *storage.Storage) (scan, clean http.Handler, token string) {
@@ -132,7 +156,7 @@ func convergeTestHandlers(t *testing.T, userScope string, perm users.Permissions
 func TestConvergeScanIsShallow(t *testing.T) {
 	userScope := t.TempDir()
 	caseDir := filepath.Join(userScope, "case")
-	convergeCase(t, caseDir)
+	wantCount := convergeCase(t, caseDir)
 
 	scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
 
@@ -154,13 +178,17 @@ func TestConvergeScanIsShallow(t *testing.T) {
 		t.Fatal("expected the directory to be recognized as a CONVERGE case")
 	}
 
-	// 6 at the top level + 3 inside outputs_*. The nested directory under
-	// outputs_a and everything under archive/ is out of reach.
-	if got.Count != 9 {
-		t.Errorf("Count = %d, want 9 (groups: %+v)", got.Count, got.Groups)
+	// 8 output files at the top level + the 2 outputs_* directories, each of
+	// which counts once because the whole tree goes. Everything under archive/
+	// is out of reach.
+	if got.Count != wantCount {
+		t.Errorf("Count = %d, want %d (groups: %+v)", got.Count, wantCount, got.Groups)
 	}
 
-	wantGroups := map[string]int{"echo": 1, "restart": 2, "map": 1, "out": 2, "post": 3}
+	wantGroups := map[string]int{
+		"echo": 1, "restart": 1, "map": 1, "out": 1, "post": 2,
+		"log": 1, "nfs": 1, "outputs": 2,
+	}
 	gotGroups := map[string]int{}
 	for _, g := range got.Groups {
 		gotGroups[g.Kind] = g.Count
@@ -171,12 +199,21 @@ func TestConvergeScanIsShallow(t *testing.T) {
 		}
 	}
 
-	// Groups keep convergePatterns' order so the prompt is stable.
+	// The outputs_* size covers the whole tree, including the file that matches
+	// no pattern and the one in the nested directory: 5 files of one byte.
+	for _, g := range got.Groups {
+		if g.Kind == "outputs" && g.Size != 5 {
+			t.Errorf("outputs group size = %d, want 5 (the whole tree)", g.Size)
+		}
+	}
+
+	// Groups keep convergePatterns' order, with the directories last, so the
+	// prompt is stable.
 	var order []string
 	for _, g := range got.Groups {
 		order = append(order, g.Kind)
 	}
-	want := []string{"echo", "restart", "map", "out", "post"}
+	want := []string{"echo", "restart", "map", "out", "post", "log", "nfs", "outputs"}
 	for i := range want {
 		if i >= len(order) || order[i] != want[i] {
 			t.Errorf("group order = %v, want %v", order, want)
@@ -228,7 +265,7 @@ func TestConvergeScanRejectsNonCaseDirectory(t *testing.T) {
 func TestConvergeCleanDeletesOnlySurfaceOutputs(t *testing.T) {
 	userScope := t.TempDir()
 	caseDir := filepath.Join(userScope, "case")
-	convergeCase(t, caseDir)
+	wantDeleted := convergeCase(t, caseDir)
 
 	_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
 
@@ -245,8 +282,8 @@ func TestConvergeCleanDeletesOnlySurfaceOutputs(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if got.Deleted != 9 || got.Failed != 0 {
-		t.Errorf("deleted = %d failed = %d, want 9 and 0", got.Deleted, got.Failed)
+	if got.Deleted != wantDeleted || got.Failed != 0 {
+		t.Errorf("deleted = %d failed = %d, want %d and 0", got.Deleted, got.Failed, wantDeleted)
 	}
 
 	gone := []string{
@@ -256,9 +293,13 @@ func TestConvergeCleanDeletesOnlySurfaceOutputs(t *testing.T) {
 		"thermo.out",
 		"post00100.h5",
 		"post00100.cgns",
-		"outputs_a/post00200.h5",
-		"outputs_a/thermo.out",
-		"outputs_b/restart0200.rst",
+		"converge.log",
+		".nfs00000000012a4b5c00000001",
+		// The whole tree goes, including what matched nothing on its own.
+		"outputs_original",
+		"outputs_original/notes.txt",
+		"outputs_original/nested/post00300.h5",
+		"outputs_restart0100",
 	}
 	for _, rel := range gone {
 		if _, err := os.Stat(filepath.Join(caseDir, filepath.FromSlash(rel))); !os.IsNotExist(err) {
@@ -270,21 +311,12 @@ func TestConvergeCleanDeletesOnlySurfaceOutputs(t *testing.T) {
 		"inputs.in",
 		"surface.dat",
 		"combust.in",
-		"outputs_a/nested/post00300.h5",
 		"archive/run.echo",
 		"archive/outputs_c/thermo.out",
 	}
 	for _, rel := range kept {
 		if _, err := os.Stat(filepath.Join(caseDir, filepath.FromSlash(rel))); err != nil {
 			t.Errorf("expected %s to survive the cleanup: %v", rel, err)
-		}
-	}
-
-	// The output directories themselves stay; only their contents go.
-	for _, rel := range []string{"outputs_a", "outputs_b"} {
-		info, err := os.Stat(filepath.Join(caseDir, rel))
-		if err != nil || !info.IsDir() {
-			t.Errorf("expected %s to remain a directory: %v", rel, err)
 		}
 	}
 }
@@ -324,7 +356,7 @@ func TestConvergeSkipsSymlinks(t *testing.T) {
 	userScope := filepath.Join(root, "user")
 	outside := filepath.Join(root, "outside")
 	caseDir := filepath.Join(userScope, "case")
-	convergeCase(t, caseDir)
+	wantCount := convergeCase(t, caseDir)
 
 	if err := os.MkdirAll(outside, 0o755); err != nil {
 		t.Fatal(err)
@@ -353,8 +385,8 @@ func TestConvergeSkipsSymlinks(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &scanned); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if scanned.Count != 9 {
-		t.Errorf("Count = %d, want 9 — symlinks must not be swept", scanned.Count)
+	if scanned.Count != wantCount {
+		t.Errorf("Count = %d, want %d — symlinks must not be swept", scanned.Count, wantCount)
 	}
 
 	req, _ = http.NewRequest(http.MethodPost, "/api/converge/case", http.NoBody)
@@ -369,8 +401,15 @@ func TestConvergeSkipsSymlinks(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(caseDir, "linked.out")); err != nil {
 		t.Errorf("symlink named like an output was removed: %v", err)
 	}
+	if _, err := os.Lstat(filepath.Join(caseDir, "outputs_link")); err != nil {
+		t.Errorf("symlink named like an output directory was removed: %v", err)
+	}
+	// The whole-tree removal must not have followed the link out of scope.
 	if _, err := os.Stat(filepath.Join(outside, "thermo.out")); err != nil {
 		t.Errorf("VULNERABLE: cleanup reached a file outside the user's scope: %v", err)
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Errorf("VULNERABLE: cleanup removed a directory outside the user's scope: %v", err)
 	}
 }
 
@@ -396,18 +435,74 @@ func TestConvergeHonorsRules(t *testing.T) {
 		t.Errorf("VULNERABLE: a rule-denied file was deleted: %v", err)
 	}
 
-	// Everything else still went.
-	survivors, err := os.ReadDir(caseDir)
+	// Everything else still went, both output directories included.
+	want := []string{"archive", "combust.in", "inputs.in", "surface.dat", "thermo.out"}
+	if names := convergeSurvivors(t, caseDir); !slices.Equal(names, want) {
+		t.Errorf("surviving entries = %v, want %v", names, want)
+	}
+}
+
+// A recursive delete authorizes only its root, so a rule denying anything below
+// an outputs_* directory has to keep the whole directory: removing the parent
+// would otherwise be a way to delete what the rule protects.
+func TestConvergeRuleInsideOutputDirKeepsWholeTree(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeCase(t, caseDir)
+
+	key := []byte("test-signing-key")
+	st := denyRuleStorage(t, userScope, "/case/outputs_original/notes.txt", users.Permissions{Delete: true}, key)
+	scan, clean, token := convergeHandlers(t, st)
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/converge/case", http.NoBody)
+	req.Header.Set("X-Auth", token)
+	rec := httptest.NewRecorder()
+	scan.ServeHTTP(rec, req)
+
+	var scanned convergeScanResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &scanned); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	// 8 files + only the one clean output directory.
+	if scanned.Count != 9 {
+		t.Errorf("Count = %d, want 9 (groups: %+v)", scanned.Count, scanned.Groups)
+	}
+
+	req, _ = http.NewRequest(http.MethodPost, "/api/converge/case", http.NoBody)
+	req.Header.Set("X-Auth", token)
+	rec = httptest.NewRecorder()
+	clean.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
+	}
+
+	if _, err := os.Stat(filepath.Join(caseDir, "outputs_original", "notes.txt")); err != nil {
+		t.Errorf("VULNERABLE: a rule-denied file was deleted with its parent: %v", err)
+	}
+	// The rest of that tree stays too — the directory was skipped whole.
+	if _, err := os.Stat(filepath.Join(caseDir, "outputs_original", "post00200.h5")); err != nil {
+		t.Errorf("expected the skipped output directory to be left intact: %v", err)
+	}
+
+	want := []string{"archive", "combust.in", "inputs.in", "outputs_original", "surface.dat"}
+	if names := convergeSurvivors(t, caseDir); !slices.Equal(names, want) {
+		t.Errorf("surviving entries = %v, want %v", names, want)
+	}
+}
+
+func convergeSurvivors(t *testing.T, dir string) []string {
+	t.Helper()
+
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var names []string
-	for _, e := range survivors {
+
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
 		names = append(names, e.Name())
 	}
-	sort.Strings(names)
-	want := []string{"archive", "combust.in", "inputs.in", "outputs_a", "outputs_b", "surface.dat", "thermo.out"}
-	if len(names) != len(want) {
-		t.Errorf("surviving entries = %v, want %v", names, want)
-	}
+	slices.Sort(names)
+	return names
 }

@@ -335,7 +335,8 @@ export async function extract(
   }
 }
 
-export type ConvergeKind = "echo" | "restart" | "map" | "out" | "post";
+export type ConvergeKind =
+  "echo" | "restart" | "map" | "out" | "post" | "log" | "nfs" | "outputs";
 
 export interface ConvergeGroup {
   kind: ConvergeKind;

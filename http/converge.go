@@ -1,6 +1,7 @@
 package fbhttp
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -10,12 +11,17 @@ import (
 
 	"github.com/spf13/afero"
 
+	fberrors "github.com/rforced/filebrowser/v2/errors"
 	"github.com/rforced/filebrowser/v2/files"
 )
 
 const convergeCaseFile = "inputs.in"
 
 const convergeOutputDirPrefix = "outputs_"
+
+// convergeOutputDirKind groups the outputs_* directories, which are removed
+// whole rather than file by file.
+const convergeOutputDirKind = "outputs"
 
 type convergePattern struct {
 	kind     string
@@ -29,19 +35,36 @@ var convergePatterns = []convergePattern{
 	{kind: "map", prefix: "map_", suffixes: []string{".h5"}},
 	{kind: "out", suffixes: []string{".out"}},
 	{kind: "post", prefix: "post", suffixes: []string{".h5", ".cgns"}},
+	{kind: "log", suffixes: []string{".log"}},
+	{kind: "nfs", prefix: ".nfs"},
 }
 
 func convergeOutputKind(name string) (string, bool) {
-	if name == "" || strings.HasPrefix(name, ".") {
+	if name == "" {
 		return "", false
 	}
 
+	hidden := strings.HasPrefix(name, ".")
 	lower := strings.ToLower(name)
+
 	for _, p := range convergePatterns {
+		// A glob only matches a dotfile when the pattern spells the dot out, so
+		// "*.out" must not sweep in a hidden file while ".nfs*" must.
+		if hidden && !strings.HasPrefix(p.prefix, ".") {
+			continue
+		}
 		if !strings.HasPrefix(lower, p.prefix) {
 			continue
 		}
 
+		// No suffix means the pattern ends in the wildcard: the prefix decides.
+		if len(p.suffixes) == 0 {
+			return p.kind, true
+		}
+
+		// Match the suffix against what is left after the prefix, so the two
+		// cannot overlap. "*" may expand to nothing, which makes "restart.rst"
+		// a match, but ".rst" on its own must not be one.
 		rest := lower[len(p.prefix):]
 		for _, suffix := range p.suffixes {
 			if strings.HasSuffix(rest, suffix) {
@@ -53,41 +76,112 @@ func convergeOutputKind(name string) (string, bool) {
 	return "", false
 }
 
+// convergeMatch is one entry the cleanup removes: an output file, or a whole
+// outputs_* directory.
 type convergeMatch struct {
-	path string
-	kind string
-	size int64
+	path  string
+	kind  string
+	size  int64
+	isDir bool
 }
 
-func convergeOutputsIn(d *data, dir string) (matches []convergeMatch, outputDirs []string, err error) {
-	entries, err := afero.ReadDir(d.user.Fs, dir)
-	if err != nil {
-		return nil, nil, err
+// convergeCanDelete reports whether the rules allow every path under dir.
+//
+// A recursive delete authorizes only its root, so without this a rule denying
+// something inside an outputs_* directory would be bypassed by removing the
+// directory instead — the trap checkDescendants closes for resourceDeleteHandler.
+func convergeCanDelete(ctx context.Context, d *data, dir string) bool {
+	if len(d.settings.Rules) == 0 && len(d.user.Rules) == 0 {
+		return true
 	}
 
+	err := afero.Walk(d.user.Fs, dir, func(fPath string, _ os.FileInfo, err error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if err != nil {
+			return err
+		}
+		if !d.CheckRules(fPath) {
+			return fberrors.ErrPermissionDenied
+		}
+		return nil
+	})
+
+	return err == nil
+}
+
+// convergeDirSize totals the bytes held below dir so the prompt can say how
+// much removing the tree frees. An entry that cannot be read simply does not
+// count: the figure is informational, and it must not fail the whole scan.
+func convergeDirSize(ctx context.Context, afs afero.Fs, dir string) int64 {
+	var total int64
+
+	_ = afero.Walk(afs, dir, func(_ string, info os.FileInfo, err error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if err != nil || info == nil || info.IsDir() {
+			return nil //nolint:nilerr // an unreadable entry just does not count
+		}
+		total += info.Size()
+		return nil
+	})
+
+	return total
+}
+
+// scanConvergeOutputs collects what a cleanup of the case directory dir removes:
+// the output files sitting in it, and each outputs_* directory as a whole.
+//
+// Only dir's own entries are examined. Nothing else is descended into, so a
+// nested case, an archived run, or anything else kept alongside the case is
+// left alone.
+func scanConvergeOutputs(ctx context.Context, d *data, dir string) ([]convergeMatch, error) {
+	entries, err := afero.ReadDir(d.user.Fs, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var matches []convergeMatch
 	for _, entry := range entries {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
 		name := entry.Name()
 		fPath := path.Join(dir, name)
 
-		// Nothing the user cannot see may be swept. The prompt lists exactly
-		// what the cleanup will remove, and a rule that hides a path has to
-		// deny deleting it just the same.
-		if !d.Check(fPath) {
+		// The rules are the boundary, not d.Check: hiding dotfiles is a display
+		// preference, and the .nfs* leftovers are exactly the hidden files this
+		// cleanup exists to collect. Same call checkDescendants makes.
+		if !d.CheckRules(fPath) {
 			continue
 		}
 
 		// ReadDir describes a symlink itself, never its target. Skipping links
 		// keeps the cleanup from unlinking one whose name happens to match
-		// while leaving the output it points at in place, and from descending
-		// into a directory that actually lives somewhere else.
+		// while leaving the output it points at in place, and from deleting a
+		// tree that actually lives somewhere else.
 		if files.IsSymlink(entry.Mode()) {
 			continue
 		}
 
 		if entry.IsDir() {
-			if strings.HasPrefix(strings.ToLower(name), convergeOutputDirPrefix) {
-				outputDirs = append(outputDirs, fPath)
+			if !strings.HasPrefix(strings.ToLower(name), convergeOutputDirPrefix) {
+				continue
 			}
+			if !convergeCanDelete(ctx, d, fPath) {
+				log.Printf("INFO: leaving CONVERGE output directory %s: a rule denies part of it", fPath)
+				continue
+			}
+
+			matches = append(matches, convergeMatch{
+				path:  fPath,
+				kind:  convergeOutputDirKind,
+				size:  convergeDirSize(ctx, d.user.Fs, fPath),
+				isDir: true,
+			})
 			continue
 		}
 
@@ -97,26 +191,6 @@ func convergeOutputsIn(d *data, dir string) (matches []convergeMatch, outputDirs
 		}
 
 		matches = append(matches, convergeMatch{path: fPath, kind: kind, size: entry.Size()})
-	}
-
-	return matches, outputDirs, nil
-}
-
-func scanConvergeOutputs(d *data, dir string) ([]convergeMatch, error) {
-	matches, outputDirs, err := convergeOutputsIn(d, dir)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, outputDir := range outputDirs {
-		// One unreadable outputs_* directory should not stop the rest of the
-		// case from being cleaned, so treat it as empty and say so in the log.
-		nested, _, err := convergeOutputsIn(d, outputDir)
-		if err != nil {
-			log.Printf("WARNING: skipping CONVERGE output directory %s: %v", outputDir, err)
-			continue
-		}
-		matches = append(matches, nested...)
 	}
 
 	return matches, nil
@@ -180,6 +254,9 @@ func groupConvergeMatches(matches []convergeMatch) []convergeGroup {
 			groups = append(groups, *tally)
 		}
 	}
+	if tally, ok := tallies[convergeOutputDirKind]; ok {
+		groups = append(groups, *tally)
+	}
 
 	return groups
 }
@@ -204,7 +281,7 @@ var convergeScanHandler = withUser(func(w http.ResponseWriter, r *http.Request, 
 		return renderJSON(w, r, &convergeScanResponse{Groups: []convergeGroup{}})
 	}
 
-	matches, err := scanConvergeOutputs(d, dir)
+	matches, err := scanConvergeOutputs(r.Context(), d, dir)
 	if err != nil {
 		return errToStatus(err), err
 	}
@@ -245,7 +322,7 @@ var convergeCleanHandler = withUser(func(w http.ResponseWriter, r *http.Request,
 		return http.StatusBadRequest, errors.New("not a CONVERGE case directory")
 	}
 
-	matches, err := scanConvergeOutputs(d, dir)
+	matches, err := scanConvergeOutputs(r.Context(), d, dir)
 	if err != nil {
 		return errToStatus(err), err
 	}
@@ -261,11 +338,17 @@ var convergeCleanHandler = withUser(func(w http.ResponseWriter, r *http.Request,
 
 		match := matches[i]
 
-		// Remove, never RemoveAll: every match was a regular file when it was
-		// scanned, and refusing to recurse means a directory that took its place
-		// in the meantime cannot be swept away along with it.
+		// Files go one at a time, so a directory that took a scanned file's
+		// place in the meantime cannot be swept away with it. The outputs_*
+		// directories exist only to hold output, so those go whole — Remove
+		// would refuse a non-empty one.
+		remove := d.user.Fs.Remove
+		if match.isDir {
+			remove = d.user.Fs.RemoveAll
+		}
+
 		err := d.RunHook(func() error {
-			return d.user.Fs.Remove(match.path)
+			return remove(match.path)
 		}, "delete", match.path, "", d.user)
 		if err != nil {
 			log.Printf("WARNING: could not delete CONVERGE output %s: %v", match.path, err)

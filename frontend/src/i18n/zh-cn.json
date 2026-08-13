@@ -202,19 +202,21 @@
     "extractDestinationPlaceholder": "留空以在此处解压",
     "extractOverwrite": "目标文件夹已存在，是否覆盖？",
     "convergeClean": "清理 CONVERGE 输出",
-    "convergeCleanMessage": "此操作将永久删除该算例文件夹及其 outputs_* 文件夹中的 CONVERGE 输出文件。不会影响其他文件夹，输入文件也会保留。",
+    "convergeCleanMessage": "此操作将永久删除该算例文件夹中的 CONVERGE 输出文件，以及每个 outputs_* 文件夹及其全部内容。不会影响其他文件夹，输入文件也会保留。",
     "convergeCleanScanning": "正在查找输出文件…",
     "convergeCleaning": "正在删除输出文件…",
     "convergeCleanEmpty": "此处未找到 CONVERGE 输出文件。",
-    "convergeCleanTotal": "将删除 {count} 个文件，释放 {size}。",
-    "convergeCleanDone": "已删除 {count} 个文件，释放 {size}。",
-    "convergeCleanPartial": "有 {count} 个文件无法删除。",
+    "convergeCleanTotal": "将删除 {count} 个项目，释放 {size}。",
+    "convergeCleanDone": "已删除 {count} 个项目，释放 {size}。",
+    "convergeCleanPartial": "有 {count} 个项目无法删除。",
     "convergeKinds": {
       "echo": "回显文件",
       "restart": "重启文件",
       "map": "映射文件",
       "out": "单元平均输出",
-      "post": "逐单元后处理"
+      "post": "逐单元后处理",
+      "log": "日志文件",
+      "outputs": "输出文件夹（含全部内容）"
     }
   },
   "search": {
