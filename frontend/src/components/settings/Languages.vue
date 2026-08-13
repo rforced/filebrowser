@@ -1,5 +1,5 @@
 <template>
-  <select name="selectLanguage" v-on:change="change" :value="locale">
+  <select name="selectLanguage" v-on:change="change" :value="selected">
     <option v-for="(language, value) in locales" :key="value" :value="value">
       {{ language }}
     </option>
@@ -15,38 +15,11 @@ export default {
   data() {
     const dataObj = {};
     const locales = {
-      ar: "العربية",
-      bg: "български език",
-      ca: "Català",
-      cs: "Čeština",
       de: "Deutsch",
-      el: "Ελληνικά",
       en: "English",
-      es: "Español",
-      fr: "Français",
-      he: "עברית",
-      hr: "Hrvatski",
-      hu: "Magyar",
-      is: "Icelandic",
       it: "Italiano",
       ja: "日本語",
-      ko: "한국어",
-      no: "Norsk",
-      nl: "Nederlands (Nederland)",
-      "nl-be": "Nederlands (België)",
-      lv: "Latviešu",
-      pl: "Polski",
-      "pt-br": "Português (Brasil)",
-      "pt-pt": "Português (Portugal)",
-      ro: "Romanian",
-      ru: "Русский",
-      sk: "Slovenčina",
-      "sv-se": "Swedish (Sweden)",
-      tr: "Türkçe",
-      uk: "Українська",
-      vi: "Tiếng Việt",
       "zh-cn": "中文 (简体)",
-      "zh-tw": "中文 (繁體)",
     };
 
     // Vue3 reactivity breaks with this configuration
@@ -59,6 +32,14 @@ export default {
     });
 
     return dataObj;
+  },
+  computed: {
+    // Accounts left on a locale we no longer ship fall back to English, which
+    // is what vue-i18n renders for them anyway. Without this the select has no
+    // matching option and renders blank.
+    selected() {
+      return this.locales[this.locale] ? this.locale : "en";
+    },
   },
   methods: {
     change(event) {
