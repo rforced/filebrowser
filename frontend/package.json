@@ -5,7 +5,7 @@
   "type": "module",
   "engines": {
     "node": ">=24.0.0",
-    "pnpm": ">=10.0.0"
+    "pnpm": ">=11.0.0"
   },
   "scripts": {
     "dev": "vite dev",
@@ -21,11 +21,11 @@
   "dependencies": {
     "@chenfengyuan/vue-number-input": "^2.0.1",
     "ace-builds": "^1.44.0",
-    "csv-parse": "^7.0.1",
+    "csv-parse": "^7.0.2",
     "dayjs": "^1.11.21",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.13",
     "filesize": "^11.0.22",
-    "marked": "^18.0.7",
+    "marked": "^18.0.9",
     "marked-katex-extension": "^5.1.10",
     "material-icons": "^1.13.14",
     "normalize.css": "^8.0.1",
@@ -33,11 +33,11 @@
     "qrcode.vue": "^3.10.0",
     "three": "0.185.1",
     "tus-js-client": "^4.3.1",
-    "video.js": "^8.23.9",
+    "video.js": "^8.24.0",
     "videojs-hotkeys": "^0.2.30",
-    "videojs-mobile-ui": "^1.2.6",
-    "vue": "^3.5.40",
-    "vue-i18n": "^11.4.7",
+    "videojs-mobile-ui": "^1.2.7",
+    "vue": "^3.5.41",
+    "vue-i18n": "^11.4.8",
     "vue-lazyload": "^3.0.0",
     "vue-router": "^5.2.0",
     "vue-toastification": "2.0.0-rc.5"
@@ -45,36 +45,27 @@
   "devDependencies": {
     "@intlify/unplugin-vue-i18n": "^11.2.4",
     "@tsconfig/node24": "^24.0.4",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.2.0",
     "@types/three": "0.185.1",
-    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/eslint-config-typescript": "^14.9.0",
     "@vue/test-utils": "^2.4.11",
     "@vue/tsconfig": "^0.9.1",
     "autoprefixer": "^10.5.4",
-    "eslint": "^10.8.0",
+    "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",
     "eslint-plugin-vue": "^10.10.0",
-    "happy-dom": "^20.11.1",
-    "postcss": "^8.5.23",
+    "happy-dom": "^20.11.2",
+    "postcss": "^8.5.26",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "vite": "^8.1.5",
+    "vite": "^8.2.1",
     "vite-plugin-compression2": "^2.5.3",
     "vitest": "^4.1.10",
-    "vue-tsc": "^3.3.8"
+    "vue-tsc": "^3.3.9"
   },
-  "packageManager": "pnpm@10.32.1+sha512.a706938f0e89ac1456b6563eab4edf1d1faf3368d1191fc5c59790e96dc918e4456ab2e67d613de1043d2e8c81f87303e6b40d4ffeca9df15ef1ad567348f2be",
-  "pnpm": {
-    "overrides": {
-      "glob@^10.0.0": "^12.0.0",
-      "esbuild": "^0.28.1",
-      "minimatch@^9.0.1": "^10.2.5",
-      "brace-expansion": "^5.0.9"
-    },
-    "onlyBuiltDependencies": []
-  }
+  "packageManager": "pnpm@11.21.0+sha512.521705bce689924eac72f5a3587122f362689ef6571e55ba80076fd637c11132ecffada26fad4ea79c485bfddbfd3d5a2a5b05805a77e893de71ec8a6cca3bb1"
 }
