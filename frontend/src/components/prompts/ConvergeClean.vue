@@ -86,6 +86,7 @@ const allConvergeKinds: ConvergeKind[] = [
   "out",
   "post",
   "log",
+  "run",
   "nfs",
   "outputs",
 ];
@@ -104,6 +105,7 @@ const convergeKinds: { key: ConvergeKind; glob: string }[] = [
   { key: "out", glob: "*.out" },
   { key: "post", glob: "post*.h5, post*.cgns" },
   { key: "log", glob: "*.log" },
+  { key: "run", glob: "horizon.json, hosts" },
   { key: "outputs", glob: "outputs_*/" },
 ];
 

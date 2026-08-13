@@ -202,7 +202,7 @@
     "extractDestinationPlaceholder": "Leer lassen, um hier zu entpacken",
     "extractOverwrite": "Der Zielordner existiert bereits. Möchtest du ihn überschreiben?",
     "convergeClean": "CONVERGE-Ausgabe bereinigen",
-    "convergeCleanMessage": "Dies löscht die CONVERGE-Ausgabedateien in diesem Case-Ordner endgültig, sowie jeden outputs_*-Ordner samt seinem gesamten Inhalt. Kein anderer Ordner wird angerührt, und das Input-Deck bleibt erhalten.",
+    "convergeCleanMessage": "Dies löscht die CONVERGE-Ausgabedateien in diesem Case-Ordner endgültig, sowie jeden outputs_*-Ordner samt seinem gesamten Inhalt.",
     "convergeCleanScanning": "Ausgabedateien werden gesucht …",
     "convergeCleaning": "Ausgabedateien werden gelöscht …",
     "convergeCleanEmpty": "Hier wurden keine CONVERGE-Ausgabedateien gefunden.",
@@ -216,6 +216,7 @@
       "out": "Zellgemittelte Ausgabe",
       "post": "Zellweise Post-Ausgabe",
       "log": "Protokoll",
+      "run": "Laufdateien",
       "outputs": "Ausgabeordner (samt Inhalt)"
     }
   },

@@ -202,7 +202,7 @@
     "extractDestinationPlaceholder": "Lascia vuoto per estrarre qui",
     "extractOverwrite": "La cartella di destinazione esiste già. Vuoi sovrascriverla?",
     "convergeClean": "Pulisci l'output di CONVERGE",
-    "convergeCleanMessage": "Questa operazione elimina definitivamente i file di output di CONVERGE in questa cartella del caso e ogni cartella outputs_* con tutto il suo contenuto. Nessun'altra cartella viene toccata e il file di input resta al suo posto.",
+    "convergeCleanMessage": "Questa operazione elimina definitivamente i file di output di CONVERGE in questa cartella del caso e ogni cartella outputs_* con tutto il suo contenuto.",
     "convergeCleanScanning": "Ricerca dei file di output in corso…",
     "convergeCleaning": "Eliminazione dei file di output in corso…",
     "convergeCleanEmpty": "Nessun file di output di CONVERGE trovato qui.",
@@ -216,6 +216,7 @@
       "out": "Output mediato per cella",
       "post": "Post cella per cella",
       "log": "Log",
+      "run": "File di esecuzione",
       "outputs": "Cartelle di output (contenuto incluso)"
     }
   },

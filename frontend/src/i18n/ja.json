@@ -202,7 +202,7 @@
     "extractDestinationPlaceholder": "空白にするとここに展開します",
     "extractOverwrite": "展開先フォルダーはすでに存在します。上書きしますか？",
     "convergeClean": "CONVERGE の出力を削除",
-    "convergeCleanMessage": "このケースフォルダーにある CONVERGE の出力ファイルと、outputs_* フォルダーをその中身ごと完全に削除します。ほかのフォルダーには影響せず、入力ファイルはそのまま残ります。",
+    "convergeCleanMessage": "このケースフォルダーにある CONVERGE の出力ファイルと、outputs_* フォルダーをその中身ごと完全に削除します。",
     "convergeCleanScanning": "出力ファイルを検索しています…",
     "convergeCleaning": "出力ファイルを削除しています…",
     "convergeCleanEmpty": "CONVERGE の出力ファイルは見つかりませんでした。",
@@ -216,6 +216,7 @@
       "out": "セル平均出力",
       "post": "セルごとのポスト出力",
       "log": "ログ",
+      "run": "実行時ファイル",
       "outputs": "出力フォルダー（中身を含む）"
     }
   },

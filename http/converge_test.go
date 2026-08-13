@@ -44,6 +44,16 @@ func TestConvergeOutputKind(t *testing.T) {
 		{"log with path-ish name", "job.12345.log", "log", true},
 		{"log wrong extension", "converge.logs", "", false},
 
+		// run: horizon.json / hosts, matched whole.
+		{"horizon", "horizon.json", "run", true},
+		{"hosts", "hosts", "run", true},
+		{"uppercase hosts", "HOSTS", "run", true},
+		{"mixed case horizon", "Horizon.JSON", "run", true},
+		{"copy of hosts", "hosts.bak", "", false},
+		{"hosts with a suffix in the name", "hostsfile", "", false},
+		{"horizon without the extension", "horizon", "", false},
+		{"another json", "settings.json", "", false},
+
 		// nfs: .nfs* — a prefix-only pattern, and the one that matches dotfiles.
 		{"nfs stub", ".nfs00000000012a4b5c00000001", "nfs", true},
 		{"nfs bare", ".nfs", "nfs", true},
@@ -111,8 +121,10 @@ func convergeCase(t *testing.T, dir string) int {
 	write("inputs.in")
 	write("surface.dat")
 	write("combust.in")
+	// Named close enough to the run files to be swept by a sloppy match.
+	write("hosts.bak")
 
-	// One of every output family, at the top level. 8 entries.
+	// One of every output family, at the top level. 10 entries.
 	write("run.echo")
 	write("restart0100.rst")
 	write("map_00001.h5")
@@ -120,6 +132,8 @@ func convergeCase(t *testing.T, dir string) int {
 	write("post00100.h5")
 	write("post00100.cgns")
 	write("converge.log")
+	write("horizon.json")
+	write("hosts")
 	write(".nfs00000000012a4b5c00000001")
 
 	// CONVERGE's own output directories. Each counts as a single entry, since
@@ -136,7 +150,7 @@ func convergeCase(t *testing.T, dir string) int {
 	write("archive", "run.echo")
 	write("archive", "outputs_c", "thermo.out")
 
-	return 8 + 2
+	return 10 + 2
 }
 
 func convergeHandlers(t *testing.T, st *storage.Storage) (scan, clean http.Handler, token string) {
@@ -178,7 +192,7 @@ func TestConvergeScanIsShallow(t *testing.T) {
 		t.Fatal("expected the directory to be recognized as a CONVERGE case")
 	}
 
-	// 8 output files at the top level + the 2 outputs_* directories, each of
+	// 10 output files at the top level + the 2 outputs_* directories, each of
 	// which counts once because the whole tree goes. Everything under archive/
 	// is out of reach.
 	if got.Count != wantCount {
@@ -187,7 +201,7 @@ func TestConvergeScanIsShallow(t *testing.T) {
 
 	wantGroups := map[string]int{
 		"echo": 1, "restart": 1, "map": 1, "out": 1, "post": 2,
-		"log": 1, "nfs": 1, "outputs": 2,
+		"log": 1, "run": 2, "nfs": 1, "outputs": 2,
 	}
 	gotGroups := map[string]int{}
 	for _, g := range got.Groups {
@@ -213,7 +227,7 @@ func TestConvergeScanIsShallow(t *testing.T) {
 	for _, g := range got.Groups {
 		order = append(order, g.Kind)
 	}
-	want := []string{"echo", "restart", "map", "out", "post", "log", "nfs", "outputs"}
+	want := []string{"echo", "restart", "map", "out", "post", "log", "run", "nfs", "outputs"}
 	for i := range want {
 		if i >= len(order) || order[i] != want[i] {
 			t.Errorf("group order = %v, want %v", order, want)
@@ -294,6 +308,8 @@ func TestConvergeCleanDeletesOnlySurfaceOutputs(t *testing.T) {
 		"post00100.h5",
 		"post00100.cgns",
 		"converge.log",
+		"horizon.json",
+		"hosts",
 		".nfs00000000012a4b5c00000001",
 		// The whole tree goes, including what matched nothing on its own.
 		"outputs_original",
@@ -311,6 +327,7 @@ func TestConvergeCleanDeletesOnlySurfaceOutputs(t *testing.T) {
 		"inputs.in",
 		"surface.dat",
 		"combust.in",
+		"hosts.bak",
 		"archive/run.echo",
 		"archive/outputs_c/thermo.out",
 	}
@@ -436,7 +453,7 @@ func TestConvergeHonorsRules(t *testing.T) {
 	}
 
 	// Everything else still went, both output directories included.
-	want := []string{"archive", "combust.in", "inputs.in", "surface.dat", "thermo.out"}
+	want := []string{"archive", "combust.in", "hosts.bak", "inputs.in", "surface.dat", "thermo.out"}
 	if names := convergeSurvivors(t, caseDir); !slices.Equal(names, want) {
 		t.Errorf("surviving entries = %v, want %v", names, want)
 	}
@@ -463,9 +480,9 @@ func TestConvergeRuleInsideOutputDirKeepsWholeTree(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &scanned); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	// 8 files + only the one clean output directory.
-	if scanned.Count != 9 {
-		t.Errorf("Count = %d, want 9 (groups: %+v)", scanned.Count, scanned.Groups)
+	// 10 files + only the one clean output directory.
+	if scanned.Count != 11 {
+		t.Errorf("Count = %d, want 11 (groups: %+v)", scanned.Count, scanned.Groups)
 	}
 
 	req, _ = http.NewRequest(http.MethodPost, "/api/converge/case", http.NoBody)
@@ -485,7 +502,7 @@ func TestConvergeRuleInsideOutputDirKeepsWholeTree(t *testing.T) {
 		t.Errorf("expected the skipped output directory to be left intact: %v", err)
 	}
 
-	want := []string{"archive", "combust.in", "inputs.in", "outputs_original", "surface.dat"}
+	want := []string{"archive", "combust.in", "hosts.bak", "inputs.in", "outputs_original", "surface.dat"}
 	if names := convergeSurvivors(t, caseDir); !slices.Equal(names, want) {
 		t.Errorf("surviving entries = %v, want %v", names, want)
 	}

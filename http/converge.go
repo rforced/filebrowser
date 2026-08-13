@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/spf13/afero"
@@ -19,14 +20,13 @@ const convergeCaseFile = "inputs.in"
 
 const convergeOutputDirPrefix = "outputs_"
 
-// convergeOutputDirKind groups the outputs_* directories, which are removed
-// whole rather than file by file.
 const convergeOutputDirKind = "outputs"
 
 type convergePattern struct {
 	kind     string
 	prefix   string
 	suffixes []string
+	names    []string
 }
 
 var convergePatterns = []convergePattern{
@@ -36,6 +36,7 @@ var convergePatterns = []convergePattern{
 	{kind: "out", suffixes: []string{".out"}},
 	{kind: "post", prefix: "post", suffixes: []string{".h5", ".cgns"}},
 	{kind: "log", suffixes: []string{".log"}},
+	{kind: "run", names: []string{"horizon.json", "hosts"}},
 	{kind: "nfs", prefix: ".nfs"},
 }
 
@@ -53,6 +54,14 @@ func convergeOutputKind(name string) (string, bool) {
 		if hidden && !strings.HasPrefix(p.prefix, ".") {
 			continue
 		}
+
+		if len(p.names) > 0 {
+			if slices.Contains(p.names, lower) {
+				return p.kind, true
+			}
+			continue
+		}
+
 		if !strings.HasPrefix(lower, p.prefix) {
 			continue
 		}
@@ -76,8 +85,6 @@ func convergeOutputKind(name string) (string, bool) {
 	return "", false
 }
 
-// convergeMatch is one entry the cleanup removes: an output file, or a whole
-// outputs_* directory.
 type convergeMatch struct {
 	path  string
 	kind  string
@@ -85,11 +92,6 @@ type convergeMatch struct {
 	isDir bool
 }
 
-// convergeCanDelete reports whether the rules allow every path under dir.
-//
-// A recursive delete authorizes only its root, so without this a rule denying
-// something inside an outputs_* directory would be bypassed by removing the
-// directory instead — the trap checkDescendants closes for resourceDeleteHandler.
 func convergeCanDelete(ctx context.Context, d *data, dir string) bool {
 	if len(d.settings.Rules) == 0 && len(d.user.Rules) == 0 {
 		return true
@@ -111,9 +113,6 @@ func convergeCanDelete(ctx context.Context, d *data, dir string) bool {
 	return err == nil
 }
 
-// convergeDirSize totals the bytes held below dir so the prompt can say how
-// much removing the tree frees. An entry that cannot be read simply does not
-// count: the figure is informational, and it must not fail the whole scan.
 func convergeDirSize(ctx context.Context, afs afero.Fs, dir string) int64 {
 	var total int64
 
@@ -131,12 +130,6 @@ func convergeDirSize(ctx context.Context, afs afero.Fs, dir string) int64 {
 	return total
 }
 
-// scanConvergeOutputs collects what a cleanup of the case directory dir removes:
-// the output files sitting in it, and each outputs_* directory as a whole.
-//
-// Only dir's own entries are examined. Nothing else is descended into, so a
-// nested case, an archived run, or anything else kept alongside the case is
-// left alone.
 func scanConvergeOutputs(ctx context.Context, d *data, dir string) ([]convergeMatch, error) {
 	entries, err := afero.ReadDir(d.user.Fs, dir)
 	if err != nil {
