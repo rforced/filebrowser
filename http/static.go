@@ -24,11 +24,6 @@ import (
 func handleWithStaticData(w http.ResponseWriter, _ *http.Request, d *data, fSys fs.FS, file, contentType string) (int, error) {
 	w.Header().Set("Content-Type", contentType)
 
-	auther, err := d.store.Auth.Get(d.settings.AuthMethod)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
 	data := map[string]interface{}{
 		"Name":                  d.settings.Branding.Name,
 		"DisableExternal":       d.settings.Branding.DisableExternal,
@@ -39,7 +34,6 @@ func handleWithStaticData(w http.ResponseWriter, _ *http.Request, d *data, fSys 
 		"StaticURL":             path.Join(d.server.BaseURL, "/static"),
 		"AuthMethod":            d.settings.AuthMethod,
 		"LogoutPage":            d.settings.LogoutPage,
-		"LoginPage":             auther.LoginPage(),
 		"CSS":                   false,
 		"ReCaptcha":             false,
 		"Theme":                 d.settings.Branding.Theme,

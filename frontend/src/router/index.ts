@@ -14,8 +14,7 @@ import Errors from "@/views/Errors.vue";
 import { useAuthStore } from "@/stores/auth";
 import { baseURL, name } from "@/utils/constants";
 import i18n from "@/i18n";
-import { loginPage } from "@/utils/constants";
-import { login, validateLogin } from "@/utils/auth";
+import { validateLogin } from "@/utils/auth";
 import { catchAllRedirect } from "./catchAll";
 
 const titles = {
@@ -151,11 +150,7 @@ const routes = [
 ];
 
 async function initAuth() {
-  if (loginPage) {
-    await validateLogin();
-  } else {
-    await login("", "", "");
-  }
+  await validateLogin();
 }
 
 const router = createRouter({

@@ -110,12 +110,6 @@ func (a JSONAuth) Auth(r *http.Request, usr users.Store, _ *settings.Settings, s
 	return u, nil
 }
 
-// LoginPage tells that json auth doesn't require a login page.
-func (a JSONAuth) LoginPage() bool {
-	return true
-}
-
-// ReCaptcha identifies a reCAPTCHA Enterprise connection.
 type ReCaptcha struct {
 	Key              string   `json:"key"`
 	Secret           string   `json:"secret"`

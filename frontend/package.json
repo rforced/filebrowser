@@ -21,7 +21,6 @@
   "dependencies": {
     "@chenfengyuan/vue-number-input": "^2.0.1",
     "ace-builds": "^1.44.0",
-    "csv-parse": "^7.0.2",
     "dayjs": "^1.11.21",
     "dompurify": "^3.4.13",
     "filesize": "^11.0.22",

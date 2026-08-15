@@ -442,7 +442,7 @@ func TestDetectType_Model(t *testing.T) {
 				Size:      int64(len(tc.contents)),
 			}
 
-			if err := fi.detectType(true, false, true, false); err != nil {
+			if err := fi.detectType(true, false, true); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if fi.Type != tc.want {
@@ -517,7 +517,7 @@ func TestDetectType_Image(t *testing.T) {
 				Size:      int64(len(tc.contents)),
 			}
 
-			if err := fi.detectType(true, true, tc.readHeader, false); err != nil {
+			if err := fi.detectType(true, true, tc.readHeader); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if fi.Type != tc.want {

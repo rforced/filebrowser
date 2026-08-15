@@ -552,3 +552,110 @@ func TestLoginHandler_RateLimitCheckedBeforeAuth(t *testing.T) {
 		t.Errorf("status = %d, want %d (rate limit should block even valid credentials)", recorder.Code, http.StatusTooManyRequests)
 	}
 }
+
+func TestActiveSessionIsInvitedToRenew(t *testing.T) {
+	env := setupTestStorage(t)
+	env.server.TokenExpirationTime = "1h"
+
+	request := func(tokenStr string) *httptest.ResponseRecorder {
+		req, _ := http.NewRequest(http.MethodGet, "/", http.NoBody)
+		req.Header.Set("X-Auth", tokenStr)
+		rec := httptest.NewRecorder()
+		handle(meHandler, "", env.storage, env.server).ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("fresh token is not asked to renew", func(t *testing.T) {
+		fresh := createTestToken(t, env, env.user.ID, time.Hour)
+		rec := request(fresh)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rec.Code)
+		}
+		if got := rec.Header().Get("X-Renew-Token"); got != "" {
+			t.Errorf("X-Renew-Token = %q on a fresh token, want empty", got)
+		}
+	})
+
+	t.Run("token past halfway is asked to renew", func(t *testing.T) {
+		stale := createTestToken(t, env, env.user.ID, 20*time.Minute)
+		rec := request(stale)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rec.Code)
+		}
+		if got := rec.Header().Get("X-Renew-Token"); got != "true" {
+			t.Errorf("X-Renew-Token = %q on a token past halfway, want %q", got, "true")
+		}
+	})
+}
+
+func TestRenewalSlidesWithinAbsoluteLifetime(t *testing.T) {
+	env := setupTestStorage(t)
+
+	policy := tokenPolicy{expiration: time.Hour, maxLifetime: 24 * time.Hour}
+
+	renew := func(tokenStr string) *httptest.ResponseRecorder {
+		req, _ := http.NewRequest(http.MethodPost, "/", http.NoBody)
+		req.Header.Set("X-Auth", tokenStr)
+		rec := httptest.NewRecorder()
+		handle(renewHandler(policy), "", env.storage, env.server).ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("a session still inside its lifetime renews", func(t *testing.T) {
+		tokenStr, err := auth.GenerateToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := env.storage.Tokens.Save(tokenStr, &auth.Token{
+			UserID:    env.user.ID,
+			ExpiresAt: time.Now().Add(10 * time.Minute),
+			CreatedAt: time.Now().Add(-2 * time.Hour),
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		rec := renew(tokenStr)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected a renewal inside the lifetime to succeed, got %d", rec.Code)
+		}
+		newToken := rec.Body.String()
+		if newToken == "" || newToken == tokenStr {
+			t.Fatal("expected a fresh token to be issued")
+		}
+
+		stored, err := env.storage.Tokens.Get(newToken)
+		if err != nil {
+			t.Fatalf("renewed token was not stored: %v", err)
+		}
+		if time.Since(stored.CreatedAt) < 90*time.Minute {
+			t.Errorf("renewal reset the session start; CreatedAt = %v", stored.CreatedAt)
+		}
+		if !stored.ExpiresAt.After(time.Now().Add(30 * time.Minute)) {
+			t.Errorf("renewal did not slide the expiry forward: %v", stored.ExpiresAt)
+		}
+
+		if _, err := env.storage.Tokens.Get(tokenStr); err == nil {
+			t.Error("the replaced token is still valid")
+		}
+	})
+
+	t.Run("a session past its lifetime cannot renew", func(t *testing.T) {
+		tokenStr, err := auth.GenerateToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := env.storage.Tokens.Save(tokenStr, &auth.Token{
+			UserID:    env.user.ID,
+			ExpiresAt: time.Now().Add(10 * time.Minute),
+			CreatedAt: time.Now().Add(-25 * time.Hour),
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		if rec := renew(tokenStr); rec.Code != http.StatusUnauthorized {
+			t.Errorf("expected 401 past the absolute lifetime, got %d", rec.Code)
+		}
+	})
+}

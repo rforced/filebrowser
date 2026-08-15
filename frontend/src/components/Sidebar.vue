@@ -64,7 +64,7 @@
           <span>{{ $t("sidebar.settings") }}</span>
         </button>
       </div>
-      <div v-if="canLogout">
+      <div>
         <button
           @click="logout"
           class="action"
@@ -124,8 +124,6 @@ import {
   hideLoginButton,
   disableExternal,
   disableUsedPercentage,
-  logoutPage,
-  loginPage,
   domain,
   teamId,
   filesystemId,
@@ -157,7 +155,6 @@ export default {
     version: () => version,
     disableExternal: () => disableExternal,
     disableUsedPercentage: () => disableUsedPercentage,
-    canLogout: () => loginPage || logoutPage !== "/login",
     jobEnabled: () => !!domain && !!teamId && !!filesystemId,
     jobUrl() {
       if (!this.jobEnabled) return "";

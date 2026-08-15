@@ -72,7 +72,13 @@ export async function fetchURL(
   }
 
   if (auth && res.headers.get("X-Renew-Token") === "true") {
-    await renew(authStore.token);
+    try {
+      await renew(authStore.token);
+    } catch (e) {
+      if (e instanceof StatusError && e.status === 401) {
+        await logout("session_expired");
+      }
+    }
   }
 
   if (res.status < 200 || res.status > 299) {

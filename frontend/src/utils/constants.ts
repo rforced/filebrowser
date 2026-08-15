@@ -9,7 +9,6 @@ const version: string = window.FileBrowser.Version;
 const logoURL = `${staticURL}/img/logo.svg`;
 const authMethod = window.FileBrowser.AuthMethod;
 const logoutPage: string = window.FileBrowser.LogoutPage;
-const loginPage: boolean = window.FileBrowser.LoginPage;
 const theme: UserTheme = window.FileBrowser.Theme;
 const enableThumbs: boolean = window.FileBrowser.EnableThumbs;
 const resizePreview: boolean = window.FileBrowser.ResizePreview;
@@ -32,7 +31,6 @@ export {
   version,
   authMethod,
   logoutPage,
-  loginPage,
   theme,
   enableThumbs,
   resizePreview,

@@ -3,27 +3,15 @@ import { useLayoutStore } from "@/stores/layout";
 import { baseURL } from "@/utils/constants";
 import { upload as postTus, useTus } from "./tus";
 import { createURL, fetchURL, removePrefix, StatusError } from "./utils";
-import { isEncodableResponse, makeRawResource } from "@/utils/encodings";
 
 export async function fetch(url: string, signal?: AbortSignal) {
-  const encoding = isEncodableResponse(url);
   url = removePrefix(url);
-  const res = await fetchURL(`/api/resources${url}`, {
-    signal,
-    headers: {
-      "X-Encoding": encoding ? "true" : "false",
-    },
-  });
+  const res = await fetchURL(`/api/resources${url}`, { signal });
 
   let data: Resource;
   try {
-    if (res.headers.get("Content-Type") == "application/octet-stream") {
-      data = await makeRawResource(res, url);
-    } else {
-      data = (await res.json()) as Resource;
-    }
+    data = (await res.json()) as Resource;
   } catch (e) {
-    // Check if the error is an intentional cancellation
     if (e instanceof Error && e.name === "AbortError") {
       throw new StatusError("000 No connection", 0, true);
     }

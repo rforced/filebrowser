@@ -48,7 +48,6 @@
     "discardChanges": "破棄",
     "stopSearch": "検索を停止",
     "saveChanges": "変更を保存",
-    "editAsText": "テキストとして編集",
     "extract": "展開",
     "cleanConvergeOutput": "CONVERGE の出力を削除",
     "increaseFontSize": "文字を大きくする",
@@ -90,18 +89,11 @@
     "sortByName": "名前で並べ替え",
     "sortBySize": "サイズで並べ替え",
     "noPreview": "このファイルのプレビューは利用できません。",
-    "csvTooLarge": "CSV ファイルが大きすぎるためプレビューできません（5MB 超）。ダウンロードしてご覧ください。",
-    "csvLoadFailed": "CSV ファイルを読み込めませんでした。",
     "modelLoadFailed": "3D モデルを読み込めませんでした。",
     "modelTooLarge": "3D モデルが大きすぎるためプレビューできません（100MB 超）。ダウンロードしてご覧ください。",
     "modelNoWebgl": "3D プレビューは利用できません。このブラウザーは WebGL に対応していません。",
     "showingRows": "{count} 行を表示中",
     "columnSeparator": "区切り文字",
-    "csvSeparators": {
-      "comma": "カンマ (,)",
-      "semicolon": "セミコロン (;)",
-      "both": "カンマ (,) とセミコロン (;)"
-    },
     "fileEncoding": "文字コード"
   },
   "help": {
@@ -172,7 +164,6 @@
     "expirationRequired": "共有には有効期限が必要です。",
     "calculateSize": "計算",
     "calculating": "計算中…",
-    "resolution": "解像度",
     "discardEditorChanges": "変更を破棄してもよろしいですか？",
     "replaceOrSkip": "ファイルの置き換えまたはスキップ",
     "resolveConflict": "どちらのファイルを残しますか？",

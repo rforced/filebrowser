@@ -48,7 +48,6 @@
     "discardChanges": "Discard",
     "stopSearch": "Stop searching",
     "saveChanges": "Save changes",
-    "editAsText": "Edit as Text",
     "extract": "Extract",
     "cleanConvergeOutput": "Clean CONVERGE output",
     "increaseFontSize": "Increase font size",
@@ -90,18 +89,11 @@
     "sortByName": "Sort by name",
     "sortBySize": "Sort by size",
     "noPreview": "Preview is not available for this file.",
-    "csvTooLarge": "CSV file is too large for preview (>5MB). Please download to view.",
-    "csvLoadFailed": "Failed to load CSV file.",
     "modelLoadFailed": "Failed to load 3D model.",
     "modelTooLarge": "3D model is too large for preview (>100MB). Please download to view.",
     "modelNoWebgl": "3D preview is not available: WebGL is not supported by this browser.",
     "showingRows": "Showing {count} row(s)",
     "columnSeparator": "Column Separator",
-    "csvSeparators": {
-      "comma": "Comma (,)",
-      "semicolon": "Semicolon (;)",
-      "both": "Both (,) and (;)"
-    },
     "fileEncoding": "File Encoding"
   },
   "help": {
@@ -172,7 +164,6 @@
     "expirationRequired": "An expiration time is required for sharing.",
     "calculateSize": "Calculate",
     "calculating": "Calculating...",
-    "resolution": "Resolution",
     "discardEditorChanges": "Are you sure you wish to discard the changes you've made?",
     "replaceOrSkip": "Replace or skip files",
     "resolveConflict": "Which files do you want to keep?",

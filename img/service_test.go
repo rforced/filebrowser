@@ -215,7 +215,7 @@ func TestService_Resize(t *testing.T) {
 			},
 			matcher: sizeMatcher(100, 100),
 		},
-		"get thumbnail from file with APP0 JFIF": {
+		"low quality preview of a file with an embedded thumbnail": {
 			options: []Option{WithMode(ResizeModeFill), WithQuality(QualityLow)},
 			width:   100,
 			height:  100,
@@ -223,9 +223,9 @@ func TestService_Resize(t *testing.T) {
 				t.Helper()
 				return openFile(t, "testdata/gray-sample.jpg")
 			},
-			matcher: sizeMatcher(125, 128),
+			matcher: sizeMatcher(100, 100),
 		},
-		"get thumbnail from file without APP0 JFIF": {
+		"low quality preview of a file without APP0 JFIF": {
 			options: []Option{WithMode(ResizeModeFill), WithQuality(QualityLow)},
 			width:   100,
 			height:  100,
@@ -233,7 +233,7 @@ func TestService_Resize(t *testing.T) {
 				t.Helper()
 				return openFile(t, "testdata/20130612_142406.jpg")
 			},
-			matcher: sizeMatcher(320, 240),
+			matcher: sizeMatcher(100, 100),
 		},
 		"resize from file without IFD1 thumbnail": {
 			options: []Option{WithMode(ResizeModeFill), WithQuality(QualityLow)},

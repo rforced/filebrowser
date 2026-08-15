@@ -37,7 +37,6 @@ var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 		return errToStatus(err), err
 	}
 
-	encoding := r.Header.Get("X-Encoding")
 	if r.URL.Query().Get("dirsize") == "true" {
 		dirInfo, err := file.DirSize()
 		if err != nil {
@@ -50,29 +49,6 @@ var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 		file.Sorting = d.user.Sorting
 		file.ApplySort()
 		return renderJSON(w, r, file)
-	} else if encoding == "true" {
-		if file.Type != "text" {
-			return renderJSON(w, r, file)
-		}
-
-		const maxReadSize = 10 * 1024 * 1024 // 10 MB
-		if file.Size > maxReadSize {
-			return http.StatusRequestEntityTooLarge, fmt.Errorf("file size %d exceeds maximum allowed read size of %d bytes", file.Size, maxReadSize)
-		}
-
-		f, err := d.user.Fs.Open(r.URL.Path)
-		if err != nil {
-			return errToStatus(err), err
-		}
-		defer f.Close()
-
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.WriteHeader(http.StatusOK)
-		_, err = io.Copy(w, io.LimitReader(f, maxReadSize))
-		if err != nil {
-			return http.StatusInternalServerError, err
-		}
-		return 0, nil
 	}
 
 	if checksum := r.URL.Query().Get("checksum"); checksum != "" {

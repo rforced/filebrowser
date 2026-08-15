@@ -48,7 +48,6 @@
     "discardChanges": "Verwerfen",
     "stopSearch": "Suche beenden",
     "saveChanges": "Änderungen speichern",
-    "editAsText": "Als Text bearbeiten",
     "extract": "Entpacken",
     "cleanConvergeOutput": "CONVERGE-Ausgabe bereinigen",
     "increaseFontSize": "Schrift vergrößern",
@@ -90,18 +89,11 @@
     "sortByName": "Nach Name sortieren",
     "sortBySize": "Nach Größe sortieren",
     "noPreview": "Für diese Datei ist keine Vorschau verfügbar.",
-    "csvTooLarge": "Die CSV-Datei ist zu groß für die Vorschau (> 5 MB). Bitte lade sie herunter, um sie anzuzeigen.",
-    "csvLoadFailed": "CSV-Datei konnte nicht geladen werden.",
     "modelLoadFailed": "3D-Modell konnte nicht geladen werden.",
     "modelTooLarge": "Das 3D-Modell ist zu groß für die Vorschau (> 100 MB). Bitte lade es herunter, um es anzuzeigen.",
     "modelNoWebgl": "3D-Vorschau nicht verfügbar: WebGL wird von diesem Browser nicht unterstützt.",
     "showingRows": "{count} Zeile(n) angezeigt",
     "columnSeparator": "Spaltentrennzeichen",
-    "csvSeparators": {
-      "comma": "Komma (,)",
-      "semicolon": "Semikolon (;)",
-      "both": "Komma (,) und Semikolon (;)"
-    },
     "fileEncoding": "Dateikodierung"
   },
   "help": {
@@ -172,7 +164,6 @@
     "expirationRequired": "Für eine Freigabe ist eine Ablaufzeit erforderlich.",
     "calculateSize": "Berechnen",
     "calculating": "Wird berechnet …",
-    "resolution": "Auflösung",
     "discardEditorChanges": "Möchtest du deine Änderungen wirklich verwerfen?",
     "replaceOrSkip": "Dateien ersetzen oder überspringen",
     "resolveConflict": "Welche Dateien möchtest du behalten?",

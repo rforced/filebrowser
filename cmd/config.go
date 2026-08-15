@@ -429,9 +429,6 @@ func getSettings(flags *pflag.FlagSet, set *settings.Settings, ser *settings.Ser
 		case "disableTypeDetectionByHeader":
 			ser.TypeDetectionByHeader, err = flags.GetBool(flag.Name)
 			ser.TypeDetectionByHeader = !ser.TypeDetectionByHeader
-		case "disableImageResolutionCalc":
-			ser.ImageResolutionCal, err = flags.GetBool(flag.Name)
-			ser.ImageResolutionCal = !ser.ImageResolutionCal
 		case "domain":
 			ser.Domain, err = flags.GetString(flag.Name)
 		case "teamId":

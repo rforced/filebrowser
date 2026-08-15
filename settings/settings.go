@@ -61,7 +61,6 @@ type Server struct {
 	EnableThumbnails      bool   `json:"enableThumbnails"`
 	ResizePreview         bool   `json:"resizePreview"`
 	TypeDetectionByHeader bool   `json:"typeDetectionByHeader"`
-	ImageResolutionCal    bool   `json:"imageResolutionCalculation"`
 	AuthHook              string `json:"authHook"`
 	TokenExpirationTime   string `json:"tokenExpirationTime"`
 	SessionMaxLifetime    string `json:"sessionMaxLifetime"`

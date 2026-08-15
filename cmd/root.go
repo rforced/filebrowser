@@ -116,7 +116,6 @@ func addServerFlags(flags *pflag.FlagSet) {
 	flags.Bool("disableThumbnails", false, "disable image thumbnails")
 	flags.Bool("disablePreviewResize", false, "disable resize of image previews")
 	flags.Bool("disableTypeDetectionByHeader", false, "disables type detection by reading file headers")
-	flags.Bool("disableImageResolutionCalc", false, "disables image resolution calculation by reading image files")
 	flags.String("domain", "", "Job platform domain (e.g. app.job.io)")
 	flags.String("teamId", "", "Job platform team ID")
 	flags.String("filesystemId", "", "Job platform filesystem ID")
@@ -411,10 +410,6 @@ func getServerSettings(v *viper.Viper, st *storage.Storage) (*settings.Server, e
 		server.TypeDetectionByHeader = !v.GetBool("disableTypeDetectionByHeader")
 	}
 
-	if v.IsSet("disableImageResolutionCalc") {
-		server.ImageResolutionCal = !v.GetBool("disableImageResolutionCalc")
-	}
-
 	if v.IsSet("domain") {
 		server.Domain = v.GetString("domain")
 	}
@@ -540,7 +535,6 @@ func quickSetup(v *viper.Viper, s *storage.Storage) error {
 		EnableThumbnails:      !v.GetBool("disableThumbnails"),
 		ResizePreview:         !v.GetBool("disablePreviewResize"),
 		TypeDetectionByHeader: !v.GetBool("disableTypeDetectionByHeader"),
-		ImageResolutionCal:    !v.GetBool("disableImageResolutionCalc"),
 	}
 
 	err = s.Settings.SaveServer(ser)

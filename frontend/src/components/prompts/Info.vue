@@ -44,11 +44,6 @@
         </p>
       </template>
 
-      <div v-if="resolution">
-        <strong>{{ t("prompts.resolution") }}:</strong>
-        {{ resolution.width }} x {{ resolution.height }}
-      </div>
-
       <p v-if="fileStore.selected.length < 2" :title="modTime">
         <strong>{{ t("prompts.lastModified") }}:</strong> {{ humanTime }}
       </p>
@@ -191,18 +186,6 @@ const dir = computed(() => {
       ? (fileStore.req?.isDir ?? false)
       : fileStore.req!.items[fileStore.selected[0]].isDir)
   );
-});
-
-const resolution = computed(() => {
-  if (fileStore.selectedCount === 1) {
-    const selectedItem = fileStore.req?.items[fileStore.selected[0]];
-    if (selectedItem && selectedItem.type === "image") {
-      return selectedItem.resolution ?? null;
-    }
-  } else if (fileStore.req && fileStore.req.type === "image") {
-    return fileStore.req.resolution ?? null;
-  }
-  return null;
 });
 
 const calculateDirSize = async () => {

@@ -177,6 +177,11 @@ func authenticated(fn handleFunc, allowQueryToken bool) handleFunc {
 		d.token = token
 		d.tokenStr = tokenStr
 
+		expiration := d.server.GetTokenExpirationTime(DefaultTokenExpirationTime)
+		if time.Until(token.ExpiresAt) < expiration/2 {
+			w.Header().Set("X-Renew-Token", "true")
+		}
+
 		canonicalizeRequestPath(r)
 		return fn(w, r, d)
 	}

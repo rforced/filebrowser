@@ -14,7 +14,6 @@ vi.mock("@/utils/constants", () => ({
   version: "0.0.0",
   authMethod: "password",
   logoutPage: "",
-  loginPage: true,
   theme: "light",
   enableThumbs: false,
   resizePreview: false,

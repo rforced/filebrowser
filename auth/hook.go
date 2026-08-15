@@ -96,11 +96,6 @@ func (a *HookAuth) Auth(r *http.Request, usr users.Store, stg *settings.Settings
 	}
 }
 
-// LoginPage tells that hook auth requires a login page.
-func (a *HookAuth) LoginPage() bool {
-	return true
-}
-
 func (a *HookAuth) RunCommand(ctx context.Context) (string, error) {
 	name, args, err := splitCommand(a.Command)
 	if err != nil {

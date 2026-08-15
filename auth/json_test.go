@@ -367,15 +367,6 @@ func TestJSONAuthUnknownUser(t *testing.T) {
 	}
 }
 
-func TestJSONAuthLoginPage(t *testing.T) {
-	t.Parallel()
-
-	a := JSONAuth{}
-	if !a.LoginPage() {
-		t.Error("LoginPage() should return true")
-	}
-}
-
 func TestReCaptchaStructJSON(t *testing.T) {
 	t.Parallel()
 

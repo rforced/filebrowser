@@ -1,8 +1,3 @@
-interface ImageResolution {
-  width: number;
-  height: number;
-}
-
 interface ResourceBase {
   path: string;
   name: string;
@@ -14,7 +9,6 @@ interface ResourceBase {
   isSymlink: boolean;
   type: ResourceType;
   url: string;
-  resolution?: ImageResolution;
 }
 
 interface Resource extends ResourceBase {
@@ -25,7 +19,6 @@ interface Resource extends ResourceBase {
   hash?: string;
   index: number;
   content?: string;
-  rawContent?: ArrayBuffer;
 }
 
 interface ResourceItem extends ResourceBase {
@@ -78,9 +71,4 @@ interface RecursiveEntry {
   size: number;
   modified: string;
   isDir: boolean;
-}
-
-interface CsvData {
-  headers: string[];
-  rows: string[][];
 }

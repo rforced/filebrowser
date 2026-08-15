@@ -48,7 +48,6 @@
     "discardChanges": "Ignora",
     "stopSearch": "Interrompi la ricerca",
     "saveChanges": "Salva le modifiche",
-    "editAsText": "Modifica come testo",
     "extract": "Estrai",
     "cleanConvergeOutput": "Pulisci l'output di CONVERGE",
     "increaseFontSize": "Aumenta la dimensione del carattere",
@@ -90,18 +89,11 @@
     "sortByName": "Ordina per nome",
     "sortBySize": "Ordina per dimensione",
     "noPreview": "L'anteprima non è disponibile per questo file.",
-    "csvTooLarge": "Il file CSV è troppo grande per l'anteprima (>5 MB). Scaricalo per visualizzarlo.",
-    "csvLoadFailed": "Impossibile caricare il file CSV.",
     "modelLoadFailed": "Impossibile caricare il modello 3D.",
     "modelTooLarge": "Il modello 3D è troppo grande per l'anteprima (>100 MB). Scaricalo per visualizzarlo.",
     "modelNoWebgl": "Anteprima 3D non disponibile: WebGL non è supportato da questo browser.",
     "showingRows": "Visualizzate {count} riga/e",
     "columnSeparator": "Separatore di colonna",
-    "csvSeparators": {
-      "comma": "Virgola (,)",
-      "semicolon": "Punto e virgola (;)",
-      "both": "Virgola (,) e punto e virgola (;)"
-    },
     "fileEncoding": "Codifica del file"
   },
   "help": {
@@ -172,7 +164,6 @@
     "expirationRequired": "Per la condivisione è richiesta una scadenza.",
     "calculateSize": "Calcola",
     "calculating": "Calcolo in corso…",
-    "resolution": "Risoluzione",
     "discardEditorChanges": "Sei sicuro di voler scartare le modifiche apportate?",
     "replaceOrSkip": "Sostituisci o salta i file",
     "resolveConflict": "Quali file vuoi mantenere?",

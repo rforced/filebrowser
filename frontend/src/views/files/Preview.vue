@@ -6,7 +6,7 @@
     @mousemove="toggleNavigation"
     @touchstart="toggleNavigation"
   >
-    <header-bar v-if="isPdf || isCsv || is3d || showNav">
+    <header-bar v-if="isPdf || is3d || showNav">
       <action icon="close" :label="$t('buttons.close')" @action="close()" />
       <title>{{ name }}</title>
       <action
@@ -23,13 +23,6 @@
           icon="mode_edit"
           :label="$t('buttons.rename')"
           show="rename"
-        />
-        <action
-          :disabled="layoutStore.loading"
-          v-if="isCsv && authStore.user?.perm.modify"
-          icon="edit_note"
-          :label="t('buttons.editAsText')"
-          @action="editAsText"
         />
         <action
           :disabled="layoutStore.loading"
@@ -74,9 +67,8 @@
     </div>
     <template v-else>
       <div class="preview">
-        <CsvViewer v-if="isCsv" :content="csvContent" :error="csvError" />
         <ModelViewer
-          v-else-if="is3d && fileStore.req"
+          v-if="is3d && fileStore.req"
           :src="previewUrl"
           :extension="fileStore.req.extension"
           :size="fileStore.req.size"
@@ -167,7 +159,6 @@ import HeaderBar from "@/components/header/HeaderBar.vue";
 import Action from "@/components/header/Action.vue";
 import ExtendedImage from "@/components/files/ExtendedImage.vue";
 import VideoPlayer from "@/components/files/VideoPlayer.vue";
-import CsvViewer from "@/components/files/CsvViewer.vue";
 import {
   computed,
   defineAsyncComponent,
@@ -179,10 +170,6 @@ import {
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-
-// CSV file size limit for preview (5MB)
-// Prevents browser memory issues with large files
-const CSV_MAX_SIZE = 5 * 1024 * 1024;
 
 // three.js and its loaders are sizeable, so only fetch them when a 3D model is
 // actually opened.
@@ -203,8 +190,6 @@ const hoverNav = ref<boolean>(false);
 const autoPlay = ref<boolean>(false);
 const previousRaw = ref<string>("");
 const nextRaw = ref<string>("");
-const csvContent = ref<ArrayBuffer | string>("");
-const csvError = ref<string>("");
 
 const player = ref<HTMLVideoElement | HTMLAudioElement | null>(null);
 
@@ -244,12 +229,6 @@ const previewUrl = computed(() => {
 });
 
 const isPdf = computed(() => fileStore.req?.extension.toLowerCase() == ".pdf");
-const isCsv = computed(
-  () =>
-    fileStore.req?.extension.toLowerCase() == ".csv" &&
-    fileStore.req.size <= CSV_MAX_SIZE
-);
-
 const is3d = computed(() => fileStore.req?.type === "model");
 
 const isResizeEnabled = computed(() => resizePreview);
@@ -331,22 +310,6 @@ const updatePreview = async () => {
   const dirs = route.fullPath.split("/");
   name.value = decodeURIComponent(dirs[dirs.length - 1]);
 
-  // Load CSV content if it's a CSV file
-  if (isCsv.value && fileStore.req) {
-    csvContent.value = "";
-    csvError.value = "";
-
-    if (fileStore.req.size > CSV_MAX_SIZE) {
-      csvError.value = t("files.csvTooLarge");
-    } else {
-      if (fileStore.req.rawContent != null) {
-        csvContent.value = fileStore.req.rawContent;
-      } else {
-        csvContent.value = fileStore.req.content ?? "";
-      }
-    }
-  }
-
   if (!listing.value) {
     try {
       const path = url.removeLastDir(route.path);
@@ -417,8 +380,4 @@ const close = () => {
 
 const download = () => window.open(downloadUrl.value);
 const openDirect = () => window.open(directUrl.value);
-
-const editAsText = () => {
-  router.push({ path: route.path, query: { edit: "true" } });
-};
 </script>
