@@ -50,55 +50,6 @@
         </div>
       </form>
     </div>
-
-    <div class="column">
-      <form
-        class="card"
-        v-if="!authStore.user?.lockPassword"
-        @submit="updatePassword"
-      >
-        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
-          <h2>{{ t("settings.changePassword") }}</h2>
-        </div>
-
-        <div class="px-6 py-4 flex flex-col gap-3">
-          <input
-            :class="passwordClass"
-            type="password"
-            :placeholder="t('settings.newPassword')"
-            v-model="password"
-            name="password"
-          />
-          <input
-            :class="passwordClass"
-            type="password"
-            :placeholder="t('settings.newPasswordConfirm')"
-            v-model="passwordConf"
-            name="passwordConf"
-          />
-          <input
-            v-if="isCurrentPasswordRequired"
-            :class="passwordClass"
-            type="password"
-            :placeholder="t('settings.currentPassword')"
-            v-model="currentPassword"
-            name="current_password"
-            autocomplete="current-password"
-          />
-        </div>
-
-        <div
-          class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
-        >
-          <input
-            class="btn btn-blue btn-soft"
-            type="submit"
-            name="submitPassword"
-            :value="t('buttons.update')"
-          />
-        </div>
-      </form>
-    </div>
   </div>
 </template>
 
@@ -108,9 +59,8 @@ import { useLayoutStore } from "@/stores/layout";
 import { users as api } from "@/api";
 import AceEditorTheme from "@/components/settings/AceEditorTheme.vue";
 import Languages from "@/components/settings/Languages.vue";
-import { computed, inject, onMounted, ref } from "vue";
+import { inject, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { authMethod } from "@/utils/constants";
 
 const layoutStore = useLayoutStore();
 const authStore = useAuthStore();
@@ -119,31 +69,12 @@ const { t } = useI18n();
 const $showSuccess = inject<IToastSuccess>("$showSuccess")!;
 const $showError = inject<IToastError>("$showError")!;
 
-const password = ref<string>("");
-const passwordConf = ref<string>("");
-const currentPassword = ref<string>("");
-const isCurrentPasswordRequired = ref<boolean>(false);
 const hideDotfiles = ref<boolean>(false);
 const singleClick = ref<boolean>(false);
 const redirectAfterCopyMove = ref<boolean>(false);
 const dateFormat = ref<boolean>(false);
 const locale = ref<string>("");
 const aceEditorTheme = ref<string>("");
-
-// Horizon's validation states, from css/forms.css.
-const passwordClass = computed(() => {
-  const baseClass = "form-control";
-
-  if (password.value === "" && passwordConf.value === "") {
-    return baseClass;
-  }
-
-  if (password.value === passwordConf.value) {
-    return `${baseClass} is-valid`;
-  }
-
-  return `${baseClass} is-invalid`;
-});
 
 onMounted(async () => {
   layoutStore.loading = true;
@@ -155,38 +86,10 @@ onMounted(async () => {
   dateFormat.value = authStore.user.dateFormat;
   aceEditorTheme.value = authStore.user.aceEditorTheme;
   layoutStore.loading = false;
-  isCurrentPasswordRequired.value = authMethod == "json";
 
   return true;
 });
 
-const updatePassword = async (event: Event) => {
-  event.preventDefault();
-
-  if (
-    password.value !== passwordConf.value ||
-    password.value === "" ||
-    currentPassword.value === "" ||
-    authStore.user === null
-  ) {
-    return;
-  }
-
-  try {
-    const data = {
-      ...authStore.user,
-      id: authStore.user.id,
-      password: password.value,
-    };
-    await api.update(data, ["password"], currentPassword.value);
-    authStore.updateUser(data);
-    $showSuccess(t("settings.passwordUpdated"));
-  } catch (e: any) {
-    $showError(e);
-  } finally {
-    password.value = passwordConf.value = "";
-  }
-};
 const updateSettings = async (event: Event) => {
   event.preventDefault();
 

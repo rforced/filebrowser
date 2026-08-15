@@ -10,17 +10,6 @@
       />
     </p>
 
-    <p v-if="!isDefault">
-      <label for="password">{{ t("settings.password") }}</label>
-      <input
-        class="form-control"
-        type="password"
-        :placeholder="passwordPlaceholder"
-        v-model="user.password"
-        id="password"
-      />
-    </p>
-
     <p>
       <label for="scope">{{ t("settings.scope") }}</label>
       <input
@@ -44,15 +33,6 @@
         id="locale"
         v-model:locale="user.locale"
       ></languages>
-    </p>
-
-    <p v-if="!isDefault && user.perm">
-      <input
-        type="checkbox"
-        :disabled="user.perm.admin"
-        v-model="user.lockPassword"
-      />
-      {{ t("settings.lockPassword") }}
     </p>
 
     <permissions v-model:perm="user.perm" />
@@ -91,22 +71,11 @@ onMounted(() => {
   }
 });
 
-const passwordPlaceholder = computed(() =>
-  props.isNew ? "" : t("settings.avoidChanges")
-);
 const scopePlaceholder = computed(() =>
   createUserDirData.value ? t("settings.userScopeGenerationPlaceholder") : ""
 );
 const displayHomeDirectoryCheckbox = computed(
   () => props.isNew && createUserDirData.value
-);
-
-watch(
-  () => props.user,
-  () => {
-    if (!props.user?.perm?.admin) return;
-    props.user.lockPassword = false;
-  }
 );
 
 watch(createUserDirData, () => {

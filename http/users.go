@@ -1,6 +1,8 @@
 package fbhttp
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log"
@@ -52,6 +54,14 @@ func getUser(_ http.ResponseWriter, r *http.Request) (*modifyUserRequest, error)
 	}
 
 	return req, nil
+}
+
+func unusablePassword() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return users.HashPwd(base64.StdEncoding.EncodeToString(buf))
 }
 
 func withSelfOrAdmin(fn handleFunc) handleFunc {
@@ -156,12 +166,15 @@ var userPostHandler = withAdmin(func(w http.ResponseWriter, r *http.Request, d *
 	}
 
 	if req.Data.Password == "" {
-		return http.StatusBadRequest, fberrors.ErrEmptyPassword
-	}
-
-	req.Data.Password, err = users.ValidateAndHashPwd(req.Data.Password, d.settings.MinimumPasswordLength)
-	if err != nil {
-		return http.StatusBadRequest, err
+		req.Data.Password, err = unusablePassword()
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+	} else {
+		req.Data.Password, err = users.ValidateAndHashPwd(req.Data.Password, d.settings.MinimumPasswordLength)
+		if err != nil {
+			return http.StatusBadRequest, err
+		}
 	}
 
 	userHome, err := d.settings.MakeUserDir(req.Data.Username, req.Data.Scope, d.server.Root)
