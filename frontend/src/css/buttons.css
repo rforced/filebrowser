@@ -1,0 +1,181 @@
+@utility btn {
+  @apply inline-block font-bold text-white text-center border border-transparent py-2 px-4 rounded-md transition ease-in-out duration-150;
+
+  &:hover {
+    @apply cursor-pointer;
+  }
+
+  &:focus {
+    @apply outline-hidden ring-3;
+  }
+
+  &.disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  &:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+}
+
+@utility disabled {
+  &.btn {
+    @apply opacity-50 cursor-not-allowed;
+  }
+}
+
+@utility btn-flex {
+  @apply flex justify-center items-center gap-2;
+}
+
+/* Left-aligned variant of btn-flex, for vertical stacks of full-width buttons
+   where centring each label independently leaves the icons ragged. */
+@utility btn-menu {
+  @apply flex justify-start items-center gap-2;
+}
+
+@utility btn-soft {
+  @apply text-sm font-medium;
+}
+
+@utility btn-sm {
+  @apply px-2 py-1;
+}
+
+@utility btn-group {
+  & > :first-child:not(:only-child) {
+    @apply rounded-r-none border-r-0;
+  }
+
+  & > :last-child:not(:only-child) {
+    @apply rounded-l-none;
+  }
+
+  & > *:not(:first-child):not(:last-child) {
+    @apply rounded-none;
+  }
+}
+
+@utility btn-amber {
+  @apply bg-amber-300 border-amber-300 text-white dark:bg-amber-700 dark:border-amber-700;
+}
+
+@utility btn-emerald {
+  @apply bg-emerald-300 border-emerald-300 text-white dark:bg-emerald-700 dark:border-emerald-700;
+}
+
+@utility btn-rose {
+  @apply bg-rose-300 border-rose-300 text-white dark:bg-rose-700 dark:border-rose-700;
+}
+
+@utility btn-blue {
+  @apply bg-blue-500 dark:bg-teal-600 text-white dark:text-blue-900;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-blue-700 border-blue-700 dark:bg-teal-300 dark:border-teal-300;
+  }
+
+  &:focus {
+    @apply ring-blue-500/50 dark:ring-teal-200/50;
+  }
+}
+
+@utility btn-blue-outline {
+  @apply bg-white dark:bg-gray-900 text-blue-700 dark:text-teal border-teal;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-blue-500 border-blue-500 text-white dark:border-teal dark:bg-teal dark:text-blue-700;
+  }
+
+  &:focus {
+    @apply ring-blue-500/50;
+  }
+}
+
+@utility btn-yellow {
+  @apply bg-yellow-500 border-yellow-500 text-blue-800 dark:bg-yellow-600 dark:border-yellow-600 dark:text-white;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-yellow-600 border-yellow-600 dark:bg-yellow-500 dark:border-yellow-500;
+  }
+}
+
+@utility btn-green {
+  @apply bg-green-700 border-green-700 text-white dark:bg-green-400 dark:border-green-800 dark:text-gray-800;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-green-800 border-green-800 dark:bg-green-600 dark:border-green-600;
+  }
+
+  &:focus {
+    @apply ring-green-600;
+  }
+}
+
+@utility btn-green-outline {
+  @apply bg-white dark:bg-gray-900 border-green-700 text-green-800 dark:text-green-600;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-green-700 border-green-700 dark:border-green-600 dark:bg-green-600 text-white;
+  }
+
+  &:focus {
+    @apply ring-green-600;
+  }
+}
+
+@utility btn-red {
+  @apply bg-red-600 border-red-600 text-white dark:bg-red-700 dark:border-red-700;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-red-700 border-red-700 dark:bg-red-600 dark:border-red-600;
+  }
+
+  &:focus {
+    @apply ring-red-300;
+  }
+}
+
+@utility btn-red-outline {
+  @apply bg-white dark:bg-gray-900 border-red-500 text-red-700 dark:text-red-300;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-red-500 border-red-500 text-white;
+  }
+
+  &:focus {
+    @apply ring-red-300;
+  }
+}
+
+@utility btn-amber-outline {
+  @apply bg-white dark:bg-gray-900 border-amber-500 text-amber-700 dark:text-amber-300;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-amber-500 border-amber-500 text-white;
+  }
+
+  &:focus {
+    @apply ring-amber-300;
+  }
+}
+
+@utility btn-gray {
+  @apply bg-gray-700 border-gray-600 text-gray-100 dark:bg-gray-600 dark:border-gray-500;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-gray-800 border-gray-700 dark:bg-gray-500 dark:border-gray-400;
+  }
+}
+
+@utility btn-white {
+  @apply bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100;
+
+  &:hover:not(:disabled):not(.disabled) {
+    @apply bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500;
+  }
+
+  &:focus {
+    @apply ring-gray-400;
+  }
+}

@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@import "./base.css";
+@import "./tokens.css";
+@import "./buttons.css";
+@import "./forms.css";
+@import "tippy.js/dist/tippy.css" layer(utilities);
+@import "./tooltips.css";
+@import "./markdown.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@plugin '@tailwindcss/forms';
+
+@layer components {
+  #loading {
+    @apply fixed inset-0 z-9999 bg-gray-50 dark:bg-gray-900 transition-opacity duration-100;
+  }
+
+  #loading.done {
+    @apply opacity-0;
+  }
+
+  .card {
+    @apply flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow-xs dark:ring-1 dark:ring-gray-700 overflow-hidden;
+  }
+
+  .row {
+    @apply grid gap-4 lg:grid-cols-2 items-start;
+  }
+
+  .column {
+    @apply flex flex-col gap-4 min-w-0;
+  }
+
+  .small {
+    @apply text-sm text-gray-600 dark:text-gray-300;
+  }
+
+  .link {
+    @apply text-blue-600 dark:text-teal hover:underline;
+  }
+
+  .action {
+    @apply inline-flex items-center justify-center gap-2 rounded-md p-2 text-gray-600 dark:text-gray-300 transition cursor-pointer bg-transparent border-0;
+  }
+
+  .action:hover:not(:disabled):not(.disabled) {
+    @apply bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white;
+  }
+
+  .action:disabled,
+  .action.disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .action-link {
+    @apply text-blue-600 dark:text-teal hover:underline cursor-pointer;
+  }
+}
