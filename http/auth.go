@@ -104,7 +104,6 @@ type userInfo struct {
 	SingleClick           bool              `json:"singleClick"`
 	RedirectAfterCopyMove bool              `json:"redirectAfterCopyMove"`
 	Perm                  users.Permissions `json:"perm"`
-	Commands              []string          `json:"commands"`
 	LockPassword          bool              `json:"lockPassword"`
 	HideDotfiles          bool              `json:"hideDotfiles"`
 	DateFormat            bool              `json:"dateFormat"`
@@ -121,7 +120,6 @@ func userInfoFrom(user *users.User) userInfo {
 		RedirectAfterCopyMove: user.RedirectAfterCopyMove,
 		Perm:                  user.Perm,
 		LockPassword:          user.LockPassword,
-		Commands:              user.Commands,
 		HideDotfiles:          user.HideDotfiles,
 		DateFormat:            user.DateFormat,
 		Username:              user.Username,

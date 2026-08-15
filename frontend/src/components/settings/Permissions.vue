@@ -24,10 +24,6 @@
       <input type="checkbox" :disabled="admin" v-model="perm.modify" />
       {{ $t("settings.perm.modify") }}
     </p>
-    <p v-if="isExecEnabled">
-      <input type="checkbox" :disabled="admin" v-model="perm.execute" />
-      {{ $t("settings.perm.execute") }}
-    </p>
     <p>
       <input type="checkbox" :disabled="admin" v-model="perm.rename" />
       {{ $t("settings.perm.rename") }}
@@ -40,7 +36,6 @@
 </template>
 
 <script>
-import { enableExec } from "@/utils/constants";
 export default {
   name: "permissions",
   props: ["perm"],
@@ -59,7 +54,6 @@ export default {
         this.perm.admin = value;
       },
     },
-    isExecEnabled: () => enableExec,
   },
 };
 </script>

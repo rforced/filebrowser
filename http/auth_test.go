@@ -406,7 +406,6 @@ func TestUserInfoFrom(t *testing.T) {
 		RedirectAfterCopyMove: true,
 		Perm:                  users.Permissions{Admin: true, Create: true},
 		LockPassword:          false,
-		Commands:              []string{"ls", "cat"},
 		HideDotfiles:          true,
 		DateFormat:            true,
 		AceEditorTheme:        "monokai",
@@ -431,9 +430,6 @@ func TestUserInfoFrom(t *testing.T) {
 	}
 	if !info.HideDotfiles {
 		t.Error("HideDotfiles should be true")
-	}
-	if len(info.Commands) != 2 {
-		t.Errorf("Commands length = %d, want 2", len(info.Commands))
 	}
 }
 

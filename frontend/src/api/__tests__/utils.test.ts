@@ -17,7 +17,6 @@ vi.mock("@/utils/constants", () => ({
   theme: "light",
   enableThumbs: false,
   resizePreview: false,
-  enableExec: false,
   tusSettings: { retryCount: 5, chunkSize: 10485760 },
   tusEndpoint: "/api/tus",
   logoURL: "/static/img/logo.svg",

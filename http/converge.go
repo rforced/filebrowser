@@ -340,9 +340,7 @@ var convergeCleanHandler = withUser(func(w http.ResponseWriter, r *http.Request,
 			remove = d.user.Fs.RemoveAll
 		}
 
-		err := d.RunHook(func() error {
-			return remove(match.path)
-		}, "delete", match.path, "", d.user)
+		err := remove(match.path)
 		if err != nil {
 			log.Printf("WARNING: could not delete CONVERGE output %s: %v", match.path, err)
 			resp.Failed++

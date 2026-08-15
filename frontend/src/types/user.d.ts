@@ -5,7 +5,6 @@ interface IUser {
   scope: string;
   locale: string;
   perm: Permissions;
-  commands: string[];
   rules: IRule[];
   lockPassword: boolean;
   hideDotfiles: boolean;
@@ -26,7 +25,6 @@ interface IUserForm {
   scope?: string;
   locale?: string;
   perm?: Permissions;
-  commands?: string[];
   rules?: IRule[];
   lockPassword?: boolean;
   hideDotfiles?: boolean;
@@ -41,12 +39,10 @@ interface Permissions {
   create: boolean;
   delete: boolean;
   download: boolean;
-  execute: boolean;
   modify: boolean;
   move: boolean;
   rename: boolean;
   share: boolean;
-  shell: boolean;
   upload: boolean;
 }
 

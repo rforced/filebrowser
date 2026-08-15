@@ -27,22 +27,20 @@ type AuthMethod string
 
 // Settings contain the main settings of the application.
 type Settings struct {
-	Key                   []byte              `json:"key"`
-	HideLoginButton       bool                `json:"hideLoginButton"`
-	CreateUserDir         bool                `json:"createUserDir"`
-	UserHomeBasePath      string              `json:"userHomeBasePath"`
-	Defaults              UserDefaults        `json:"defaults"`
-	AuthMethod            AuthMethod          `json:"authMethod"`
-	LogoutPage            string              `json:"logoutPage"`
-	Branding              Branding            `json:"branding"`
-	Tus                   Tus                 `json:"tus"`
-	Commands              map[string][]string `json:"commands"`
-	Shell                 []string            `json:"shell"`
-	Rules                 []rules.Rule        `json:"rules"`
-	MinimumPasswordLength uint                `json:"minimumPasswordLength"`
-	FileMode              fs.FileMode         `json:"fileMode"`
-	DirMode               fs.FileMode         `json:"dirMode"`
-	HideDotfiles          bool                `json:"hideDotfiles"`
+	Key                   []byte       `json:"key"`
+	HideLoginButton       bool         `json:"hideLoginButton"`
+	CreateUserDir         bool         `json:"createUserDir"`
+	UserHomeBasePath      string       `json:"userHomeBasePath"`
+	Defaults              UserDefaults `json:"defaults"`
+	AuthMethod            AuthMethod   `json:"authMethod"`
+	LogoutPage            string       `json:"logoutPage"`
+	Branding              Branding     `json:"branding"`
+	Tus                   Tus          `json:"tus"`
+	Rules                 []rules.Rule `json:"rules"`
+	MinimumPasswordLength uint         `json:"minimumPasswordLength"`
+	FileMode              fs.FileMode  `json:"fileMode"`
+	DirMode               fs.FileMode  `json:"dirMode"`
+	HideDotfiles          bool         `json:"hideDotfiles"`
 }
 
 // GetRules implements rules.Provider.
@@ -62,7 +60,6 @@ type Server struct {
 	Log                   string `json:"log"`
 	EnableThumbnails      bool   `json:"enableThumbnails"`
 	ResizePreview         bool   `json:"resizePreview"`
-	EnableExec            bool   `json:"enableExec"`
 	TypeDetectionByHeader bool   `json:"typeDetectionByHeader"`
 	ImageResolutionCal    bool   `json:"imageResolutionCalculation"`
 	AuthHook              string `json:"authHook"`

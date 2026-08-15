@@ -11,7 +11,6 @@ import (
 const uploadCacheTTL = 3 * time.Minute
 
 // UploadCache is an interface for tracking active uploads.
-// Allows for different backends (e.g. in-memory or redis)
 // to support both single instance and multi replica deployments.
 type UploadCache interface {
 	// Register stores an upload with its expected file size. remove is called if
@@ -89,13 +88,8 @@ func (c *memoryUploadCache) Close() {
 	c.cache.Stop()
 }
 
-// NewUploadCache creates a new upload cache.
-// If redisURL is empty, an in-memory cache will be used (suitable for single instance deployments).
-// Otherwise, Redis will be used for the cache (suitable for multi-instance deployments).
-// The redisURL can include credentials, e.g. redis://user:pass@host:port
-func NewUploadCache(redisURL string) (UploadCache, error) {
-	if redisURL != "" {
-		return newRedisUploadCache(redisURL)
-	}
-	return newMemoryUploadCache(), nil
+// NewUploadCache creates a new in-memory upload cache. One File Browser serves
+// one filesystem, so there is no second instance to share upload state with.
+func NewUploadCache() UploadCache {
+	return newMemoryUploadCache()
 }

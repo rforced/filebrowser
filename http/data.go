@@ -8,7 +8,6 @@ import (
 
 	fbAuth "github.com/rforced/filebrowser/v2/auth"
 	"github.com/rforced/filebrowser/v2/rules"
-	"github.com/rforced/filebrowser/v2/runner"
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/storage"
 	"github.com/rforced/filebrowser/v2/users"
@@ -17,7 +16,6 @@ import (
 type handleFunc func(w http.ResponseWriter, r *http.Request, d *data) (int, error)
 
 type data struct {
-	*runner.Runner
 	settings *settings.Settings
 	server   *settings.Server
 	store    *storage.Storage
@@ -103,7 +101,6 @@ func handle(fn handleFunc, prefix string, store *storage.Storage, server *settin
 		}
 
 		status, err := fn(w, r, &data{
-			Runner:   &runner.Runner{Enabled: server.EnableExec, Settings: settings},
 			store:    store,
 			settings: settings,
 			server:   server,

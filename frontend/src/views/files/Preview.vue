@@ -97,7 +97,6 @@
           v-else-if="fileStore.req?.type == 'video'"
           ref="player"
           :source="previewUrl"
-          :subtitles="subtitles"
           :options="videoOptions"
         >
         </VideoPlayer>
@@ -254,13 +253,6 @@ const isCsv = computed(
 const is3d = computed(() => fileStore.req?.type === "model");
 
 const isResizeEnabled = computed(() => resizePreview);
-
-const subtitles = computed(() => {
-  if (fileStore.req?.subtitles) {
-    return api.getSubtitlesURL(fileStore.req);
-  }
-  return [];
-});
 
 const videoOptions = computed(() => {
   return { autoplay: autoPlay.value };

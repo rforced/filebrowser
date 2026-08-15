@@ -167,7 +167,6 @@ func (a *HookAuth) SaveUser() (*users.User, error) {
 			RedirectAfterCopyMove: a.Settings.Defaults.RedirectAfterCopyMove,
 			Sorting:               a.Settings.Defaults.Sorting,
 			Perm:                  a.Settings.Defaults.Perm,
-			Commands:              a.Settings.Defaults.Commands,
 			DateFormat:            a.Settings.Defaults.DateFormat,
 			HideDotfiles:          a.Settings.Defaults.HideDotfiles,
 		}
@@ -215,7 +214,6 @@ func (a *HookAuth) GetUser(d *users.User) *users.User {
 	isAdmin := a.Fields.GetBoolean("user.perm.admin", d.Perm.Admin)
 	perms := users.Permissions{
 		Admin:    isAdmin,
-		Execute:  isAdmin || a.Fields.GetBoolean("user.perm.execute", d.Perm.Execute),
 		Create:   isAdmin || a.Fields.GetBoolean("user.perm.create", d.Perm.Create),
 		Rename:   isAdmin || a.Fields.GetBoolean("user.perm.rename", d.Perm.Rename),
 		Modify:   isAdmin || a.Fields.GetBoolean("user.perm.modify", d.Perm.Modify),
@@ -236,7 +234,6 @@ func (a *HookAuth) GetUser(d *users.User) *users.User {
 			Asc: a.Fields.GetBoolean("user.sorting.asc", d.Sorting.Asc),
 			By:  a.Fields.GetString("user.sorting.by", d.Sorting.By),
 		},
-		Commands:     a.Fields.GetArray("user.commands", d.Commands),
 		DateFormat:   a.Fields.GetBoolean("user.dateFormat", d.DateFormat),
 		HideDotfiles: a.Fields.GetBoolean("user.hideDotfiles", d.HideDotfiles),
 		Perm:         perms,
@@ -261,10 +258,8 @@ var validHookFields = []string{
 	"user.redirectAfterCopyMove",
 	"user.sorting.by",
 	"user.sorting.asc",
-	"user.commands",
 	"user.hideDotfiles",
 	"user.perm.admin",
-	"user.perm.execute",
 	"user.perm.create",
 	"user.perm.rename",
 	"user.perm.modify",

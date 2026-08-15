@@ -24,14 +24,12 @@ interface Resource extends ResourceBase {
   sorting: Sorting;
   hash?: string;
   index: number;
-  subtitles?: string[];
   content?: string;
   rawContent?: ArrayBuffer;
 }
 
 interface ResourceItem extends ResourceBase {
   index: number;
-  subtitles?: string[];
 }
 
 type ResourceType =

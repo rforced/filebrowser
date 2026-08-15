@@ -243,16 +243,6 @@ export function getPreviewURL(file: ResourceItem, size: string) {
   return createURL("api/preview/" + size + file.path, params);
 }
 
-export function getSubtitlesURL(file: ResourceItem) {
-  const authStore = useAuthStore();
-  const params = {
-    inline: "true",
-    auth: authStore.token,
-  };
-
-  return file.subtitles?.map((d) => createURL("api/subtitle" + d, params));
-}
-
 export interface ExtractCheckResult {
   archive: boolean;
   destination?: string;

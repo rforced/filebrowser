@@ -127,10 +127,7 @@ func resourceDeleteHandler(fileCache FileCache) handleFunc {
 			return errToStatus(err), err
 		}
 
-		err = d.RunHook(func() error {
-			return d.user.Fs.RemoveAll(r.URL.Path)
-		}, "delete", r.URL.Path, "", d.user)
-
+		err = d.user.Fs.RemoveAll(r.URL.Path)
 		if err != nil {
 			return errToStatus(err), err
 		}
@@ -147,9 +144,7 @@ func resourcePostHandler(fileCache FileCache) handleFunc {
 
 		// Directories creation on POST.
 		if strings.HasSuffix(r.URL.Path, "/") {
-			err := d.RunHook(func() error {
-				return d.user.Fs.MkdirAll(r.URL.Path, d.settings.DirMode)
-			}, "upload", r.URL.Path, "", d.user)
+			err := d.user.Fs.MkdirAll(r.URL.Path, d.settings.DirMode)
 			return errToStatus(err), err
 		}
 
@@ -177,7 +172,7 @@ func resourcePostHandler(fileCache FileCache) handleFunc {
 			}
 		}
 
-		err = d.RunHook(func() error {
+		err = func() error {
 			info, writeErr := writeFile(d.user.Fs, r.URL.Path, r.Body, d.settings.FileMode, d.settings.DirMode)
 			if writeErr != nil {
 				return writeErr
@@ -186,7 +181,7 @@ func resourcePostHandler(fileCache FileCache) handleFunc {
 			etag := fmt.Sprintf(`"%x%x"`, info.ModTime().UnixNano(), info.Size())
 			w.Header().Set("ETag", etag)
 			return nil
-		}, "upload", r.URL.Path, "", d.user)
+		}()
 
 		if err != nil {
 			_ = d.user.Fs.RemoveAll(r.URL.Path)
@@ -214,7 +209,7 @@ var resourcePutHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 		return http.StatusNotFound, nil
 	}
 
-	err = d.RunHook(func() error {
+	err = func() error {
 		info, writeErr := writeFile(d.user.Fs, r.URL.Path, r.Body, d.settings.FileMode, d.settings.DirMode)
 		if writeErr != nil {
 			return writeErr
@@ -223,7 +218,7 @@ var resourcePutHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 		etag := fmt.Sprintf(`"%x%x"`, info.ModTime().UnixNano(), info.Size())
 		w.Header().Set("ETag", etag)
 		return nil
-	}, "save", r.URL.Path, "", d.user)
+	}()
 
 	return errToStatus(err), err
 })
@@ -280,9 +275,7 @@ func resourcePatchHandler(fileCache FileCache) handleFunc {
 			return errToStatus(err), err
 		}
 
-		err = d.RunHook(func() error {
-			return patchAction(r.Context(), action, src, dst, d, fileCache)
-		}, action, src, dst, d.user)
+		err = patchAction(r.Context(), action, src, dst, d, fileCache)
 
 		return errToStatus(err), err
 	})
