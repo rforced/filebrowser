@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"regexp"
 	"sync"
 	"time"
 
@@ -18,20 +17,13 @@ const (
 	DefaultTokenExpirationTime = time.Hour * 2
 	loginRateLimit             = 10
 	loginRateWindow            = time.Minute
-	usernameMaxLength          = 64
-	usernameMinLength          = 1
 	maxAuthBodySize            = 1 << 20 // 1 MiB
 )
 
-// tokenPolicy bounds how long a session lives: expiration is how long any single
-// token is good for, and maxLifetime how far renewals may carry the session as a
-// whole from the login that started it.
 type tokenPolicy struct {
 	expiration  time.Duration
 	maxLifetime time.Duration
 }
-
-var validUsername = regexp.MustCompile(`^[a-zA-Z0-9@._\-]+$`)
 
 type loginAttempts struct {
 	mu    sync.Mutex
