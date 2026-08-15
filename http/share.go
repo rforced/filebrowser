@@ -25,26 +25,42 @@ type shareResponse struct {
 	Hash        string `json:"hash"`
 	Path        string `json:"path"`
 	UserID      uint   `json:"userID"`
+	Username    string `json:"username"`
 	Expire      int64  `json:"expire"`
 	HasPassword bool   `json:"hasPassword"`
 }
 
-func toShareResponse(l *share.Link) *shareResponse {
+func toShareResponse(l *share.Link, owners map[uint]string) *shareResponse {
 	return &shareResponse{
 		Hash:        l.Hash,
 		Path:        l.Path,
 		UserID:      l.UserID,
+		Username:    owners[l.UserID],
 		Expire:      l.Expire,
 		HasPassword: l.PasswordHash != "",
 	}
 }
 
-func toShareResponses(links []*share.Link) []*shareResponse {
+func toShareResponses(links []*share.Link, owners map[uint]string) []*shareResponse {
 	res := make([]*shareResponse, 0, len(links))
 	for _, l := range links {
-		res = append(res, toShareResponse(l))
+		res = append(res, toShareResponse(l, owners))
 	}
 	return res
+}
+
+func shareOwners(d *data) (map[uint]string, error) {
+	list, err := d.store.Users.Gets(d.server.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	owners := make(map[uint]string, len(list))
+	for _, u := range list {
+		owners[u.ID] = u.Username
+	}
+
+	return owners, nil
 }
 
 func withPermShare(fn handleFunc) handleFunc {
@@ -58,15 +74,7 @@ func withPermShare(fn handleFunc) handleFunc {
 }
 
 var shareListHandler = withPermShare(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
-	var (
-		s   []*share.Link
-		err error
-	)
-	if d.user.Perm.Admin {
-		s, err = d.store.Share.All()
-	} else {
-		s, err = d.store.Share.FindByUserID(d.user.ID)
-	}
+	s, err := d.store.Share.All()
 	if errors.Is(err, fberrors.ErrNotExist) {
 		return renderJSON(w, r, []*shareResponse{})
 	}
@@ -82,11 +90,16 @@ var shareListHandler = withPermShare(func(w http.ResponseWriter, r *http.Request
 		return s[i].Expire < s[j].Expire
 	})
 
-	return renderJSON(w, r, toShareResponses(s))
+	owners, err := shareOwners(d)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	return renderJSON(w, r, toShareResponses(s, owners))
 })
 
 var shareGetsHandler = withPermShare(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
-	s, err := d.store.Share.Gets(r.URL.Path, d.user.ID)
+	s, err := d.store.Share.Gets(r.URL.Path)
 	if errors.Is(err, fberrors.ErrNotExist) {
 		return renderJSON(w, r, []*shareResponse{})
 	}
@@ -95,7 +108,12 @@ var shareGetsHandler = withPermShare(func(w http.ResponseWriter, r *http.Request
 		return http.StatusInternalServerError, err
 	}
 
-	return renderJSON(w, r, toShareResponses(s))
+	owners, err := shareOwners(d)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	return renderJSON(w, r, toShareResponses(s, owners))
 })
 
 var shareDeleteHandler = withPermShare(func(_ http.ResponseWriter, r *http.Request, d *data) (int, error) {
@@ -106,16 +124,11 @@ var shareDeleteHandler = withPermShare(func(_ http.ResponseWriter, r *http.Reque
 		return http.StatusBadRequest, nil
 	}
 
-	link, err := d.store.Share.GetByHash(hash)
-	if err != nil {
+	if _, err := d.store.Share.GetByHash(hash); err != nil {
 		return errToStatus(err), err
 	}
 
-	if link.UserID != d.user.ID && !d.user.Perm.Admin {
-		return http.StatusForbidden, nil
-	}
-
-	err = d.store.Share.Delete(hash)
+	err := d.store.Share.Delete(hash)
 	return errToStatus(err), err
 })
 
@@ -203,5 +216,5 @@ var sharePostHandler = withPermShare(func(w http.ResponseWriter, r *http.Request
 		return http.StatusInternalServerError, err
 	}
 
-	return renderJSON(w, r, toShareResponse(s))
+	return renderJSON(w, r, toShareResponse(s, map[uint]string{d.user.ID: d.user.Username}))
 })

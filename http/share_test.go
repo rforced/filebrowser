@@ -6,11 +6,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rforced/filebrowser/v2/share"
+	"github.com/rforced/filebrowser/v2/users"
 )
 
 func TestShareListHandlerPermissions(t *testing.T) {
@@ -104,10 +107,199 @@ func TestShareListHandlerPermissions(t *testing.T) {
 	}
 }
 
-// Regression for the share secret exposure (GHSA-833g-cqhp-h72j): the share API
-// must not serialize the bcrypt password hash, while still persisting it
-// server-side so password-protected shares keep working. Our fork has no bypass
-// token field, so password_hash is the only secret to guard.
+func TestShareHandlersListEveryOwnersShares(t *testing.T) {
+	t.Parallel()
+
+	env := setupTestStorage(t)
+	env.user.Perm.Share = true
+	env.user.Perm.Download = true
+	if err := env.storage.Users.Update(env.user, "Perm"); err != nil {
+		t.Fatalf("failed to update user permissions: %v", err)
+	}
+
+	other := &users.User{
+		Username: "someoneelse",
+		Password: "irrelevant",
+		Perm:     users.Permissions{Share: true, Download: true},
+	}
+	if err := env.storage.Users.Save(other); err != nil {
+		t.Fatalf("failed to save second user: %v", err)
+	}
+	if other.ID == env.user.ID {
+		t.Fatalf("second user reused ID %d", other.ID)
+	}
+
+	expire := time.Now().Add(time.Hour).Unix()
+	for _, l := range []*share.Link{
+		{Hash: "mine", Path: "/docs/file.txt", UserID: env.user.ID, Expire: expire},
+		{Hash: "theirs", Path: "/docs/file.txt", UserID: other.ID, Expire: expire},
+		{Hash: "theirs-elsewhere", Path: "/other/file.txt", UserID: other.ID, Expire: expire},
+	} {
+		if err := env.storage.Share.Save(l); err != nil {
+			t.Fatalf("failed to save share %q: %v", l.Hash, err)
+		}
+	}
+
+	tokenStr := createTestToken(t, env, env.user.ID, time.Hour)
+
+	wantOwners := map[string]string{
+		"mine":             env.user.Username,
+		"theirs":           other.Username,
+		"theirs-elsewhere": other.Username,
+	}
+
+	testCases := map[string]struct {
+		handler   handleFunc
+		prefix    string
+		target    string
+		wantHashs []string
+	}{
+		"global list": {
+			handler:   shareListHandler,
+			target:    "/api/shares",
+			wantHashs: []string{"mine", "theirs", "theirs-elsewhere"},
+		},
+		"per-path list": {
+			handler:   shareGetsHandler,
+			prefix:    "/api/share",
+			target:    "/api/share/docs/file.txt",
+			wantHashs: []string{"mine", "theirs"},
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			req, err := http.NewRequest(http.MethodGet, tc.target, http.NoBody)
+			if err != nil {
+				t.Fatalf("failed to create request: %v", err)
+			}
+			req.Header.Set("X-Auth", tokenStr)
+
+			recorder := httptest.NewRecorder()
+			handle(tc.handler, tc.prefix, env.storage, env.server).ServeHTTP(recorder, req)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200, body: %s", recorder.Code, recorder.Body.String())
+			}
+
+			var links []shareResponse
+			if err := json.NewDecoder(recorder.Body).Decode(&links); err != nil {
+				t.Fatalf("failed to decode response body: %v", err)
+			}
+
+			got := make([]string, 0, len(links))
+			for _, l := range links {
+				got = append(got, l.Hash)
+
+				if want := wantOwners[l.Hash]; l.Username != want {
+					t.Errorf("share %q username = %q, want %q", l.Hash, l.Username, want)
+				}
+			}
+			sort.Strings(got)
+
+			want := slices.Clone(tc.wantHashs)
+			sort.Strings(want)
+
+			if !slices.Equal(got, want) {
+				t.Fatalf("hashes = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestShareDeleteHandlerAllowsAnyShareUser(t *testing.T) {
+	t.Parallel()
+
+	env := setupTestStorage(t)
+	env.user.Perm.Share = true
+	env.user.Perm.Download = true
+	env.user.Perm.Admin = false
+	if err := env.storage.Users.Update(env.user, "Perm"); err != nil {
+		t.Fatalf("failed to update user permissions: %v", err)
+	}
+
+	if err := env.storage.Share.Save(&share.Link{
+		Hash:   "theirs",
+		Path:   "/docs/file.txt",
+		UserID: env.user.ID + 999,
+		Expire: time.Now().Add(time.Hour).Unix(),
+	}); err != nil {
+		t.Fatalf("failed to save share: %v", err)
+	}
+
+	tokenStr := createTestToken(t, env, env.user.ID, time.Hour)
+
+	testCases := map[string]struct {
+		hash     string
+		wantCode int
+	}{
+		"another user's share is removed": {hash: "theirs", wantCode: http.StatusOK},
+		"an unknown hash is a miss":       {hash: "nosuchhash", wantCode: http.StatusNotFound},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			req, _ := http.NewRequest(http.MethodDelete, "/api/share/"+tc.hash, http.NoBody)
+			req.Header.Set("X-Auth", tokenStr)
+
+			recorder := httptest.NewRecorder()
+			handle(shareDeleteHandler, "/api/share", env.storage, env.server).ServeHTTP(recorder, req)
+
+			if recorder.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d, body: %s", recorder.Code, tc.wantCode, recorder.Body.String())
+			}
+		})
+	}
+
+	if _, err := env.storage.Share.GetByHash("theirs"); err == nil {
+		t.Fatal("share still exists after a non-owner deleted it")
+	}
+}
+
+func TestShareListHandlerToleratesDeletedOwner(t *testing.T) {
+	t.Parallel()
+
+	env := setupTestStorage(t)
+	env.user.Perm.Share = true
+	env.user.Perm.Download = true
+	if err := env.storage.Users.Update(env.user, "Perm"); err != nil {
+		t.Fatalf("failed to update user permissions: %v", err)
+	}
+
+	if err := env.storage.Share.Save(&share.Link{
+		Hash:   "orphan",
+		Path:   "/docs/file.txt",
+		UserID: env.user.ID + 999,
+		Expire: time.Now().Add(time.Hour).Unix(),
+	}); err != nil {
+		t.Fatalf("failed to save share: %v", err)
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/shares", http.NoBody)
+	req.Header.Set("X-Auth", createTestToken(t, env, env.user.ID, time.Hour))
+
+	recorder := httptest.NewRecorder()
+	handle(shareListHandler, "", env.storage, env.server).ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body: %s", recorder.Code, recorder.Body.String())
+	}
+
+	var links []shareResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&links); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+
+	if len(links) != 1 {
+		t.Fatalf("links length = %d, want 1", len(links))
+	}
+	if links[0].Username != "" {
+		t.Errorf("username = %q, want empty for a deleted owner", links[0].Username)
+	}
+}
+
 func TestShareListHandlerDoesNotLeakPasswordHash(t *testing.T) {
 	t.Parallel()
 

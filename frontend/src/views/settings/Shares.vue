@@ -16,9 +16,7 @@
               <tr>
                 <th>{{ t("settings.path") }}</th>
                 <th>{{ t("settings.shareDuration") }}</th>
-                <th v-if="authStore.user?.perm.admin">
-                  {{ t("settings.username") }}
-                </th>
+                <th>{{ t("settings.owner") }}</th>
                 <th></th>
                 <th></th>
               </tr>
@@ -35,7 +33,7 @@
                   }}</template>
                   <template v-else>{{ t("permanent") }}</template>
                 </td>
-                <td v-if="authStore.user?.perm.admin">{{ link.username }}</td>
+                <td>{{ link.username }}</td>
                 <td class="small">
                   <button
                     class="action"
@@ -69,9 +67,8 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthStore } from "@/stores/auth";
 import { useLayoutStore } from "@/stores/layout";
-import { share as api, users } from "@/api";
+import { share as api } from "@/api";
 import dayjs from "dayjs";
 import Errors from "@/views/Errors.vue";
 import { inject, ref, onMounted } from "vue";
@@ -84,7 +81,6 @@ const $showSuccess = inject<IToastSuccess>("$showSuccess")!;
 const { t } = useI18n();
 
 const layoutStore = useLayoutStore();
-const authStore = useAuthStore();
 
 const error = ref<StatusError | null>(null);
 const links = ref<Share[]>([]);
@@ -93,17 +89,7 @@ onMounted(async () => {
   layoutStore.loading = true;
 
   try {
-    const newLinks = await api.list();
-    if (authStore.user?.perm.admin) {
-      const userMap = new Map<number, string>();
-      for (const user of await users.getAll())
-        userMap.set(user.id, user.username);
-      for (const link of newLinks) {
-        if (link.userID && userMap.has(link.userID))
-          link.username = userMap.get(link.userID);
-      }
-    }
-    links.value = newLinks;
+    links.value = await api.list();
   } catch (err) {
     if (err instanceof Error) {
       error.value = err;

@@ -59,9 +59,9 @@ func (s shareBackend) GetPermanent(path string, id uint) (*share.Link, error) {
 	return links[0], nil
 }
 
-func (s shareBackend) Gets(path string, id uint) ([]*share.Link, error) {
+func (s shareBackend) Gets(path string) ([]*share.Link, error) {
 	links, err := s.find(func(l *share.Link) bool {
-		return l.Path == path && l.UserID == id
+		return l.Path == path
 	})
 	if err != nil {
 		return nil, err

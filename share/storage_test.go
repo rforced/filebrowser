@@ -31,7 +31,7 @@ func (m *mockBackend) GetPermanent(_ string, _ uint) (*Link, error) {
 	return nil, nil
 }
 
-func (m *mockBackend) Gets(_ string, _ uint) ([]*Link, error) {
+func (m *mockBackend) Gets(_ string) ([]*Link, error) {
 	return m.links, nil
 }
 
@@ -137,7 +137,7 @@ func TestFilterExpired_PermanentLinksPreserved(t *testing.T) {
 
 	store := NewStorage(back)
 
-	links, err := store.Gets("/a", 1)
+	links, err := store.Gets("/a")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestFilterExpired_SingleExpired(t *testing.T) {
 
 	store := NewStorage(back)
 
-	links, err := store.Gets("/a", 1)
+	links, err := store.Gets("/a")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

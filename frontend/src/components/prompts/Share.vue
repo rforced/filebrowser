@@ -10,6 +10,7 @@
           <tr>
             <th>#</th>
             <th>{{ t("settings.shareDuration") }}</th>
+            <th>{{ t("settings.owner") }}</th>
             <th></th>
             <th></th>
           </tr>
@@ -22,6 +23,7 @@
               }}</template>
               <template v-else>{{ t("permanent") }}</template>
             </td>
+            <td>{{ link.username }}</td>
             <td class="small">
               <button
                 class="action"

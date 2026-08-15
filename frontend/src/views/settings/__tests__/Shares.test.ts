@@ -78,7 +78,7 @@ function createI18nPlugin() {
           shareManagement: "Share Management",
           path: "Path",
           shareDuration: "Share Duration",
-          username: "Username",
+          owner: "Owner",
           shareDeleted: "Share deleted!",
         },
         files: {
@@ -208,34 +208,30 @@ describe("Shares.vue", () => {
     expect(link.attributes("href")).toContain("share/link1");
   });
 
-  it("shows username column for admin users", async () => {
+  it("names the owner of every share, to admins and plain users alike", async () => {
     const shares: Share[] = [
-      { hash: "s1", path: "/file.txt", expire: 0, userID: 2 },
+      {
+        hash: "s1",
+        path: "/file.txt",
+        expire: 0,
+        userID: 2,
+        username: "alice",
+      },
     ];
     mockShareList.mockResolvedValue(shares);
-    mockUsersGetAll.mockResolvedValue([{ id: 2, username: "alice" }]);
 
-    const authStore = useAuthStore();
-    authStore.user = makeUser({ admin: true });
+    for (const admin of [true, false]) {
+      const authStore = useAuthStore();
+      authStore.user = makeUser({ admin });
 
-    const wrapper = mountShares();
-    await flushPromises();
+      const wrapper = mountShares();
+      await flushPromises();
 
-    expect(wrapper.text()).toContain("Username");
-    expect(wrapper.text()).toContain("alice");
-  });
+      expect(wrapper.text()).toContain("Owner");
+      expect(wrapper.text()).toContain("alice");
+    }
 
-  it("does not show username column for non-admin users", async () => {
-    const shares: Share[] = [{ hash: "s1", path: "/file.txt", expire: 0 }];
-    mockShareList.mockResolvedValue(shares);
-
-    const authStore = useAuthStore();
-    authStore.user = makeUser({ admin: false });
-
-    const wrapper = mountShares();
-    await flushPromises();
-
-    expect(wrapper.text()).not.toContain("Username");
+    expect(mockUsersGetAll).not.toHaveBeenCalled();
   });
 
   it("renders multiple shares preserving order", async () => {
@@ -274,23 +270,25 @@ describe("Shares.vue", () => {
     expect(layoutStore.loading).toBe(false);
   });
 
-  it("each share row has a delete button", async () => {
+  it("offers a delete button on every share, whoever owns it", async () => {
     const shares: Share[] = [
-      { hash: "d1", path: "/deletable.txt", expire: 0 },
-      { hash: "d2", path: "/also-deletable.txt", expire: 0 },
+      { hash: "mine", path: "/mine.txt", expire: 0, userID: 1 },
+      { hash: "theirs", path: "/theirs.txt", expire: 0, userID: 2 },
     ];
     mockShareList.mockResolvedValue(shares);
 
     const authStore = useAuthStore();
-    authStore.user = makeUser();
+    authStore.user = makeUser({ admin: false });
 
     const wrapper = mountShares();
     await flushPromises();
 
-    const deleteButtons = wrapper.findAll("button.action");
-    expect(deleteButtons.length).toBe(4);
+    const rows = wrapper.findAll("table tr");
+    expect(rows.length).toBe(3);
+    expect(rows[2].text()).toContain("/theirs.txt");
 
-    const deleteIcons = wrapper.findAll("button.action i.fa-trash");
-    expect(deleteIcons.length).toBe(2);
+    expect(rows[1].findAll("button.action i.fa-trash").length).toBe(1);
+    expect(rows[2].findAll("button.action i.fa-trash").length).toBe(1);
+    expect(wrapper.findAll("button.action").length).toBe(4);
   });
 });
