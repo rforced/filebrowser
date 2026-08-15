@@ -18,10 +18,9 @@ const (
 	MosaicViewMode ViewMode = "mosaic"
 )
 
-// User describes a user.
 type User struct {
-	ID                    uint            `storm:"id,increment" json:"id"`
-	Username              string          `storm:"unique" json:"username"`
+	ID                    uint            `json:"id"`
+	Username              string          `json:"username"`
 	Password              string          `json:"password"`
 	Scope                 string          `json:"scope"`
 	Locale                string          `json:"locale"`

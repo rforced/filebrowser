@@ -2,13 +2,13 @@ package bolt
 
 import (
 	"bytes"
-	"errors"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/asdine/storm/v3"
+	bbolt "go.etcd.io/bbolt"
 
 	"github.com/rforced/filebrowser/v2/auth"
 	fberrors "github.com/rforced/filebrowser/v2/errors"
@@ -17,7 +17,7 @@ import (
 func newTestTokenStore(t *testing.T) auth.TokenStore {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := storm.Open(dbPath)
+	db, err := bbolt.Open(dbPath, 0o600, nil)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestTokenStoreDoesNotPersistBearerToken(t *testing.T) {
 	t.Parallel()
 
 	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := storm.Open(dbPath)
+	db, err := bbolt.Open(dbPath, 0o600, nil)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
@@ -246,12 +246,9 @@ func TestTokenStore_DeleteByUserKeepsListedTokens(t *testing.T) {
 	}
 }
 
-// Token mirrors the pre-hashing record layout. Storm derives its bucket from the
-// type name, so declaring it here writes into the same bucket the real store
-// uses, which is what makes the upgrade path testable.
-type Token struct {
-	Token     string    `json:"token" storm:"id"`
-	UserID    uint      `json:"userID" storm:"index"`
+type legacyToken struct {
+	Token     string    `json:"token"`
+	UserID    uint      `json:"userID"`
 	ExpiresAt time.Time `json:"expiresAt"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -260,18 +257,28 @@ func TestNewStorageDropsPreHashingTokens(t *testing.T) {
 	t.Parallel()
 
 	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := storm.Open(dbPath)
+	db, err := bbolt.Open(dbPath, 0o600, nil)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
 
-	// A session from before the upgrade, keyed by the bearer token itself.
-	if err := db.Save(&Token{
+	legacy := legacyToken{
 		Token:     "legacy-plaintext-token",
 		UserID:    1,
 		ExpiresAt: time.Now().Add(-time.Hour),
 		CreatedAt: time.Now().Add(-2 * time.Hour),
+	}
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatalf("failed to marshal legacy token: %v", err)
+	}
+	if err := db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(tokensBucket))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(legacy.Token), raw)
 	}); err != nil {
 		t.Fatalf("failed to save legacy token: %v", err)
 	}
@@ -280,12 +287,23 @@ func TestNewStorageDropsPreHashingTokens(t *testing.T) {
 		t.Fatalf("NewStorage() error: %v", err)
 	}
 
-	var remaining []auth.Token
-	if err := db.All(&remaining); err != nil && !errors.Is(err, storm.ErrNotFound) {
-		t.Fatalf("All() error: %v", err)
+	remaining := 0
+	if err := db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(tokensBucket))
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(_, v []byte) error {
+			if v != nil {
+				remaining++
+			}
+			return nil
+		})
+	}); err != nil {
+		t.Fatalf("scan error: %v", err)
 	}
-	if len(remaining) != 0 {
-		t.Errorf("%d pre-hashing token(s) survived the upgrade", len(remaining))
+	if remaining != 0 {
+		t.Errorf("%d pre-hashing token(s) survived the upgrade", remaining)
 	}
 
 	// The sweep that could not key those records must now run clean.

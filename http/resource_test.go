@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asdine/storm/v3"
 	"github.com/spf13/afero"
+	bbolt "go.etcd.io/bbolt"
 
 	"github.com/rforced/filebrowser/v2/auth"
 	"github.com/rforced/filebrowser/v2/diskcache"
@@ -20,13 +20,9 @@ import (
 	"github.com/rforced/filebrowser/v2/users"
 )
 
-// scopedUserStorage returns a storage whose single user (ID 1) is scoped to
-// userScope through a symlink-confining ScopedFs (via customFSUser), mirroring
-// production. The signature matches upstream's helper so upstream test files
-// port over with only their token line adjusted.
 func scopedUserStorage(t *testing.T, userScope string, perm users.Permissions, key []byte) *storage.Storage {
 	t.Helper()
-	db, err := storm.Open(filepath.Join(t.TempDir(), "db"))
+	db, err := bbolt.Open(filepath.Join(t.TempDir(), "db"), 0o600, nil)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}

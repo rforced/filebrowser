@@ -4,81 +4,96 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/asdine/storm/v3"
-	"github.com/asdine/storm/v3/q"
+	bbolt "go.etcd.io/bbolt"
 
 	fberrors "github.com/rforced/filebrowser/v2/errors"
 	"github.com/rforced/filebrowser/v2/share"
 )
 
 type shareBackend struct {
-	db *storm.DB
+	db *bbolt.DB
+}
+
+func (s shareBackend) find(match func(*share.Link) bool) ([]*share.Link, error) {
+	var links []*share.Link
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		return scan(tx, sharesBucket, func(_ []byte, l *share.Link) error {
+			if match(l) {
+				links = append(links, l)
+			}
+			return nil
+		})
+	})
+	return links, err
 }
 
 func (s shareBackend) All() ([]*share.Link, error) {
-	var v []*share.Link
-	err := s.db.All(&v)
-	if errors.Is(err, storm.ErrNotFound) {
-		return v, fberrors.ErrNotExist
-	}
-
-	return v, err
+	return s.find(func(*share.Link) bool { return true })
 }
 
 func (s shareBackend) FindByUserID(id uint) ([]*share.Link, error) {
-	var v []*share.Link
-	err := s.db.Select(q.Eq("UserID", id)).Find(&v)
-	if errors.Is(err, storm.ErrNotFound) {
-		return v, fberrors.ErrNotExist
-	}
-
-	return v, err
+	return s.find(func(l *share.Link) bool { return l.UserID == id })
 }
 
 func (s shareBackend) GetByHash(hash string) (*share.Link, error) {
-	var v share.Link
-	err := s.db.One("Hash", hash, &v)
-	if errors.Is(err, storm.ErrNotFound) {
-		return nil, fberrors.ErrNotExist
+	link := &share.Link{}
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		return getJSON(tx, sharesBucket, []byte(hash), link)
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	return &v, err
+	return link, nil
 }
 
 func (s shareBackend) GetPermanent(path string, id uint) (*share.Link, error) {
-	var v share.Link
-	err := s.db.Select(q.Eq("Path", path), q.Eq("Expire", 0), q.Eq("UserID", id)).First(&v)
-	if errors.Is(err, storm.ErrNotFound) {
+	links, err := s.find(func(l *share.Link) bool {
+		return l.Path == path && l.Expire == 0 && l.UserID == id
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(links) == 0 {
 		return nil, fberrors.ErrNotExist
 	}
-
-	return &v, err
+	return links[0], nil
 }
 
 func (s shareBackend) Gets(path string, id uint) ([]*share.Link, error) {
-	var v []*share.Link
-	err := s.db.Select(q.Eq("Path", path), q.Eq("UserID", id)).Find(&v)
-	if errors.Is(err, storm.ErrNotFound) {
-		return v, fberrors.ErrNotExist
+	links, err := s.find(func(l *share.Link) bool {
+		return l.Path == path && l.UserID == id
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	return v, err
+	if len(links) == 0 {
+		return links, fberrors.ErrNotExist
+	}
+	return links, nil
 }
 
 func (s shareBackend) Save(l *share.Link) error {
-	return s.db.Save(l)
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		return putJSON(tx, sharesBucket, []byte(l.Hash), l)
+	})
 }
 
 func (s shareBackend) Delete(hash string) error {
-	err := s.db.DeleteStruct(&share.Link{Hash: hash})
-	if errors.Is(err, storm.ErrNotFound) {
-		return nil
-	}
-	return err
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(sharesBucket))
+		if b == nil {
+			return nil
+		}
+		return b.Delete([]byte(hash))
+	})
+}
+
+func movedUnder(linkPath, prefix string) bool {
+	return linkPath == prefix || strings.HasPrefix(linkPath, prefix+"/")
 }
 
 func (s shareBackend) UpdatePathPrefix(oldPath, newPath string, userID uint) error {
-	// Share paths are stored without a trailing slash
+	// Share paths are stored without a trailing slash.
 	from := strings.TrimRight(oldPath, "/")
 	to := strings.TrimRight(newPath, "/")
 
@@ -86,55 +101,50 @@ func (s shareBackend) UpdatePathPrefix(oldPath, newPath string, userID uint) err
 		return nil
 	}
 
-	var links []share.Link
-	if err := s.db.Prefix("Path", from, &links); err != nil {
-		if errors.Is(err, storm.ErrNotFound) {
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		var moved []*share.Link
+
+		err := scan(tx, sharesBucket, func(_ []byte, l *share.Link) error {
+			if l.UserID == userID && movedUnder(l.Path, from) {
+				l.Path = to + strings.TrimPrefix(l.Path, from)
+				moved = append(moved, l)
+			}
 			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		for _, l := range moved {
+			err = errors.Join(err, putJSON(tx, sharesBucket, []byte(l.Hash), l))
 		}
 		return err
-	}
-
-	var err error
-	for _, link := range links {
-		if link.UserID != userID {
-			continue
-		}
-
-		// Prefix matches on the raw string, so a move of "/a/b" also returns
-		// "/a/bc". Only the moved entry itself and its children have relocated.
-		if link.Path != from && !strings.HasPrefix(link.Path, from+"/") {
-			continue
-		}
-
-		link.Path = to + strings.TrimPrefix(link.Path, from)
-		err = errors.Join(err, s.db.Save(&link))
-	}
-	return err
+	})
 }
 
 func (s shareBackend) DeleteWithPathPrefix(pathPrefix string, userID uint) error {
-	// Share paths are stored without a trailing slash
 	prefix := strings.TrimRight(pathPrefix, "/")
 
-	var links []share.Link
-	if err := s.db.Prefix("Path", prefix, &links); err != nil {
-		if errors.Is(err, storm.ErrNotFound) {
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		var doomed [][]byte
+
+		err := scan(tx, sharesBucket, func(key []byte, l *share.Link) error {
+			if l.UserID == userID && movedUnder(l.Path, prefix) {
+				doomed = append(doomed, append([]byte(nil), key...))
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		b := tx.Bucket([]byte(sharesBucket))
+		if b == nil {
 			return nil
 		}
+		for _, key := range doomed {
+			err = errors.Join(err, b.Delete(key))
+		}
 		return err
-	}
-
-	var err error
-	for _, link := range links {
-		if link.UserID != userID {
-			continue
-		}
-
-		if link.Path != prefix && !strings.HasPrefix(link.Path, prefix+"/") {
-			continue
-		}
-
-		err = errors.Join(err, s.db.DeleteStruct(&share.Link{Hash: link.Hash}))
-	}
-	return err
+	})
 }

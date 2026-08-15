@@ -1,77 +1,94 @@
 package bolt
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
-	"regexp"
+	"strings"
 
-	"github.com/asdine/storm/v3"
-	"github.com/asdine/storm/v3/q"
-	bolt "go.etcd.io/bbolt"
+	bbolt "go.etcd.io/bbolt"
 
 	fberrors "github.com/rforced/filebrowser/v2/errors"
 	"github.com/rforced/filebrowser/v2/users"
 )
 
 type usersBackend struct {
-	db *storm.DB
+	db *bbolt.DB
 }
 
-func (st usersBackend) GetBy(i interface{}) (user *users.User, err error) {
-	user = &users.User{}
-
-	var arg string
-	switch i.(type) {
+func (st usersBackend) GetBy(i interface{}) (*users.User, error) {
+	switch v := i.(type) {
 	case uint:
-		arg = "ID"
+		return st.getByID(v)
 	case string:
-		arg = "Username"
+		return st.getByUsername(v)
 	default:
 		return nil, fberrors.ErrInvalidDataType
 	}
+}
 
-	err = st.db.One(arg, i, user)
-
+func (st usersBackend) getByID(id uint) (*users.User, error) {
+	user := &users.User{}
+	err := st.db.View(func(tx *bbolt.Tx) error {
+		return getJSON(tx, usersBucket, itob(uint64(id)), user)
+	})
 	if err != nil {
-		if errors.Is(err, storm.ErrNotFound) {
-			return nil, fberrors.ErrNotExist
-		}
 		return nil, err
 	}
+	return user, nil
+}
 
-	return
+func (st usersBackend) getByUsername(username string) (*users.User, error) {
+	var found *users.User
+	err := st.db.View(func(tx *bbolt.Tx) error {
+		return scan(tx, usersBucket, func(_ []byte, u *users.User) error {
+			if u.Username == username {
+				found = u
+				return errStopScan
+			}
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	if found == nil {
+		return nil, fberrors.ErrNotExist
+	}
+	return found, nil
 }
 
 func (st usersBackend) GetByScope(scope string) (*users.User, error) {
-	user := &users.User{}
-	// Match case-insensitively: on a case-insensitive filesystem two scopes
-	// that differ only in case (e.g. /users/Alice and /users/alice) resolve to
-	// the same home directory, so they must be treated as a collision.
-	pattern := "(?i)^" + regexp.QuoteMeta(scope) + "$"
-	err := st.db.Select(q.Re("Scope", pattern)).First(user)
+	var found *users.User
+	err := st.db.View(func(tx *bbolt.Tx) error {
+		return scan(tx, usersBucket, func(_ []byte, u *users.User) error {
+			if strings.EqualFold(u.Scope, scope) {
+				found = u
+				return errStopScan
+			}
+			return nil
+		})
+	})
 	if err != nil {
-		if errors.Is(err, storm.ErrNotFound) {
-			return nil, fberrors.ErrNotExist
-		}
 		return nil, err
 	}
-
-	return user, nil
+	if found == nil {
+		return nil, fberrors.ErrNotExist
+	}
+	return found, nil
 }
 
 func (st usersBackend) Gets() ([]*users.User, error) {
 	var allUsers []*users.User
-	err := st.db.All(&allUsers)
-	if errors.Is(err, storm.ErrNotFound) {
-		return nil, fberrors.ErrNotExist
-	}
-
+	err := st.db.View(func(tx *bbolt.Tx) error {
+		return scan(tx, usersBucket, func(_ []byte, u *users.User) error {
+			allUsers = append(allUsers, u)
+			return nil
+		})
+	})
 	if err != nil {
-		return allUsers, err
+		return nil, err
 	}
-
-	return allUsers, err
+	return allUsers, nil
 }
 
 func (st usersBackend) Update(user *users.User, fields ...string) error {
@@ -79,63 +96,90 @@ func (st usersBackend) Update(user *users.User, fields ...string) error {
 		return st.Save(user)
 	}
 
-	for _, field := range fields {
-		userField := reflect.ValueOf(user).Elem().FieldByName(field)
-		if !userField.IsValid() {
-			return fmt.Errorf("invalid field: %s", field)
-		}
-		val := userField.Interface()
-		if err := st.db.UpdateField(user, field, val); err != nil {
+	return st.db.Update(func(tx *bbolt.Tx) error {
+		stored := &users.User{}
+		if err := getJSON(tx, usersBucket, itob(uint64(user.ID)), stored); err != nil {
 			return err
 		}
-	}
 
-	return nil
+		src := reflect.ValueOf(user).Elem()
+		dst := reflect.ValueOf(stored).Elem()
+
+		for _, field := range fields {
+			srcField := src.FieldByName(field)
+			if !srcField.IsValid() {
+				return fmt.Errorf("invalid field: %s", field)
+			}
+			dstField := dst.FieldByName(field)
+			if !dstField.CanSet() {
+				return fmt.Errorf("cannot set field: %s", field)
+			}
+			dstField.Set(srcField)
+		}
+
+		if err := st.checkUsernameFree(tx, stored); err != nil {
+			return err
+		}
+		return putJSON(tx, usersBucket, itob(uint64(stored.ID)), stored)
+	})
 }
 
 func (st usersBackend) Save(user *users.User) error {
-	err := st.db.Save(user)
-	if errors.Is(err, storm.ErrAlreadyExists) {
-		return fberrors.ErrExist
-	}
-	return err
+	return st.db.Update(func(tx *bbolt.Tx) error {
+		if user.ID == 0 {
+			id, err := nextUserID(tx)
+			if err != nil {
+				return err
+			}
+			user.ID = uint(id)
+		} else if err := bumpUserIDCounter(tx, uint64(user.ID)); err != nil {
+			return err
+		}
+
+		if err := st.checkUsernameFree(tx, user); err != nil {
+			return err
+		}
+
+		return putJSON(tx, usersBucket, itob(uint64(user.ID)), user)
+	})
+}
+
+func (st usersBackend) checkUsernameFree(tx *bbolt.Tx, user *users.User) error {
+	return scan(tx, usersBucket, func(_ []byte, other *users.User) error {
+		if other.ID != user.ID && other.Username == user.Username {
+			return fberrors.ErrExist
+		}
+		return nil
+	})
 }
 
 func (st usersBackend) DeleteByID(id uint) error {
-	return st.db.DeleteStruct(&users.User{ID: id})
+	return st.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(usersBucket))
+		if b == nil {
+			return nil
+		}
+		return b.Delete(itob(uint64(id)))
+	})
 }
 
 func (st usersBackend) DeleteByUsername(username string) error {
-	user, err := st.GetBy(username)
+	user, err := st.getByUsername(username)
 	if err != nil {
 		return err
 	}
-
-	return st.db.DeleteStruct(user)
+	return st.DeleteByID(user.ID)
 }
 
 func (st usersBackend) CountAdmins() (int, error) {
 	count := 0
-
-	err := st.db.Bolt.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(reflect.TypeOf(users.User{}).Name()))
-		if bucket == nil {
-			return nil
-		}
-
-		c := bucket.Cursor()
-		for _, v := c.First(); v != nil; _, v = c.Next() {
-			var u users.User
-			if err := st.db.Codec().Unmarshal(v, &u); err != nil {
-				return err
-			}
+	err := st.db.View(func(tx *bbolt.Tx) error {
+		return scan(tx, usersBucket, func(_ []byte, u *users.User) error {
 			if u.Perm.Admin {
 				count++
 			}
-		}
-
-		return nil
+			return nil
+		})
 	})
-
 	return count, err
 }

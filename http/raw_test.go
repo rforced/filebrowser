@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asdine/storm/v3"
 	"github.com/spf13/afero"
+	bbolt "go.etcd.io/bbolt"
 
 	"github.com/rforced/filebrowser/v2/auth"
 	"github.com/rforced/filebrowser/v2/files"
@@ -46,7 +46,7 @@ func TestRawArchiveDoesNotManufactureTraversal(t *testing.T) {
 		t.Skipf("cannot create backslash-named file: %v", err)
 	}
 
-	db, err := storm.Open(filepath.Join(t.TempDir(), "db"))
+	db, err := bbolt.Open(filepath.Join(t.TempDir(), "db"), 0o600, nil)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}

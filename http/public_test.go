@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/asdine/storm/v3"
 	"github.com/spf13/afero"
+	bbolt "go.etcd.io/bbolt"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/rforced/filebrowser/v2/files"
@@ -79,7 +79,7 @@ func TestPublicShareHandlerAuthentication(t *testing.T) {
 				t.Parallel()
 
 				dbPath := filepath.Join(t.TempDir(), "db")
-				db, err := storm.Open(dbPath)
+				db, err := bbolt.Open(dbPath, 0o600, nil)
 				if err != nil {
 					t.Fatalf("failed to open db: %v", err)
 				}
@@ -184,7 +184,7 @@ func TestPublicShareHandlerRules(t *testing.T) {
 			t.Parallel()
 
 			dbPath := filepath.Join(t.TempDir(), "db")
-			db, err := storm.Open(dbPath)
+			db, err := bbolt.Open(dbPath, 0o600, nil)
 			if err != nil {
 				t.Fatalf("failed to open db: %v", err)
 			}
@@ -292,7 +292,7 @@ func TestPublicShareRejectsWhenOwnerLosesDownload(t *testing.T) {
 
 	newEnv := func(t *testing.T, perm users.Permissions) *storage.Storage {
 		t.Helper()
-		db, err := storm.Open(filepath.Join(t.TempDir(), "db"))
+		db, err := bbolt.Open(filepath.Join(t.TempDir(), "db"), 0o600, nil)
 		if err != nil {
 			t.Fatalf("failed to open db: %v", err)
 		}

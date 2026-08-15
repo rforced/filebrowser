@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/asdine/storm/v3"
+	bbolt "go.etcd.io/bbolt"
 
 	"github.com/rforced/filebrowser/v2/auth"
 	"github.com/rforced/filebrowser/v2/settings"
@@ -23,7 +23,7 @@ var testTokenPolicy = tokenPolicy{expiration: 2 * time.Hour, maxLifetime: 24 * t
 func setupTestStorage(t *testing.T) *httpTestEnv {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := storm.Open(dbPath)
+	db, err := bbolt.Open(dbPath, 0o600, nil)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}

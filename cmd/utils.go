@@ -10,12 +10,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/asdine/storm/v3"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	bbolt "go.etcd.io/bbolt"
 	yaml "gopkg.in/yaml.v3"
 
 	"github.com/rforced/filebrowser/v2/settings"
@@ -173,7 +173,7 @@ func withViperAndStore(fn func(cmd *cobra.Command, args []string, v *viper.Viper
 
 		log.Println("Using database: " + path)
 
-		db, err := storm.Open(path, storm.BoltOptions(databasePermissions, nil))
+		db, err := bbolt.Open(path, databasePermissions, nil)
 		if err != nil {
 			return err
 		}

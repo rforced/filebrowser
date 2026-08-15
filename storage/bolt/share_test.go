@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/asdine/storm/v3"
+	bbolt "go.etcd.io/bbolt"
 
 	"github.com/rforced/filebrowser/v2/share"
 )
@@ -19,7 +19,7 @@ func newTestShareBackend(t *testing.T) shareBackend {
 	}
 	_ = f.Close()
 
-	db, err := storm.Open(f.Name())
+	db, err := bbolt.Open(f.Name(), 0o600, nil)
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
@@ -127,8 +127,7 @@ func TestDeleteWithPathPrefixNoMatch(t *testing.T) {
 
 	s := newTestShareBackend(t)
 
-	// No links exist at all: the storm Prefix query returns ErrNotFound, which
-	// must be treated as a no-op rather than surfaced as an error.
+	// No links exist at all: the scan finds nothing, which
 	if err := s.DeleteWithPathPrefix("/a", 1); err != nil {
 		t.Fatalf("DeleteWithPathPrefix on empty store returned error: %v", err)
 	}

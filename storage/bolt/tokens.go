@@ -4,37 +4,42 @@ import (
 	"errors"
 	"time"
 
-	"github.com/asdine/storm/v3"
-	"github.com/asdine/storm/v3/q"
+	bbolt "go.etcd.io/bbolt"
 
 	"github.com/rforced/filebrowser/v2/auth"
 	fberrors "github.com/rforced/filebrowser/v2/errors"
 )
 
 type tokenBackend struct {
-	db *storm.DB
+	db *bbolt.DB
 }
 
 func (s tokenBackend) Save(token string, t *auth.Token) error {
 	t.Hash = auth.HashToken(token)
-	return s.db.Save(t)
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		return putJSON(tx, tokensBucket, []byte(t.Hash), t)
+	})
 }
 
 func (s tokenBackend) Get(token string) (*auth.Token, error) {
-	var t auth.Token
-	err := s.db.One("Hash", auth.HashToken(token), &t)
-	if errors.Is(err, storm.ErrNotFound) {
-		return nil, fberrors.ErrNotExist
+	t := &auth.Token{}
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		return getJSON(tx, tokensBucket, []byte(auth.HashToken(token)), t)
+	})
+	if err != nil {
+		return nil, err
 	}
-	return &t, err
+	return t, nil
 }
 
 func (s tokenBackend) Delete(token string) error {
-	err := s.db.DeleteStruct(&auth.Token{Hash: auth.HashToken(token)})
-	if errors.Is(err, storm.ErrNotFound) {
-		return nil
-	}
-	return err
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(tokensBucket))
+		if b == nil {
+			return nil
+		}
+		return b.Delete([]byte(auth.HashToken(token)))
+	})
 }
 
 func (s tokenBackend) DeleteByUser(userID uint, keep ...string) error {
@@ -45,50 +50,53 @@ func (s tokenBackend) DeleteByUser(userID uint, keep ...string) error {
 		}
 	}
 
-	var tokens []auth.Token
-	err := s.db.Select(q.Eq("UserID", userID)).Find(&tokens)
-	if errors.Is(err, storm.ErrNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	for _, t := range tokens {
-		if _, ok := kept[t.Hash]; ok {
-			continue
+	return s.deleteMatching(func(key []byte, t *auth.Token) bool {
+		if t.UserID != userID {
+			return false
 		}
-		err = errors.Join(err, s.db.DeleteStruct(&t))
-	}
-	return err
+		_, spared := kept[string(key)]
+		return !spared
+	})
 }
 
 func (s tokenBackend) DeleteExpired() error {
-	var tokens []auth.Token
-	err := s.db.Select(q.Lt("ExpiresAt", time.Now())).Find(&tokens)
-	if errors.Is(err, storm.ErrNotFound) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-
-	// Collect failures rather than returning on the first one: this runs as a
-	// periodic sweep, and one unremovable record must not leave every expired
-	// session behind it in the database.
-	for _, t := range tokens {
-		err = errors.Join(err, s.db.DeleteStruct(&t))
-	}
-	return err
+	now := time.Now()
+	return s.deleteMatching(func(_ []byte, t *auth.Token) bool {
+		return t.ExpiresAt.Before(now)
+	})
 }
 
-// purgeLegacy removes sessions written before tokens were stored hashed. Their
-// records are keyed by the bearer token itself, so they no longer authenticate
-// anything; and because that key does not decode into the current struct, the
-// expiry sweep cannot delete them by identity either.
 func (s tokenBackend) purgeLegacy() error {
-	err := s.db.Select(q.Eq("Hash", "")).Delete(new(auth.Token))
-	if errors.Is(err, storm.ErrNotFound) {
-		return nil
-	}
-	return err
+	return s.deleteMatching(func(_ []byte, t *auth.Token) bool {
+		return t.Hash == ""
+	})
 }
+
+func (s tokenBackend) deleteMatching(match func(key []byte, t *auth.Token) bool) error {
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		var doomed [][]byte
+
+		err := scan(tx, tokensBucket, func(key []byte, t *auth.Token) error {
+			if match(key, t) {
+				doomed = append(doomed, append([]byte(nil), key...))
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		b := tx.Bucket([]byte(tokensBucket))
+		if b == nil {
+			return nil
+		}
+		for _, key := range doomed {
+			err = errors.Join(err, b.Delete(key))
+		}
+		return err
+	})
+}
+
+var _ auth.TokenStore = tokenBackend{}
+
+var _ = fberrors.ErrNotExist

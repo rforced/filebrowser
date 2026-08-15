@@ -1,7 +1,7 @@
 package bolt
 
 import (
-	"github.com/asdine/storm/v3"
+	bbolt "go.etcd.io/bbolt"
 
 	"github.com/rforced/filebrowser/v2/auth"
 	fberrors "github.com/rforced/filebrowser/v2/errors"
@@ -9,7 +9,7 @@ import (
 )
 
 type authBackend struct {
-	db *storm.DB
+	db *bbolt.DB
 }
 
 func (s authBackend) Get(t settings.AuthMethod) (auth.Auther, error) {
@@ -24,9 +24,9 @@ func (s authBackend) Get(t settings.AuthMethod) (auth.Auther, error) {
 		return nil, fberrors.ErrInvalidAuthMethod
 	}
 
-	return auther, get(s.db, "auther", auther)
+	return auther, getConfig(s.db, "auther", auther)
 }
 
 func (s authBackend) Save(a auth.Auther) error {
-	return save(s.db, "auther", a)
+	return saveConfig(s.db, "auther", a)
 }

@@ -7,15 +7,9 @@ import (
 	"time"
 )
 
-// Token is the stored half of a session. The bearer token itself is handed to
-// the client once and never persisted — only its hash is — so read access to the
-// database (a backup, a snapshot, a stray copy under a served root) yields no
-// usable sessions.
 type Token struct {
-	// Hash must stay serializable: storm persists records through a JSON codec
-	// and would not read the identifier back into a `json:"-"` field.
-	Hash   string `json:"hash" storm:"id"`
-	UserID uint   `json:"userID" storm:"index"`
+	Hash   string `json:"hash"`
+	UserID uint   `json:"userID"`
 
 	ExpiresAt time.Time `json:"expiresAt"`
 
