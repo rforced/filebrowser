@@ -1,6 +1,6 @@
 import { useAuthStore } from "@/stores/auth";
 import router from "@/router";
-import { baseURL, noAuth, logoutPage } from "./constants";
+import { baseURL, logoutPage } from "./constants";
 import { StatusError } from "@/api/utils";
 
 export async function saveToken(token: string) {
@@ -89,26 +89,6 @@ export async function renew(token: string) {
   }
 }
 
-export async function signup(username: string, password: string) {
-  const data = { username, password };
-
-  const res = await fetch(`${baseURL}/api/signup`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (res.status !== 200) {
-    const body = await res.text();
-    throw new StatusError(
-      body || `${res.status} ${res.statusText}`,
-      res.status
-    );
-  }
-}
-
 export async function logout(reason?: string) {
   const authStore = useAuthStore();
 
@@ -126,9 +106,7 @@ export async function logout(reason?: string) {
   authStore.clearUser();
   localStorage.setItem("token", "");
 
-  if (noAuth) {
-    window.location.reload();
-  } else if (logoutPage !== "/login") {
+  if (logoutPage !== "/login") {
     document.location.href = `${logoutPage}`;
   } else {
     if (typeof reason === "string" && reason.trim() !== "") {

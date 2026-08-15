@@ -120,15 +120,9 @@
     "help": "帮助"
   },
   "login": {
-    "createAnAccount": "注册账号",
-    "loginInstead": "已有账号",
     "password": "密码",
-    "passwordConfirm": "确认密码",
-    "passwordsDontMatch": "两次输入的密码不一致",
-    "signup": "注册",
     "submit": "登录",
     "username": "用户名",
-    "usernameTaken": "用户名已被使用",
     "wrongCredentials": "用户名或密码错误",
     "captchaFailed": "安全验证失败。请重试；如果问题持续存在，请联系技术支持。",
     "rateLimited": "登录尝试次数过多，请在一分钟后重试。",
@@ -238,7 +232,6 @@
     "allowEdit": "编辑、重命名或删除文件/文件夹",
     "allowNew": "创建新文件和文件夹",
     "allowPublish": "发布新的帖子与页面",
-    "allowSignup": "允许用户注册",
     "hideLoginButton": "从公开页面隐藏登录按钮",
     "avoidChanges": "（留空则不修改）",
     "branding": "品牌定制",
@@ -332,7 +325,6 @@
     "newFolder": "新建文件夹",
     "preview": "预览",
     "settings": "设置",
-    "signup": "注册",
     "siteSettings": "站点设置"
   },
   "success": {

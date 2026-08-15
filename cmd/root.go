@@ -25,6 +25,7 @@ import (
 
 	"github.com/rforced/filebrowser/v2/auth"
 	"github.com/rforced/filebrowser/v2/diskcache"
+	fberrors "github.com/rforced/filebrowser/v2/errors"
 	"github.com/rforced/filebrowser/v2/frontend"
 	fbhttp "github.com/rforced/filebrowser/v2/http"
 	"github.com/rforced/filebrowser/v2/img"
@@ -85,7 +86,6 @@ func init() {
 
 	// Runtime flags for the root command
 	flags := rootCmd.Flags()
-	flags.Bool("noauth", false, "use the noauth auther when using quick setup")
 	flags.String("username", "admin", "username for the first user when using quick setup")
 	flags.String("password", "", "hashed password for the first user when using quick setup")
 	flags.Uint32("socketPerm", 0666, "unix socket file permissions")
@@ -218,7 +218,19 @@ user created with the credentials from options "username" and "password".`,
 		if appSettings, err := st.Settings.Get(); err != nil {
 			log.Printf("[WARN] failed to load settings for startup log: %v", err)
 		} else {
+			// Refuse to start on an auth method we no longer implement rather
+			// than serving with a broken one. The proxy and noauth methods were
+			// removed; a database provisioned before that still names one, and
+			// without this check the server would come up and then fail every
+			// request with an opaque 500.
 			auther, err := st.Auth.Get(appSettings.AuthMethod)
+			if errors.Is(err, fberrors.ErrInvalidAuthMethod) {
+				return fmt.Errorf(
+					"auth method %q is no longer supported (only %q and %q remain); "+
+						"reconfigure with: filebrowser config set --auth.method=%s",
+					appSettings.AuthMethod, auth.MethodJSONAuth, auth.MethodHookAuth, auth.MethodJSONAuth,
+				)
+			}
 			if err != nil {
 				log.Printf("[WARN] failed to load auther for startup log: %v", err)
 			}
@@ -443,18 +455,6 @@ func getServerSettings(v *viper.Viper, st *storage.Storage) (*settings.Server, e
 		log.Println("WARNING: read https://github.com/filebrowser/filebrowser/issues/5199")
 	}
 
-	if set, err := st.Settings.Get(); err == nil && set.Signup {
-		scope := strings.TrimSpace(set.Defaults.Scope)
-		scopeIsRoot := scope == "" || scope == "." || scope == "/"
-
-		if !set.CreateUserDir && scopeIsRoot {
-			log.Println("WARNING: Signup is enabled without createUserDir and the default scope is")
-			log.Println("WARNING: the server root, so every self-registered user can read, modify and")
-			log.Println("WARNING: delete all files File Browser serves, including other users' files.")
-			log.Println("WARNING: Enable createUserDir, or set a default scope other than the root.")
-		}
-	}
-
 	return server, nil
 }
 
@@ -481,7 +481,6 @@ func quickSetup(v *viper.Viper, s *storage.Storage) error {
 
 	set := &settings.Settings{
 		Key:                   generateKey(),
-		Signup:                false,
 		HideLoginButton:       true,
 		CreateUserDir:         false,
 		MinimumPasswordLength: settings.DefaultMinimumPasswordLength,
@@ -514,44 +513,37 @@ func quickSetup(v *viper.Viper, s *storage.Storage) error {
 		Rules:    nil,
 	}
 
-	var err error
-	if v.GetBool("noauth") {
-		set.AuthMethod = auth.MethodNoAuth
-		err = s.Auth.Save(&auth.NoAuth{})
-	} else {
-		set.AuthMethod = auth.MethodJSONAuth
+	set.AuthMethod = auth.MethodJSONAuth
 
-		jsonAuth := &auth.JSONAuth{}
+	jsonAuth := &auth.JSONAuth{}
 
-		key := v.GetString("recaptcha.key")
-		secret := v.GetString("recaptcha.secret")
-		project := v.GetString("recaptcha.project")
+	key := v.GetString("recaptcha.key")
+	secret := v.GetString("recaptcha.secret")
+	project := v.GetString("recaptcha.project")
 
-		if key != "" && secret != "" && project != "" {
-			rc := &auth.ReCaptcha{
-				Key:       key,
-				Secret:    secret,
-				ProjectID: project,
-			}
-
-			if hostnames := v.GetString("recaptcha.allowed-hostnames"); hostnames != "" {
-				for h := range strings.SplitSeq(hostnames, ",") {
-					if trimmed := strings.TrimSpace(h); trimmed != "" {
-						rc.AllowedHostnames = append(rc.AllowedHostnames, trimmed)
-					}
-				}
-			}
-
-			jsonAuth.ReCaptcha = rc
+	if key != "" && secret != "" && project != "" {
+		rc := &auth.ReCaptcha{
+			Key:       key,
+			Secret:    secret,
+			ProjectID: project,
 		}
 
-		err = s.Auth.Save(jsonAuth)
+		if hostnames := v.GetString("recaptcha.allowed-hostnames"); hostnames != "" {
+			for h := range strings.SplitSeq(hostnames, ",") {
+				if trimmed := strings.TrimSpace(h); trimmed != "" {
+					rc.AllowedHostnames = append(rc.AllowedHostnames, trimmed)
+				}
+			}
+		}
+
+		jsonAuth.ReCaptcha = rc
 	}
-	if err != nil {
+
+	if err := s.Auth.Save(jsonAuth); err != nil {
 		return err
 	}
 
-	err = s.Settings.Save(set)
+	err := s.Settings.Save(set)
 	if err != nil {
 		return err
 	}

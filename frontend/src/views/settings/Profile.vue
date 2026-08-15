@@ -52,7 +52,7 @@
       </form>
     </div>
 
-    <div v-if="!noAuth" class="column">
+    <div class="column">
       <form
         class="card"
         v-if="!authStore.user?.lockPassword"
@@ -109,7 +109,7 @@ import AceEditorTheme from "@/components/settings/AceEditorTheme.vue";
 import Languages from "@/components/settings/Languages.vue";
 import { computed, inject, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { authMethod, noAuth } from "@/utils/constants";
+import { authMethod } from "@/utils/constants";
 
 const layoutStore = useLayoutStore();
 const authStore = useAuthStore();

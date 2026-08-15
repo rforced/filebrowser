@@ -9,7 +9,6 @@ import (
 )
 
 type settingsData struct {
-	Signup                bool                  `json:"signup"`
 	HideLoginButton       bool                  `json:"hideLoginButton"`
 	CreateUserDir         bool                  `json:"createUserDir"`
 	MinimumPasswordLength uint                  `json:"minimumPasswordLength"`
@@ -25,7 +24,6 @@ type settingsData struct {
 
 var settingsGetHandler = withAdmin(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 	data := &settingsData{
-		Signup:                d.settings.Signup,
 		HideLoginButton:       d.settings.HideLoginButton,
 		CreateUserDir:         d.settings.CreateUserDir,
 		MinimumPasswordLength: d.settings.MinimumPasswordLength,
@@ -49,7 +47,6 @@ var settingsPutHandler = withAdmin(func(_ http.ResponseWriter, r *http.Request, 
 		return http.StatusBadRequest, err
 	}
 
-	d.settings.Signup = req.Signup
 	d.settings.CreateUserDir = req.CreateUserDir
 	d.settings.MinimumPasswordLength = req.MinimumPasswordLength
 	d.settings.UserHomeBasePath = req.UserHomeBasePath

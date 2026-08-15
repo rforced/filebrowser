@@ -120,15 +120,9 @@
     "help": "Aiuto"
   },
   "login": {
-    "createAnAccount": "Crea un account",
-    "loginInstead": "Hai già un account",
     "password": "Password",
-    "passwordConfirm": "Conferma password",
-    "passwordsDontMatch": "Le password non corrispondono",
-    "signup": "Registrati",
     "submit": "Accedi",
     "username": "Nome utente",
-    "usernameTaken": "Nome utente già in uso",
     "wrongCredentials": "Credenziali errate",
     "captchaFailed": "Verifica di sicurezza non riuscita. Riprova o contatta l'assistenza se il problema persiste.",
     "rateLimited": "Troppi tentativi di accesso. Riprova tra un minuto.",
@@ -238,7 +232,6 @@
     "allowEdit": "Modifica, rinomina ed elimina file o cartelle",
     "allowNew": "Crea nuovi file o cartelle",
     "allowPublish": "Pubblica nuovi post e pagine",
-    "allowSignup": "Permetti agli utenti di registrarsi",
     "hideLoginButton": "Nascondi il pulsante di accesso dalle pagine pubbliche",
     "avoidChanges": "(lascia vuoto per non apportare modifiche)",
     "branding": "Branding",
@@ -332,7 +325,6 @@
     "newFolder": "Nuova cartella",
     "preview": "Anteprima",
     "settings": "Impostazioni",
-    "signup": "Registrati",
     "siteSettings": "Impostazioni del sito"
   },
   "success": {

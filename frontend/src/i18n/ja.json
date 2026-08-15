@@ -120,15 +120,9 @@
     "help": "ヘルプ"
   },
   "login": {
-    "createAnAccount": "アカウントを作成",
-    "loginInstead": "すでにアカウントをお持ちの方",
     "password": "パスワード",
-    "passwordConfirm": "パスワード（確認用）",
-    "passwordsDontMatch": "パスワードが一致しません",
-    "signup": "アカウント作成",
     "submit": "ログイン",
     "username": "ユーザー名",
-    "usernameTaken": "そのユーザー名はすでに使用されています",
     "wrongCredentials": "ユーザー名またはパスワードが間違っています",
     "captchaFailed": "セキュリティ検証に失敗しました。再試行するか、問題が解決しない場合はサポートにお問い合わせください。",
     "rateLimited": "ログイン試行回数が多すぎます。1 分後にもう一度お試しください。",
@@ -238,7 +232,6 @@
     "allowEdit": "ファイルやフォルダーの編集、名前の変更、削除",
     "allowNew": "ファイルやフォルダーの新規作成",
     "allowPublish": "新しい投稿やページの公開",
-    "allowSignup": "ユーザーの新規登録を許可",
     "hideLoginButton": "公開ページでログインボタンを非表示にする",
     "avoidChanges": "（変更しない場合は空白のままにしてください）",
     "branding": "ブランディング",
@@ -332,7 +325,6 @@
     "newFolder": "新規フォルダー",
     "preview": "プレビュー",
     "settings": "設定",
-    "signup": "サインアップ",
     "siteSettings": "サイト設定"
   },
   "success": {

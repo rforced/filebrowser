@@ -5,10 +5,8 @@ const baseURL: string = window.FileBrowser.BaseURL;
 const staticURL: string = window.FileBrowser.StaticURL;
 const recaptcha: string = window.FileBrowser.ReCaptcha;
 const recaptchaKey: string = window.FileBrowser.ReCaptchaKey;
-const signup: boolean = window.FileBrowser.Signup;
 const version: string = window.FileBrowser.Version;
 const logoURL = `${staticURL}/img/logo.svg`;
-const noAuth: boolean = window.FileBrowser.NoAuth;
 const authMethod = window.FileBrowser.AuthMethod;
 const logoutPage: string = window.FileBrowser.LogoutPage;
 const loginPage: boolean = window.FileBrowser.LoginPage;
@@ -32,9 +30,7 @@ export {
   logoURL,
   recaptcha,
   recaptchaKey,
-  signup,
   version,
-  noAuth,
   authMethod,
   logoutPage,
   loginPage,

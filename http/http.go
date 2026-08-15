@@ -60,7 +60,6 @@ func NewHandler(
 		maxLifetime: server.GetSessionMaxLifetime(settings.DefaultSessionMaxLifetime),
 	}
 	api.Handle("/login", monkey(loginHandler(policy), ""))
-	api.Handle("/signup", monkey(signupHandler, ""))
 	api.Handle("/renew", monkey(renewHandler(policy), ""))
 	api.Handle("/logout", monkey(logoutHandler, ""))
 	api.Handle("/me", monkey(meHandler, ""))
@@ -105,7 +104,6 @@ func NewHandler(
 		Handler(monkey(previewHandler(imgSvc, fileCache, server.EnableThumbnails, server.ResizePreview), "/api/preview")).Methods("GET")
 	api.PathPrefix("/command").Handler(monkey(commandsHandler, "/api/command")).Methods("GET")
 	api.PathPrefix("/search").Handler(monkey(searchHandler, "/api/search")).Methods("GET")
-	api.PathPrefix("/subtitle").Handler(monkey(subtitleHandler, "/api/subtitle")).Methods("GET")
 
 	public := api.PathPrefix("/public").Subrouter()
 	public.PathPrefix("/dl").Handler(monkey(publicDlHandler, "/api/public/dl/")).Methods("GET")

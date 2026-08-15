@@ -18,12 +18,8 @@ func (s authBackend) Get(t settings.AuthMethod) (auth.Auther, error) {
 	switch t {
 	case auth.MethodJSONAuth:
 		auther = &auth.JSONAuth{}
-	case auth.MethodProxyAuth:
-		auther = &auth.ProxyAuth{}
 	case auth.MethodHookAuth:
 		auther = &auth.HookAuth{}
-	case auth.MethodNoAuth:
-		auther = &auth.NoAuth{}
 	default:
 		return nil, fberrors.ErrInvalidAuthMethod
 	}

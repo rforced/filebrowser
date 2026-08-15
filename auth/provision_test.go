@@ -1,17 +1,14 @@
 package auth
 
 import (
-	"net/http"
 	"strings"
-	"testing"
 
 	fberrors "github.com/rforced/filebrowser/v2/errors"
-	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/users"
 )
 
 // provisionStore is a users.Store that actually records saved users, so the
-// auto-provisioning paths (proxy and hook) can be exercised end to end. It is
+// auto-provisioning path (hook auth) can be exercised end to end. It is
 // separate from json_test.go's single-user mockUserStore, which reports
 // os.ErrNotExist and discards saves.
 type provisionStore struct {
@@ -60,47 +57,5 @@ func (m *provisionStore) SaveProvisioned(user *users.User, derivedScope bool) er
 }
 
 func (m *provisionStore) Delete(_ interface{}) error { return nil }
-func (m *provisionStore) LastUpdate(_ uint) int64    { return 0 }
 
-// With CreateUserDir enabled, two distinct proxy-authenticated users must each
-// receive their own home directory instead of both inheriting the server root.
-func TestProxyAuthCreateUserDirIsolatesScope(t *testing.T) {
-	t.Parallel()
-
-	store := newProvisionStore()
-	srv := &settings.Server{Root: t.TempDir()}
-	s := &settings.Settings{
-		Key:              []byte("key"),
-		AuthMethod:       MethodProxyAuth,
-		CreateUserDir:    true,
-		UserHomeBasePath: "/users",
-		Defaults: settings.UserDefaults{
-			Scope: ".",
-			Perm:  users.Permissions{Create: true},
-		},
-	}
-
-	auth := ProxyAuth{Header: "X-Remote-User"}
-	provision := func(name string) *users.User {
-		req, _ := http.NewRequest(http.MethodGet, "/", http.NoBody)
-		req.Header.Set("X-Remote-User", name)
-		u, err := auth.Auth(req, store, s, srv)
-		if err != nil {
-			t.Fatalf("Auth(%q) error: %v", name, err)
-		}
-		return u
-	}
-
-	alice := provision("alice")
-	bob := provision("bob")
-
-	if alice.Scope == "/" || bob.Scope == "/" {
-		t.Fatalf("provisioned users inherited the server root: alice=%q bob=%q", alice.Scope, bob.Scope)
-	}
-	if alice.Scope == bob.Scope {
-		t.Fatalf("distinct users must get distinct scopes, both got %q", alice.Scope)
-	}
-	if alice.Scope != "/users/alice" {
-		t.Errorf("expected /users/alice, got %q", alice.Scope)
-	}
-}
+func (m *provisionStore) LastUpdate(_ uint) int64 { return 0 }

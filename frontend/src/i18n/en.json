@@ -120,15 +120,9 @@
     "help": "Help"
   },
   "login": {
-    "createAnAccount": "Create an account",
-    "loginInstead": "Already have an account",
     "password": "Password",
-    "passwordConfirm": "Password Confirmation",
-    "passwordsDontMatch": "Passwords don't match",
-    "signup": "Signup",
     "submit": "Login",
     "username": "Username",
-    "usernameTaken": "Username already taken",
     "wrongCredentials": "Wrong credentials",
     "captchaFailed": "Security verification failed. Please try again or contact support if this issue persists.",
     "rateLimited": "Too many login attempts. Please try again after one minute.",
@@ -238,7 +232,6 @@
     "allowEdit": "Edit, rename and delete files or directories",
     "allowNew": "Create new files and directories",
     "allowPublish": "Publish new posts and pages",
-    "allowSignup": "Allow users to signup",
     "hideLoginButton": "Hide the login button from public pages",
     "avoidChanges": "(leave blank to avoid changes)",
     "branding": "Branding",
@@ -332,7 +325,6 @@
     "newFolder": "New folder",
     "preview": "Preview",
     "settings": "Settings",
-    "signup": "Signup",
     "siteSettings": "Site Settings"
   },
   "success": {

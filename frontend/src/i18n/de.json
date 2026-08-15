@@ -120,15 +120,9 @@
     "help": "Hilfe"
   },
   "login": {
-    "createAnAccount": "Konto erstellen",
-    "loginInstead": "Bereits ein Konto vorhanden",
     "password": "Passwort",
-    "passwordConfirm": "Passwort bestätigen",
-    "passwordsDontMatch": "Passwörter stimmen nicht überein",
-    "signup": "Registrieren",
     "submit": "Anmelden",
     "username": "Benutzername",
-    "usernameTaken": "Benutzername bereits vergeben",
     "wrongCredentials": "Falsche Anmeldedaten",
     "captchaFailed": "Sicherheitsüberprüfung fehlgeschlagen. Bitte versuche es erneut oder wende dich an den Support, falls das Problem weiterhin besteht.",
     "rateLimited": "Zu viele Anmeldeversuche. Bitte versuche es in einer Minute erneut.",
@@ -238,7 +232,6 @@
     "allowEdit": "Dateien und Verzeichnisse bearbeiten, umbenennen und löschen",
     "allowNew": "Neue Dateien und Verzeichnisse erstellen",
     "allowPublish": "Neue Beiträge und Seiten veröffentlichen",
-    "allowSignup": "Registrierung erlauben",
     "hideLoginButton": "Anmelde-Button auf öffentlichen Seiten ausblenden",
     "avoidChanges": "(leer lassen, um keine Änderungen vorzunehmen)",
     "branding": "Branding",
@@ -332,7 +325,6 @@
     "newFolder": "Neuer Ordner",
     "preview": "Vorschau",
     "settings": "Einstellungen",
-    "signup": "Registrieren",
     "siteSettings": "Website-Einstellungen"
   },
   "success": {

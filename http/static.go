@@ -37,8 +37,6 @@ func handleWithStaticData(w http.ResponseWriter, _ *http.Request, d *data, fSys 
 		"BaseURL":               d.server.BaseURL,
 		"Version":               version.Version,
 		"StaticURL":             path.Join(d.server.BaseURL, "/static"),
-		"Signup":                d.settings.Signup,
-		"NoAuth":                d.settings.AuthMethod == auth.MethodNoAuth,
 		"AuthMethod":            d.settings.AuthMethod,
 		"LogoutPage":            d.settings.LogoutPage,
 		"LoginPage":             auther.LoginPage(),

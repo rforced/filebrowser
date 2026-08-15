@@ -32,7 +32,6 @@ func addConfigFlags(flags *pflag.FlagSet) {
 	addServerFlags(flags)
 	addUserFlags(flags)
 
-	flags.BoolP("signup", "s", false, "allow users to signup")
 	flags.Bool("hideLoginButton", false, "hide login button from public pages")
 	flags.Bool("createUserDir", false, "generate user's home directory automatically")
 	flags.Uint("minimumPasswordLength", settings.DefaultMinimumPasswordLength, "minimum password length for new users")
@@ -44,7 +43,6 @@ func addConfigFlags(flags *pflag.FlagSet) {
 	flags.String("dirMode", fmt.Sprintf("%O", settings.DefaultDirMode), "mode bits that new directories are created with")
 
 	flags.String("auth.method", string(auth.MethodJSONAuth), "authentication type")
-	flags.String("auth.header", "", "HTTP header for auth.method=proxy")
 	flags.String("auth.command", "", "command for auth.method=hook")
 	flags.String("auth.logoutPage", "", "url of custom logout page")
 
@@ -94,29 +92,6 @@ func getAuthMethod(flags *pflag.FlagSet, defaults ...interface{}) (settings.Auth
 	}
 
 	return method, defaultAuther, nil
-}
-
-func getProxyAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (auth.Auther, error) {
-	header, err := flags.GetString("auth.header")
-	if err != nil {
-		return nil, err
-	}
-
-	if header == "" && defaultAuther != nil {
-		if h, ok := defaultAuther["header"].(string); ok {
-			header = h
-		}
-	}
-
-	if header == "" {
-		return nil, errors.New("you must set the flag 'auth.header' for method 'proxy'")
-	}
-
-	return &auth.ProxyAuth{Header: header}, nil
-}
-
-func getNoAuth() auth.Auther {
-	return &auth.NoAuth{}
 }
 
 func getReCaptcha(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (*auth.ReCaptcha, error) {
@@ -230,10 +205,6 @@ func getAuthentication(flags *pflag.FlagSet, defaults ...interface{}) (settings.
 
 	var auther auth.Auther
 	switch method {
-	case auth.MethodProxyAuth:
-		auther, err = getProxyAuth(flags, defaultAuther)
-	case auth.MethodNoAuth:
-		auther = getNoAuth()
 	case auth.MethodJSONAuth:
 		auther, err = getJSONAuth(flags, defaultAuther)
 	case auth.MethodHookAuth:
@@ -252,7 +223,6 @@ func getAuthentication(flags *pflag.FlagSet, defaults ...interface{}) (settings.
 func printSettings(ser *settings.Server, set *settings.Settings, auther auth.Auther) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 
-	fmt.Fprintf(w, "Sign up:\t%t\n", set.Signup)
 	fmt.Fprintf(w, "Hide Login Button:\t%t\n", set.HideLoginButton)
 	fmt.Fprintf(w, "Create User Dir:\t%t\n", set.CreateUserDir)
 	fmt.Fprintf(w, "Logout Page:\t%s\n", set.LogoutPage)
@@ -353,7 +323,6 @@ func logRunningConfig(ser *settings.Server, set *settings.Settings, auther auth.
 	fmt.Fprintln(w, "==== Running configuration (secrets redacted) ====")
 
 	fmt.Fprintln(w, "\nApplication:")
-	fmt.Fprintf(w, "\tSign up:\t%t\n", set.Signup)
 	fmt.Fprintf(w, "\tHide Login Button:\t%t\n", set.HideLoginButton)
 	fmt.Fprintf(w, "\tCreate User Dir:\t%t\n", set.CreateUserDir)
 	fmt.Fprintf(w, "\tLogout Page:\t%s\n", set.LogoutPage)
@@ -412,8 +381,6 @@ func logRunningConfig(ser *settings.Server, set *settings.Settings, auther auth.
 	switch a := auther.(type) {
 	case *auth.JSONAuth:
 		printReCaptcha(a.ReCaptcha)
-	case *auth.ProxyAuth:
-		fmt.Fprintf(w, "\tHeader:\t%s\n", a.Header)
 	case *auth.HookAuth:
 		fmt.Fprintf(w, "\tCommand:\t%s\n", a.Command)
 		printReCaptcha(a.ReCaptcha)
@@ -483,8 +450,6 @@ func getSettings(flags *pflag.FlagSet, set *settings.Settings, ser *settings.Ser
 			ser.FilesystemID, err = flags.GetString(flag.Name)
 
 		// Settings flags from [addConfigFlags]
-		case "signup":
-			set.Signup, err = flags.GetBool(flag.Name)
 		case "hideLoginButton":
 			set.HideLoginButton, err = flags.GetBool(flag.Name)
 		case "createUserDir":

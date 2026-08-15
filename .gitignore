@@ -8,6 +8,8 @@ rice-box.go
 /dist
 .venv
 
+FEATURES.md
+
 .DS_Store
 node_modules
 

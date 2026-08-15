@@ -1,9 +1,7 @@
 package fbhttp
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -213,80 +211,6 @@ func loginHandler(policy tokenPolicy) handleFunc {
 
 		return createAndReturnToken(w, d, user, policy, time.Now())
 	}
-}
-
-type signupBody struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-var signupHandler = func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
-	if !d.settings.Signup {
-		return http.StatusMethodNotAllowed, nil
-	}
-
-	if r.Body == nil {
-		return http.StatusBadRequest, nil
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxAuthBodySize)
-
-	info := &signupBody{}
-	err := json.NewDecoder(r.Body).Decode(info)
-	if err != nil {
-		return http.StatusBadRequest, err
-	}
-
-	if info.Password == "" || info.Username == "" {
-		return http.StatusBadRequest, nil
-	}
-
-	if len(info.Username) < usernameMinLength || len(info.Username) > usernameMaxLength {
-		return http.StatusBadRequest, fmt.Errorf("username must be between %d and %d characters", usernameMinLength, usernameMaxLength)
-	}
-
-	if !validUsername.MatchString(info.Username) {
-		return http.StatusBadRequest, fmt.Errorf("username contains invalid characters; only alphanumeric, @, ., _ and - are allowed")
-	}
-
-	user := &users.User{
-		Username: info.Username,
-	}
-
-	d.settings.Defaults.Apply(user)
-
-	// Users signed up via the signup handler should never become admins, even
-	// if that is the default permission.
-	user.Perm.Admin = false
-
-	// Self-registered users should not inherit execution capabilities from
-	// default settings, regardless of what the administrator has configured
-	// as the default. Execution rights must be explicitly granted by an admin.
-	user.Perm.Execute = false
-	user.Commands = []string{}
-
-	pwd, err := users.ValidateAndHashPwd(info.Password, d.settings.MinimumPasswordLength)
-	if err != nil {
-		return http.StatusBadRequest, err
-	}
-
-	user.Password = pwd
-
-	derivedScope, err := d.settings.CreateUserHome(user, d.server.Root, false)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	log.Printf("new user: %s, home dir: [%s].", user.Username, user.Scope)
-
-	err = d.store.Users.SaveProvisioned(user, derivedScope)
-	if errors.Is(err, fberrors.ErrExist) {
-		return http.StatusConflict, err
-	} else if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	return http.StatusOK, nil
 }
 
 func renewHandler(policy tokenPolicy) handleFunc {

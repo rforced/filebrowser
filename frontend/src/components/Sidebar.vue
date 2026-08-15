@@ -88,17 +88,6 @@
         <i class="material-icons">exit_to_app</i>
         <span>{{ $t("sidebar.login") }}</span>
       </router-link>
-
-      <router-link
-        v-if="signup"
-        class="action"
-        to="/login"
-        :aria-label="$t('sidebar.signup')"
-        :title="$t('sidebar.signup')"
-      >
-        <i class="material-icons">person_add</i>
-        <span>{{ $t("sidebar.signup") }}</span>
-      </router-link>
     </template>
 
     <div
@@ -132,11 +121,9 @@ import { useLayoutStore } from "@/stores/layout";
 import * as auth from "@/utils/auth";
 import {
   version,
-  signup,
   hideLoginButton,
   disableExternal,
   disableUsedPercentage,
-  noAuth,
   logoutPage,
   loginPage,
   domain,
@@ -166,12 +153,11 @@ export default {
     active() {
       return this.currentPromptName === "sidebar";
     },
-    signup: () => signup,
     hideLoginButton: () => hideLoginButton,
     version: () => version,
     disableExternal: () => disableExternal,
     disableUsedPercentage: () => disableUsedPercentage,
-    canLogout: () => !noAuth && (loginPage || logoutPage !== "/login"),
+    canLogout: () => loginPage || logoutPage !== "/login",
     jobEnabled: () => !!domain && !!teamId && !!filesystemId,
     jobUrl() {
       if (!this.jobEnabled) return "";
