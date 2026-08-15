@@ -21,7 +21,7 @@ import (
 	"github.com/rforced/filebrowser/v2/version"
 )
 
-func handleWithStaticData(w http.ResponseWriter, _ *http.Request, d *data, fSys fs.FS, file, contentType string) (int, error) {
+func handleWithStaticData(w http.ResponseWriter, r *http.Request, d *data, fSys fs.FS, file, contentType string) (int, error) {
 	w.Header().Set("Content-Type", contentType)
 
 	data := map[string]interface{}{
@@ -86,6 +86,8 @@ func handleWithStaticData(w http.ResponseWriter, _ *http.Request, d *data, fSys 
 	}
 
 	data["Json"] = template.JS(strings.ReplaceAll(string(b), `'`, `\'`))
+
+	data["Nonce"] = cspNonce(r)
 
 	fileContents, err := fs.ReadFile(fSys, file)
 	if err != nil {

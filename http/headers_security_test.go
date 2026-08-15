@@ -1,8 +1,12 @@
 package fbhttp
 
 import (
+	"encoding/base64"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -48,8 +52,10 @@ func TestSecurityHeadersOnEveryRoute(t *testing.T) {
 					t.Errorf("CSP on %s no longer allows %s: %s", path, allowed, csp)
 				}
 			}
-			if strings.Contains(csp, "script-src") {
-				t.Errorf("CSP on %s introduced a script-src exception: %s", path, csp)
+			for _, forbidden := range []string{"'unsafe-inline'", "'unsafe-eval'"} {
+				if strings.Contains(scriptSrc(csp), forbidden) {
+					t.Errorf("CSP on %s allows %s in script-src: %s", path, forbidden, csp)
+				}
 			}
 			if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
 				t.Errorf("Referrer-Policy on %s = %q, want no-referrer", path, got)
@@ -58,6 +64,137 @@ func TestSecurityHeadersOnEveryRoute(t *testing.T) {
 				t.Errorf("X-Content-Type-Options on %s = %q, want nosniff", path, got)
 			}
 		})
+	}
+}
+
+func scriptSrc(csp string) string {
+	for _, directive := range strings.Split(csp, ";") {
+		directive = strings.TrimSpace(directive)
+		if after, ok := strings.CutPrefix(directive, "script-src "); ok {
+			return after
+		}
+	}
+	return ""
+}
+
+func TestSecurityHeadersIssueAFreshNoncePerResponse(t *testing.T) {
+	t.Parallel()
+
+	seen := map[string]bool{}
+
+	for range 24 {
+		var fromContext string
+		inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fromContext = cspNonce(r)
+			w.WriteHeader(http.StatusOK)
+		})
+
+		rec := httptest.NewRecorder()
+		securityHeaders(inner).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		if fromContext == "" {
+			t.Fatal("no nonce published to the request context")
+		}
+		if seen[fromContext] {
+			t.Fatalf("nonce %q was reused across responses", fromContext)
+		}
+		seen[fromContext] = true
+
+		if _, err := base64.RawURLEncoding.DecodeString(fromContext); err != nil {
+			t.Errorf("nonce %q is not the base64 a CSP nonce must be: %v", fromContext, err)
+		}
+
+		if got := template.HTMLEscapeString(fromContext); got != fromContext {
+			t.Errorf("nonce %q needs HTML escaping (%q), so header and attribute would disagree", fromContext, got)
+		}
+
+		want := "'nonce-" + fromContext + "'"
+		if got := scriptSrc(rec.Header().Get("Content-Security-Policy")); !strings.Contains(got, want) {
+			t.Errorf("script-src %q does not carry %s", got, want)
+		}
+	}
+}
+
+func TestContentSecurityPolicyAdmitsWhatTheAppLoads(t *testing.T) {
+	t.Parallel()
+
+	csp := contentSecurityPolicy("n0nce")
+
+	for directive, wants := range map[string][]string{
+		"default-src":  {"'self'"},
+		"script-src":   {"'self'", "'nonce-n0nce'", "https://www.google.com", "https://www.gstatic.com"},
+		"style-src":    {"'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://kit.fontawesome.com", "https://ka-p.fontawesome.com"},
+		"font-src":     {"'self'", "data:", "https://fonts.gstatic.com", "https://ka-p.fontawesome.com"},
+		"img-src":      {"'self'", "data:", "blob:"},
+		"connect-src":  {"'self'"},
+		"frame-src":    {"'self'", "https://www.google.com"},
+		"manifest-src": {"'self'", "blob:"},
+	} {
+		value := directiveOf(csp, directive)
+		if value == "" {
+			t.Errorf("policy has no %s directive: %s", directive, csp)
+			continue
+		}
+		for _, want := range wants {
+			if !strings.Contains(value, want) {
+				t.Errorf("%s = %q, missing %s", directive, value, want)
+			}
+		}
+	}
+
+	for _, absent := range []string{"object-src", "media-src"} {
+		if directiveOf(csp, absent) != "" {
+			t.Errorf("policy pins %s; it should inherit default-src: %s", absent, csp)
+		}
+	}
+
+	if strings.Contains(csp, "http://") {
+		t.Errorf("policy names a concrete origin, which breaks IP access: %s", csp)
+	}
+
+	if strings.Contains(contentSecurityPolicy(""), "nonce-") {
+		t.Errorf("empty nonce leaked into the policy: %s", contentSecurityPolicy(""))
+	}
+}
+
+func directiveOf(csp, name string) string {
+	for _, directive := range strings.Split(csp, ";") {
+		directive = strings.TrimSpace(directive)
+		if after, ok := strings.CutPrefix(directive, name+" "); ok {
+			return after
+		}
+	}
+	return ""
+}
+
+func TestIndexTemplateNoncesEveryInlineScript(t *testing.T) {
+	t.Parallel()
+
+	const templatePath = "../frontend/public/index.html"
+
+	raw, err := os.ReadFile(templatePath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", templatePath, err)
+	}
+
+	tags := regexp.MustCompile(`<script[^>]*>`).FindAllString(string(raw), -1)
+	if len(tags) == 0 {
+		t.Fatalf("no script tags found in %s — has it moved?", templatePath)
+	}
+
+	inline := 0
+	for _, tag := range tags {
+		if strings.Contains(tag, "src=") {
+			continue
+		}
+		inline++
+		if !strings.Contains(tag, `nonce="[{[ .Nonce ]}]"`) {
+			t.Errorf("inline script without the nonce placeholder: %s", tag)
+		}
+	}
+
+	if inline == 0 {
+		t.Error("no inline scripts found; the nonce plumbing may now be dead code")
 	}
 }
 

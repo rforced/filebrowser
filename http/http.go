@@ -1,7 +1,11 @@
 package fbhttp
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"io/fs"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -105,17 +109,53 @@ func NewHandler(
 	return securityHeaders(stripPrefix(server.BaseURL, r)), nil
 }
 
-const contentSecurityPolicy = `default-src 'self'; ` +
-	`style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://kit.fontawesome.com; ` +
-	`font-src 'self' https://fonts.gstatic.com https://ka-p.fontawesome.com; ` +
-	`img-src 'self' data: blob:; ` +
-	`frame-ancestors 'none';`
+type cspNonceKey struct{}
+
+func contentSecurityPolicy(nonce string) string {
+	script := "'self' https://www.google.com https://www.gstatic.com"
+	if nonce != "" {
+		script += " 'nonce-" + nonce + "'"
+	}
+
+	return `default-src 'self'; ` +
+		`script-src ` + script + `; ` +
+		`style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://kit.fontawesome.com https://ka-p.fontawesome.com; ` +
+		`font-src 'self' data: https://fonts.gstatic.com https://ka-p.fontawesome.com; ` +
+		`img-src 'self' data: blob: https://www.gstatic.com; ` +
+		`connect-src 'self' https://www.google.com; ` +
+		`frame-src 'self' https://www.google.com; ` +
+		`manifest-src 'self' blob:; ` +
+		`worker-src 'self' blob:; ` +
+		`base-uri 'self'; ` +
+		`frame-ancestors 'none';`
+}
+
+func newCSPNonce() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func cspNonce(r *http.Request) string {
+	nonce, _ := r.Context().Value(cspNonceKey{}).(string)
+	return nonce
+}
 
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		nonce, err := newCSPNonce()
+		if err != nil {
+			log.Printf("ERROR: couldn't generate a CSP nonce: %v", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy(nonce))
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), cspNonceKey{}, nonce)))
 	})
 }

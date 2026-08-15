@@ -47,13 +47,9 @@
       content="[{[ if .Color -]}][{[ .Color ]}][{[ else ]}]#225885[{[ end ]}]"
     />
 
-    <!-- Inject Some Variables and generate the manifest json -->
-    <script>
-      // We can assign JSON directly
+    <script nonce="[{[ .Nonce ]}]">
       window.FileBrowser = [{[ .Json ]}];
 
-
-      // Dynamically inject custom CSS if enabled
       if (window.FileBrowser.CSS) {
         var cl = document.createElement('link');
         cl.rel = 'stylesheet';
@@ -97,11 +93,7 @@
         .setAttribute("href", manifestURL);
     </script>
 
-    <script>
-      // Resolve the colour theme before first paint, otherwise a dark-mode user
-      // sees a white flash while the bundle loads. Mirrors Horizon's
-      // components/layouts/master.blade.php; the key and the precedence must
-      // match src/utils/theme.ts.
+    <script nonce="[{[ .Nonce ]}]">
       (function () {
         var stored = localStorage.getItem("color-theme-preference");
         var preference =
