@@ -46,9 +46,11 @@
       ></i>
     </div>
 
-    <!-- Metadata -->
     <div :class="metaWrapClass">
-      <p class="name truncate" :class="isDir ? 'font-semibold' : ''">
+      <p
+        class="name truncate"
+        :class="[isDir ? 'font-semibold' : '', nameClass]"
+      >
         {{ name }}
       </p>
 
@@ -190,7 +192,8 @@ const metaWrapClass = computed(() => {
   return "flex-1 min-w-0";
 });
 
-// In list mode the metadata columns line up; elsewhere they stack under the name.
+const nameClass = computed(() => (isList.value ? "flex-1 min-w-0" : ""));
+
 const sizeClass = computed(() =>
   isList.value ? "w-24 text-right shrink-0" : isGallery.value ? "hidden" : ""
 );

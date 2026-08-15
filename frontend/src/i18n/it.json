@@ -1,7 +1,7 @@
 {
   "buttons": {
     "cancel": "Annulla",
-    "cleanConvergeOutput": "Pulisci l'output di CONVERGE",
+    "cleanConvergeOutput": "Pulisci l'output",
     "clear": "Cancella",
     "close": "Chiudi",
     "continue": "Continua",
@@ -104,8 +104,7 @@
     "sortByName": "Ordina per nome",
     "sortBySize": "Ordina per dimensione",
     "storage": "Archiviazione",
-    "storageAvailable": "{available} disponibili",
-    "storageOf": "di {total} utilizzati"
+    "storageAvailable": "{available} disponibili"
   },
   "help": {
     "click": "seleziona un file o una cartella",
@@ -141,7 +140,7 @@
   "prompts": {
     "calculateSize": "Calcola",
     "calculating": "Calcolo in corso…",
-    "convergeClean": "Pulisci l'output di CONVERGE",
+    "convergeClean": "Pulisci l'output",
     "convergeCleanDone": "Eliminati {count} elementi, liberati {size}.",
     "convergeCleanEmpty": "Nessun file di output di CONVERGE trovato qui.",
     "convergeCleanMessage": "Questa operazione elimina definitivamente i file di output di CONVERGE in questa cartella del caso e ogni cartella outputs_* con tutto il suo contenuto.",

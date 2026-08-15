@@ -18,11 +18,19 @@ const aceAssetFiles = (): string[] => {
     .readdirSync(ACE_SOURCE_DIR)
     .filter((file) => file.startsWith("theme-") && file.endsWith(".js"));
 
+  const exts = fs
+    .readdirSync(ACE_SOURCE_DIR)
+    .filter((file) => file.startsWith("ext-") && file.endsWith(".js"));
+
   const modes = BUNDLED_MODES.map((mode) => `mode-${mode}.js`).filter((file) =>
     fs.existsSync(path.join(ACE_SOURCE_DIR, file))
   );
 
-  return [...themes, ...modes];
+  const snippets = BUNDLED_MODES.map((mode) => `snippets/${mode}.js`).filter(
+    (file) => fs.existsSync(path.join(ACE_SOURCE_DIR, file))
+  );
+
+  return [...themes, ...exts, ...modes, ...snippets];
 };
 
 const aceAssets = (): Plugin => ({
@@ -33,9 +41,10 @@ const aceAssets = (): Plugin => ({
       const prefix = `/${ACE_ASSET_DIR}/`;
       if (!req.url?.startsWith(prefix)) return next();
 
-      const file = path.basename(req.url.split("?")[0]);
-      const full = path.join(ACE_SOURCE_DIR, file);
+      const file = req.url.slice(prefix.length).split("?")[0];
+      const full = path.join(ACE_SOURCE_DIR, path.normalize(file));
 
+      if (!full.startsWith(ACE_SOURCE_DIR + path.sep)) return next();
       if (!fs.existsSync(full)) return next();
 
       res.setHeader("Content-Type", "text/javascript");

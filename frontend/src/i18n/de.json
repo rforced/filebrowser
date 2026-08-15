@@ -1,7 +1,7 @@
 {
   "buttons": {
     "cancel": "Abbrechen",
-    "cleanConvergeOutput": "CONVERGE-Ausgabe bereinigen",
+    "cleanConvergeOutput": "Ausgabe bereinigen",
     "clear": "Leeren",
     "close": "Schließen",
     "continue": "Fortfahren",
@@ -104,8 +104,7 @@
     "sortByName": "Nach Name sortieren",
     "sortBySize": "Nach Größe sortieren",
     "storage": "Speicher",
-    "storageAvailable": "{available} verfügbar",
-    "storageOf": "von {total} belegt"
+    "storageAvailable": "{available} verfügbar"
   },
   "help": {
     "click": "Datei oder Verzeichnis auswählen",
@@ -141,7 +140,7 @@
   "prompts": {
     "calculateSize": "Berechnen",
     "calculating": "Wird berechnet …",
-    "convergeClean": "CONVERGE-Ausgabe bereinigen",
+    "convergeClean": "Ausgabe bereinigen",
     "convergeCleanDone": "{count} Eintrag/Einträge gelöscht, {size} freigegeben.",
     "convergeCleanEmpty": "Hier wurden keine CONVERGE-Ausgabedateien gefunden.",
     "convergeCleanMessage": "Dies löscht die CONVERGE-Ausgabedateien in diesem Case-Ordner endgültig, sowie jeden outputs_*-Ordner samt seinem gesamten Inhalt.",

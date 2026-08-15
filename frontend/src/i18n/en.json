@@ -1,7 +1,7 @@
 {
   "buttons": {
     "cancel": "Cancel",
-    "cleanConvergeOutput": "Clean CONVERGE output",
+    "cleanConvergeOutput": "Clean output",
     "clear": "Clear",
     "close": "Close",
     "continue": "Continue",
@@ -104,8 +104,7 @@
     "sortByName": "Sort by name",
     "sortBySize": "Sort by size",
     "storage": "Storage",
-    "storageAvailable": "{available} available",
-    "storageOf": "of {total} used"
+    "storageAvailable": "{available} available"
   },
   "help": {
     "click": "select file or directory",
@@ -141,7 +140,7 @@
   "prompts": {
     "calculateSize": "Calculate",
     "calculating": "Calculating...",
-    "convergeClean": "Clean CONVERGE output",
+    "convergeClean": "Clean output",
     "convergeCleanDone": "Deleted {count} item(s), freeing {size}.",
     "convergeCleanEmpty": "No CONVERGE output files were found here.",
     "convergeCleanMessage": "This permanently deletes the CONVERGE output files in this case folder, and every outputs_* folder together with all of its contents.",

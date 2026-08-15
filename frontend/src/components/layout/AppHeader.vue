@@ -35,7 +35,6 @@
         </button>
 
         <button
-          v-if="canLogout"
           v-tooltip="t('sidebar.logout')"
           type="button"
           class="btn btn-flex btn-gray"
@@ -63,14 +62,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 
 import { useAuthStore } from "@/stores/auth";
 import * as auth from "@/utils/auth";
-import { hideLoginButton, logoutPage, name } from "@/utils/constants";
+import { hideLoginButton, name } from "@/utils/constants";
 import Search from "@/components/Search.vue";
 
 withDefaults(defineProps<{ showSearch?: boolean }>(), { showSearch: true });
@@ -79,7 +77,6 @@ const { t } = useI18n();
 const router = useRouter();
 const authStore = useAuthStore();
 const { user, isLoggedIn } = storeToRefs(authStore);
-const canLogout = computed(() => logoutPage !== "/login");
 const toSettings = () => router.push({ path: "/settings/profile" });
 const logout = auth.logout;
 </script>

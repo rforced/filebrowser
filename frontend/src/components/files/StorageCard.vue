@@ -14,9 +14,6 @@
           {{ usage.used }}
         </div>
         <div class="text-sm text-gray-600 dark:text-gray-300">
-          {{ t("files.storageOf", { total: usage.total }) }}
-        </div>
-        <div class="text-sm text-gray-600 dark:text-gray-300">
           {{ t("files.storageAvailable", { available: usage.available }) }}
         </div>
       </div>
@@ -39,7 +36,6 @@ const route = useRoute();
 
 const DEFAULT = {
   used: "0 B",
-  total: "0 B",
   available: "0 B",
   usedPercentage: 0,
 };
@@ -59,7 +55,6 @@ const fetchUsage = async () => {
 
     Object.assign(usage, {
       used: filesize(result.used),
-      total: filesize(result.total),
       available: filesize(Math.max(0, result.total - result.used)),
       usedPercentage: result.total
         ? Math.round((result.used / result.total) * 100)

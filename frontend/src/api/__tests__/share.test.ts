@@ -145,7 +145,7 @@ describe("share API", () => {
   });
 
   describe("create", () => {
-    it("sends POST request with expiry and unit in URL", async () => {
+    it("sends POST request with expiry, unit and password in the body", async () => {
       const newShare: Share = {
         hash: "new123",
         path: "/docs/file.txt",
@@ -163,8 +163,8 @@ describe("share API", () => {
       expect(globalThis.fetch).toHaveBeenCalledOnce();
       const [callUrl, callOpts] = (globalThis.fetch as any).mock.calls[0];
       expect(callUrl).toContain("/api/share/docs/file.txt");
-      expect(callUrl).toContain("expires=24");
-      expect(callUrl).toContain("unit=hours");
+      expect(callUrl).not.toContain("expires=");
+      expect(callUrl).not.toContain("unit=");
       expect(callOpts.method).toBe("POST");
 
       const body = JSON.parse(callOpts.body);
@@ -174,7 +174,7 @@ describe("share API", () => {
       expect(result).toEqual(newShare);
     });
 
-    it("sends minimal body when no expiry is set", async () => {
+    it("sends the full body even when nothing is set", async () => {
       const newShare: Share = {
         hash: "perm1",
         path: "/docs/file.txt",
@@ -186,7 +186,11 @@ describe("share API", () => {
 
       const [callUrl, callOpts] = (globalThis.fetch as any).mock.calls[0];
       expect(callUrl).not.toContain("expires=");
-      expect(callOpts.body).toBe("{}");
+      expect(JSON.parse(callOpts.body)).toEqual({
+        password: "",
+        expires: "",
+        unit: "hours",
+      });
     });
 
     it("includes password in body even without expiry when unit differs", async () => {

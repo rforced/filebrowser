@@ -1,7 +1,7 @@
 {
   "buttons": {
     "cancel": "取消",
-    "cleanConvergeOutput": "清理 CONVERGE 输出",
+    "cleanConvergeOutput": "清理输出",
     "clear": "清空",
     "close": "关闭",
     "continue": "继续",
@@ -104,8 +104,7 @@
     "sortByName": "按名称排序",
     "sortBySize": "按大小排序",
     "storage": "存储",
-    "storageAvailable": "可用 {available}",
-    "storageOf": "已使用，共 {total}"
+    "storageAvailable": "可用 {available}"
   },
   "help": {
     "click": "选中文件或文件夹",
@@ -141,7 +140,7 @@
   "prompts": {
     "calculateSize": "计算",
     "calculating": "正在计算…",
-    "convergeClean": "清理 CONVERGE 输出",
+    "convergeClean": "清理输出",
     "convergeCleanDone": "已删除 {count} 个项目，释放 {size}。",
     "convergeCleanEmpty": "此处未找到 CONVERGE 输出文件。",
     "convergeCleanMessage": "此操作将永久删除该算例文件夹中的 CONVERGE 输出文件，以及每个 outputs_* 文件夹及其全部内容。",

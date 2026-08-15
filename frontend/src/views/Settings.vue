@@ -29,7 +29,9 @@
       </div>
     </Card>
 
-    <router-view v-else />
+    <div v-show="!loading" class="contents">
+      <router-view />
+    </div>
   </main>
 </template>
 

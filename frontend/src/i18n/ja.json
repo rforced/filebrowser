@@ -1,7 +1,7 @@
 {
   "buttons": {
     "cancel": "キャンセル",
-    "cleanConvergeOutput": "CONVERGE の出力を削除",
+    "cleanConvergeOutput": "出力を削除",
     "clear": "クリア",
     "close": "閉じる",
     "continue": "続行",
@@ -104,8 +104,7 @@
     "sortByName": "名前で並べ替え",
     "sortBySize": "サイズで並べ替え",
     "storage": "ストレージ",
-    "storageAvailable": "{available} 利用可能",
-    "storageOf": "{total} 中 使用済み"
+    "storageAvailable": "{available} 利用可能"
   },
   "help": {
     "click": "ファイルやフォルダーを選択",
@@ -141,7 +140,7 @@
   "prompts": {
     "calculateSize": "計算",
     "calculating": "計算中…",
-    "convergeClean": "CONVERGE の出力を削除",
+    "convergeClean": "出力を削除",
     "convergeCleanDone": "{count} 件の項目を削除し、{size} を解放しました。",
     "convergeCleanEmpty": "CONVERGE の出力ファイルは見つかりませんでした。",
     "convergeCleanMessage": "このケースフォルダーにある CONVERGE の出力ファイルと、outputs_* フォルダーをその中身ごと完全に削除します。",
