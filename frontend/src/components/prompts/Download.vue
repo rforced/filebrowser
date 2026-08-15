@@ -32,6 +32,7 @@ const { t } = useI18n();
 // another encoder in the binary and another decoder the downloader has to run.
 const formats = {
   zip: "zip",
+  tar: "tar",
   targz: "tar.gz",
   tarlz4: "tar.lz4",
   tarzst: "tar.zst",

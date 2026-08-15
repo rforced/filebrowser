@@ -62,6 +62,7 @@ var supportedArchiveKinds = []archiveKind{
 	{".tgz", containerTar, compressGzip},
 	{".tzst", containerTar, compressZstd},
 	{".tlz4", containerTar, compressLz4},
+	{".tar", containerTar, compressNone},
 	{".zip", containerZip, compressNone},
 	{".gz", containerNone, compressGzip},
 	{".zst", containerNone, compressZstd},

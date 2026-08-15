@@ -44,6 +44,8 @@ func parseQueryAlgorithm(r *http.Request) (ext string, cont container, comp comp
 	switch r.URL.Query().Get("algo") {
 	case "zip", "true", "":
 		return ".zip", containerZip, compressNone, nil
+	case "tar":
+		return ".tar", containerTar, compressNone, nil
 	case "targz":
 		return ".tar.gz", containerTar, compressGzip, nil
 	case "tarlz4":

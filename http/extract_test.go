@@ -59,6 +59,7 @@ func TestIsArchiveFile(t *testing.T) {
 		want     bool
 	}{
 		{"zip file", "archive.zip", true},
+		{"tar file", "archive.tar", true},
 		{"tar.gz file", "archive.tar.gz", true},
 		{"gz file", "notes.txt.gz", true},
 		{"tgz file", "archive.tgz", true},
@@ -77,9 +78,6 @@ func TestIsArchiveFile(t *testing.T) {
 		{"just a dot", ".", false},
 		{"partial match", "file.zi", false},
 		{"tar in name but not ext", "tarfile.txt", false},
-		// Bare .tar is deliberately unsupported: the formats in use all carry a
-		// compression extension.
-		{"bare tar not supported", "archive.tar", false},
 	}
 
 	for _, tt := range tests {
@@ -99,6 +97,7 @@ func TestArchiveBaseName(t *testing.T) {
 		want     string
 	}{
 		{"zip", "archive.zip", "archive"},
+		{"tar", "archive.tar", "archive"},
 		{"tar.gz", "archive.tar.gz", "archive"},
 		{"gz", "notes.txt.gz", "notes.txt"},
 		{"tgz", "archive.tgz", "archive"},
@@ -111,7 +110,6 @@ func TestArchiveBaseName(t *testing.T) {
 		{"uppercase", "ARCHIVE.ZIP", "ARCHIVE"},
 		{"mixed case tar.gz", "Archive.Tar.Gz", "Archive"},
 		{"no extension", "noext", "noext"},
-		{"bare tar left alone", "archive.tar", "archive.tar"},
 		{"dots in name", "my.archive.file.tar.gz", "my.archive.file"},
 		{"multiple dots zip", "a.b.c.zip", "a.b.c"},
 	}

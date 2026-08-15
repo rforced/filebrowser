@@ -155,6 +155,7 @@ func TestExtractRoundTripAllFormats(t *testing.T) {
 		filename string
 		comp     compression
 	}{
+		{"a.tar", compressNone},
 		{"a.tar.gz", compressGzip},
 		{"a.tgz", compressGzip},
 		{"a.tar.zst", compressZstd},
@@ -361,7 +362,7 @@ func TestExtractRejectsMagicMismatch(t *testing.T) {
 
 // An unsupported extension must never reach a decoder.
 func TestExtractRejectsUnsupportedFormat(t *testing.T) {
-	for _, name := range []string{"archive.tar", "archive.rar", "archive.7z", "archive.tar.bz2", "plain.txt"} {
+	for _, name := range []string{"archive.rar", "archive.7z", "archive.tar.bz2", "archive.tar.xz", "plain.txt"} {
 		t.Run(name, func(t *testing.T) {
 			if isArchiveFile(name) {
 				t.Fatalf("%s must not be treated as a supported archive", name)
@@ -521,6 +522,7 @@ func TestWriteArchiveRoundTrip(t *testing.T) {
 		comp compression
 		wrap func(io.Reader) (io.Reader, error)
 	}{
+		{"tar", compressNone, func(r io.Reader) (io.Reader, error) { return r, nil }},
 		{"tar.gz", compressGzip, func(r io.Reader) (io.Reader, error) { return gzip.NewReader(r) }},
 		{"tar.zst", compressZstd, func(r io.Reader) (io.Reader, error) {
 			d, err := zstd.NewReader(r)
@@ -569,6 +571,7 @@ func TestParseQueryAlgorithm(t *testing.T) {
 		"":       ".zip",
 		"zip":    ".zip",
 		"true":   ".zip",
+		"tar":    ".tar",
 		"targz":  ".tar.gz",
 		"tarlz4": ".tar.lz4",
 		"tarzst": ".tar.zst",
@@ -586,7 +589,7 @@ func TestParseQueryAlgorithm(t *testing.T) {
 		})
 	}
 
-	for _, algo := range []string{"tar", "tarbz2", "tarxz", "tarsz", "tarbr", "rar", "7z"} {
+	for _, algo := range []string{"tarbz2", "tarxz", "tarsz", "tarbr", "rar", "7z"} {
 		t.Run("removed/"+algo, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodGet, "/?algo="+algo, nil)
 			if _, _, _, err := parseQueryAlgorithm(r); err == nil {
