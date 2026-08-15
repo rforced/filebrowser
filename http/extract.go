@@ -109,11 +109,14 @@ func resolveDestDir(srcDir, destination string) (string, error) {
 	if destName == "." || destName == ".." || destName == "/" {
 		return "", errors.New("invalid destination name")
 	}
-	return path.Join(srcDir, destName), nil
+
+	dest, err := resolveInside(srcDir, destName)
+	if err != nil {
+		return "", errors.New("invalid destination name")
+	}
+	return dest, nil
 }
 
-// extractCheckHandler is a GET handler that returns whether a file is an
-// extractable archive. The file path comes from the URL path.
 var extractCheckHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 	if !d.user.Perm.Create {
 		return http.StatusForbidden, nil
@@ -349,7 +352,10 @@ func extractZip(
 		}
 		progress(extractProgress{Current: state.fileCount, CurrentFile: name})
 
-		target := path.Join(destDir, name)
+		target, err := resolveInside(destDir, name)
+		if err != nil {
+			return err
+		}
 
 		if mode.IsDir() || strings.HasSuffix(member.Name, "/") {
 			if err := afs.MkdirAll(target, 0750); err != nil {
@@ -414,7 +420,11 @@ func extractTar(
 				return err
 			}
 			progress(extractProgress{Current: state.fileCount, CurrentFile: name})
-			if err := afs.MkdirAll(path.Join(destDir, name), 0750); err != nil {
+			target, err := resolveInside(destDir, name)
+			if err != nil {
+				return err
+			}
+			if err := afs.MkdirAll(target, 0750); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", name, err)
 			}
 		case tar.TypeReg:
@@ -422,7 +432,11 @@ func extractTar(
 				return err
 			}
 			progress(extractProgress{Current: state.fileCount, CurrentFile: name})
-			if err := writeExtractedFile(afs, path.Join(destDir, name), name, tr, overwrite, state); err != nil {
+			target, err := resolveInside(destDir, name)
+			if err != nil {
+				return err
+			}
+			if err := writeExtractedFile(afs, target, name, tr, overwrite, state); err != nil {
 				return err
 			}
 		default:
@@ -457,7 +471,10 @@ func extractSingle(
 	if outputName == "" {
 		return errors.New("cannot determine output file name")
 	}
-	outputPath := path.Join(destDir, outputName)
+	outputPath, err := resolveInside(destDir, outputName)
+	if err != nil {
+		return err
+	}
 
 	progress(extractProgress{Total: 1, Current: 0, CurrentFile: outputName})
 

@@ -261,9 +261,24 @@ func checkTarMagic(r io.ReaderAt) error {
 	return nil
 }
 
-// safeArchiveName normalizes a member name from an archive and rejects any that
-// would escape the extraction directory. It returns the cleaned, root-relative
-// name.
+func resolveInside(destDir, name string) (string, error) {
+	root := gopath.Clean(destDir)
+	target := gopath.Join(root, name)
+
+	if target == root {
+		return target, nil
+	}
+
+	prefix := root
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	if !strings.HasPrefix(target, prefix) {
+		return "", fmt.Errorf("illegal file path in archive: %s", name)
+	}
+	return target, nil
+}
+
 func safeArchiveName(name string) (string, error) {
 	// A backslash is a path separator to a Windows-authored archive but a legal
 	// filename byte on POSIX. Neutralize it rather than translating it, so that

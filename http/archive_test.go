@@ -598,3 +598,46 @@ func TestParseQueryAlgorithm(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveInside(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		destDir string
+		entry   string
+		want    string
+		wantErr bool
+	}{
+		{name: "root destination, plain name", destDir: "/", entry: "a.txt", want: "/a.txt"},
+		{name: "root destination, nested name", destDir: "/", entry: "sub/a.txt", want: "/sub/a.txt"},
+		{name: "root destination, traversal absorbed", destDir: "/", entry: "../a.txt", want: "/a.txt"},
+		{name: "nested destination, plain name", destDir: "/dest", entry: "a.txt", want: "/dest/a.txt"},
+		{name: "nested destination, deep name", destDir: "/dest", entry: "x/y/z.txt", want: "/dest/x/y/z.txt"},
+		{name: "trailing slash on destination", destDir: "/dest/", entry: "a.txt", want: "/dest/a.txt"},
+		{name: "single traversal", destDir: "/dest", entry: "../a.txt", wantErr: true},
+		{name: "deep traversal", destDir: "/dest", entry: "a/../../../etc/passwd", wantErr: true},
+		{name: "absolute entry rebased under destination", destDir: "/dest", entry: "/etc/passwd", want: "/dest/etc/passwd"},
+		{name: "inner traversal normalized", destDir: "/dest", entry: "a/b/../c.txt", want: "/dest/a/c.txt"},
+		{name: "prefix sibling is not inside", destDir: "/dest", entry: "../destination/x", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveInside(tt.destDir, tt.entry)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("resolveInside(%q, %q) = %q, want an error", tt.destDir, tt.entry, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveInside(%q, %q) unexpected error: %v", tt.destDir, tt.entry, err)
+			}
+			if got != tt.want {
+				t.Errorf("resolveInside(%q, %q) = %q, want %q", tt.destDir, tt.entry, got, tt.want)
+			}
+		})
+	}
+}
