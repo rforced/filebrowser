@@ -10,11 +10,13 @@ import (
 
 	"github.com/asdine/storm/v3"
 	"github.com/spf13/afero"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/rforced/filebrowser/v2/files"
 	"github.com/rforced/filebrowser/v2/rules"
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/share"
+	"github.com/rforced/filebrowser/v2/storage"
 	"github.com/rforced/filebrowser/v2/storage/bolt"
 	"github.com/rforced/filebrowser/v2/users"
 )
@@ -95,7 +97,11 @@ func TestPublicShareHandlerAuthentication(t *testing.T) {
 				if err := storage.Share.Save(tc.share); err != nil {
 					t.Fatalf("failed to save share: %v", err)
 				}
-				if err := storage.Users.Save(&users.User{Username: "username", Password: "pw"}); err != nil {
+				if err := storage.Users.Save(&users.User{
+					Username: "username",
+					Password: "pw",
+					Perm:     users.Permissions{Share: true, Download: true},
+				}); err != nil {
 					t.Fatalf("failed to save user: %v", err)
 				}
 				if err := storage.Settings.Save(&settings.Settings{Key: []byte("key")}); err != nil {
@@ -276,4 +282,67 @@ func (cu *customFSUser) Get(baseScope string, id interface{}) (*users.User, erro
 	user.Fs = cu.fs
 
 	return user, nil
+}
+
+func TestPublicShareRejectsWhenOwnerLosesDownload(t *testing.T) {
+	passwordBcrypt, err := bcrypt.GenerateFromPassword([]byte("sharePassword"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+
+	newEnv := func(t *testing.T, perm users.Permissions) *storage.Storage {
+		t.Helper()
+		db, err := storm.Open(filepath.Join(t.TempDir(), "db"))
+		if err != nil {
+			t.Fatalf("failed to open db: %v", err)
+		}
+		t.Cleanup(func() { _ = db.Close() })
+
+		st, err := bolt.NewStorage(db)
+		if err != nil {
+			t.Fatalf("failed to get storage: %v", err)
+		}
+		if err := st.Share.Save(&share.Link{
+			Hash: "h", UserID: 1, Path: "/shared", PasswordHash: string(passwordBcrypt),
+		}); err != nil {
+			t.Fatalf("failed to save share: %v", err)
+		}
+		if err := st.Users.Save(&users.User{Username: "owner", Password: "pw", Perm: perm}); err != nil {
+			t.Fatalf("failed to save user: %v", err)
+		}
+		if err := st.Settings.Save(&settings.Settings{Key: []byte("key")}); err != nil {
+			t.Fatalf("failed to save settings: %v", err)
+		}
+
+		fs := files.NewScopedFs(afero.NewOsFs(), t.TempDir())
+		if err := fs.MkdirAll("/shared", 0o755); err != nil {
+			t.Fatalf("failed to create shared dir: %v", err)
+		}
+		if err := afero.WriteFile(fs, "/shared/file.txt", []byte("payload"), 0o600); err != nil {
+			t.Fatalf("failed to write file: %v", err)
+		}
+		st.Users = &customFSUser{Store: st.Users, fs: fs}
+		return st
+	}
+
+	request := func(t *testing.T, st *storage.Storage) int {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, "h", http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("X-SHARE-PASSWORD", "sharePassword")
+		req.RemoteAddr = fmt.Sprintf("10.9.0.%d:12345", testIPCounter.Add(1))
+		rec := httptest.NewRecorder()
+		handle(publicShareHandler, "", st, &settings.Server{}).ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	if code := request(t, newEnv(t, users.Permissions{Share: true, Download: true})); code != http.StatusOK {
+		t.Fatalf("share with a permitted owner: expected 200, got %d", code)
+	}
+
+	if code := request(t, newEnv(t, users.Permissions{Share: true})); code != http.StatusForbidden {
+		t.Errorf("VULNERABLE: share still served after the owner lost Download: got %d, want 403", code)
+	}
 }

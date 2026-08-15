@@ -127,17 +127,27 @@ func userInfoFrom(user *users.User) userInfo {
 	}
 }
 
-func extractToken(r *http.Request) string {
-	token := r.Header.Get("X-Auth")
-	if token == "" {
-		token = r.URL.Query().Get("auth")
+func extractToken(r *http.Request, allowQuery bool) string {
+	if token := r.Header.Get("X-Auth"); token != "" {
+		return token
 	}
-	return token
+	if allowQuery {
+		return r.URL.Query().Get("auth")
+	}
+	return ""
 }
 
 func withUser(fn handleFunc) handleFunc {
+	return authenticated(fn, false)
+}
+
+func withMediaUser(fn handleFunc) handleFunc {
+	return authenticated(fn, true)
+}
+
+func authenticated(fn handleFunc, allowQueryToken bool) handleFunc {
 	return func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
-		tokenStr := extractToken(r)
+		tokenStr := extractToken(r, allowQueryToken)
 		if tokenStr == "" {
 			return http.StatusUnauthorized, nil
 		}
@@ -157,6 +167,10 @@ func withUser(fn handleFunc) handleFunc {
 
 		d.user, err = d.store.Users.Get(d.server.Root, token.UserID)
 		if err != nil {
+			if errors.Is(err, fberrors.ErrNotExist) {
+				_ = d.store.Tokens.Delete(tokenStr)
+				return http.StatusUnauthorized, nil
+			}
 			return http.StatusInternalServerError, err
 		}
 

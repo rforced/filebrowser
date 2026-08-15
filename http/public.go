@@ -112,6 +112,10 @@ var withHashFile = func(fn handleFunc) handleFunc {
 			return errToStatus(err), err
 		}
 
+		if !user.Perm.Download {
+			return http.StatusForbidden, nil
+		}
+
 		d.user = user
 
 		file, err := files.NewFileInfo(&files.FileOptions{
@@ -212,10 +216,9 @@ func authenticateShareRequest(r *http.Request, l *share.Link) (int, error) {
 		return http.StatusForbidden, fmt.Errorf("share is not password-protected")
 	}
 
-	password := r.Header.Get("X-SHARE-PASSWORD")
-	password, err := url.QueryUnescape(password)
+	password, err := url.QueryUnescape(r.Header.Get("X-SHARE-PASSWORD"))
 	if err != nil {
-		return 0, err
+		return http.StatusBadRequest, err
 	}
 	if password == "" {
 		password = r.URL.Query().Get("password")
@@ -227,7 +230,7 @@ func authenticateShareRequest(r *http.Request, l *share.Link) (int, error) {
 		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
 			return http.StatusUnauthorized, nil
 		}
-		return 0, err
+		return http.StatusInternalServerError, err
 	}
 
 	return 0, nil

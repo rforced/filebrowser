@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"time"
 
 	fberrors "github.com/rforced/filebrowser/v2/errors"
 	"github.com/rforced/filebrowser/v2/files"
@@ -17,8 +19,11 @@ import (
 	"github.com/rforced/filebrowser/v2/users"
 )
 
-// MethodHookAuth is used to identify hook auth.
 const MethodHookAuth settings.AuthMethod = "hook"
+
+const hookTimeout = 30 * time.Second
+
+const hookWaitDelay = 2 * time.Second
 
 type hookCred struct {
 	Password  string `json:"password"`
@@ -66,7 +71,7 @@ func (a *HookAuth) Auth(r *http.Request, usr users.Store, stg *settings.Settings
 	a.Server = srv
 	a.Cred = cred
 
-	action, err := a.RunCommand()
+	action, err := a.RunCommand(r.Context())
 	if err != nil {
 		return nil, err
 	}
@@ -96,15 +101,25 @@ func (a *HookAuth) LoginPage() bool {
 	return true
 }
 
-// RunCommand starts the hook command and returns the action
-func (a *HookAuth) RunCommand() (string, error) {
-	command := strings.Split(a.Command, " ")
+func (a *HookAuth) RunCommand(ctx context.Context) (string, error) {
+	name, args, err := splitCommand(a.Command)
+	if err != nil {
+		return "", err
+	}
 
-	cmd := exec.Command(command[0], command[1:]...)
+	ctx, cancel := context.WithTimeout(ctx, hookTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = hookWaitDelay
 	cmd.Env = append(os.Environ(), fmt.Sprintf("USERNAME=%s", a.Cred.Username))
-	cmd.Env = append(cmd.Env, fmt.Sprintf("PASSWORD=%s", a.Cred.Password))
+	cmd.Stdin = strings.NewReader(a.Cred.Password)
+
 	out, err := cmd.Output()
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("auth hook timed out after %s", hookTimeout)
+		}
 		return "", err
 	}
 
@@ -113,7 +128,48 @@ func (a *HookAuth) RunCommand() (string, error) {
 	return a.Fields.Values["hook.action"], nil
 }
 
-// GetValues creates a map with values from the key-value format string
+func splitCommand(command string) (name string, args []string, err error) {
+	var parts []string
+	var current strings.Builder
+	var quote rune
+	inToken := false
+
+	for _, r := range command {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				current.WriteRune(r)
+			}
+		case r == '\'' || r == '"':
+			quote = r
+			inToken = true
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			if inToken {
+				parts = append(parts, current.String())
+				current.Reset()
+				inToken = false
+			}
+		default:
+			current.WriteRune(r)
+			inToken = true
+		}
+	}
+
+	if quote != 0 {
+		return "", nil, errors.New("auth hook command has an unterminated quote")
+	}
+	if inToken {
+		parts = append(parts, current.String())
+	}
+	if len(parts) == 0 {
+		return "", nil, errors.New("auth hook command is empty")
+	}
+
+	return parts[0], parts[1:], nil
+}
+
 func (a *HookAuth) GetValues(s string) {
 	m := map[string]string{}
 
@@ -208,10 +264,8 @@ func (a *HookAuth) SaveUser() (*users.User, error) {
 	return u, nil
 }
 
-// GetUser returns a User filled with hook values or provided defaults
 func (a *HookAuth) GetUser(d *users.User) *users.User {
-	// adds all permissions when user is admin
-	isAdmin := a.Fields.GetBoolean("user.perm.admin", d.Perm.Admin)
+	isAdmin := d.Perm.Admin
 	perms := users.Permissions{
 		Admin:    isAdmin,
 		Create:   isAdmin || a.Fields.GetBoolean("user.perm.create", d.Perm.Create),
@@ -259,7 +313,6 @@ var validHookFields = []string{
 	"user.sorting.by",
 	"user.sorting.asc",
 	"user.hideDotfiles",
-	"user.perm.admin",
 	"user.perm.create",
 	"user.perm.rename",
 	"user.perm.modify",

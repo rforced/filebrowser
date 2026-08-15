@@ -101,11 +101,11 @@ func createTestToken(t *testing.T, env *httpTestEnv, userID uint, expiry time.Du
 func TestExtractToken(t *testing.T) {
 	t.Parallel()
 
-	t.Run("present", func(t *testing.T) {
+	t.Run("header present", func(t *testing.T) {
 		t.Parallel()
 		r, _ := http.NewRequest(http.MethodGet, "/", http.NoBody)
 		r.Header.Set("X-Auth", "my-token")
-		if got := extractToken(r); got != "my-token" {
+		if got := extractToken(r, false); got != "my-token" {
 			t.Errorf("extractToken() = %q, want %q", got, "my-token")
 		}
 	})
@@ -113,8 +113,33 @@ func TestExtractToken(t *testing.T) {
 	t.Run("missing", func(t *testing.T) {
 		t.Parallel()
 		r, _ := http.NewRequest(http.MethodGet, "/", http.NoBody)
-		if got := extractToken(r); got != "" {
+		if got := extractToken(r, false); got != "" {
 			t.Errorf("extractToken() = %q, want empty", got)
+		}
+	})
+
+	t.Run("query rejected on ordinary endpoints", func(t *testing.T) {
+		t.Parallel()
+		r, _ := http.NewRequest(http.MethodGet, "/?auth=my-token", http.NoBody)
+		if got := extractToken(r, false); got != "" {
+			t.Errorf("VULNERABLE: query token accepted where it should not be: %q", got)
+		}
+	})
+
+	t.Run("query accepted on media endpoints", func(t *testing.T) {
+		t.Parallel()
+		r, _ := http.NewRequest(http.MethodGet, "/?auth=my-token", http.NoBody)
+		if got := extractToken(r, true); got != "my-token" {
+			t.Errorf("extractToken() = %q, want %q", got, "my-token")
+		}
+	})
+
+	t.Run("header wins over query", func(t *testing.T) {
+		t.Parallel()
+		r, _ := http.NewRequest(http.MethodGet, "/?auth=query-token", http.NoBody)
+		r.Header.Set("X-Auth", "header-token")
+		if got := extractToken(r, true); got != "header-token" {
+			t.Errorf("extractToken() = %q, want %q", got, "header-token")
 		}
 	})
 }

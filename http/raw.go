@@ -70,7 +70,7 @@ func setContentDisposition(w http.ResponseWriter, r *http.Request, file *files.F
 	}
 }
 
-var rawHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+var rawHandler = withMediaUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 	if !d.user.Perm.Download {
 		return http.StatusAccepted, nil
 	}
