@@ -1,10 +1,10 @@
 <template>
-  <div class="card floating">
-    <div class="card-title">
+  <div class="flex flex-col">
+    <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
       <h2>{{ t("prompts.fileInfo") }}</h2>
     </div>
 
-    <div class="card-content">
+    <div class="px-6 py-4 flex flex-col gap-3">
       <p v-if="fileStore.selected.length > 1">
         {{ t("prompts.filesSelected", { count: fileStore.selected.length }) }}
       </p>
@@ -103,12 +103,14 @@
       </template>
     </div>
 
-    <div class="card-action">
+    <div
+      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+    >
       <button
         id="focus-prompt"
         type="submit"
         @click="layoutStore.closeHovers"
-        class="button button--flat"
+        class="btn btn-blue btn-soft"
         :aria-label="t('buttons.ok')"
         :title="t('buttons.ok')"
       >

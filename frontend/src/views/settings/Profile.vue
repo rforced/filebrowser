@@ -2,11 +2,11 @@
   <div class="row">
     <div class="column">
       <form class="card" @submit="updateSettings">
-        <div class="card-title">
+        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
           <h2>{{ t("settings.profileSettings") }}</h2>
         </div>
 
-        <div class="card-content">
+        <div class="px-6 py-4 flex flex-col gap-3">
           <p>
             <input type="checkbox" name="hideDotfiles" v-model="hideDotfiles" />
             {{ t("settings.hideDotfiles") }}
@@ -28,22 +28,21 @@
             {{ t("settings.setDateFormat") }}
           </p>
           <h3>{{ t("settings.language") }}</h3>
-          <languages
-            class="input input--block"
-            v-model:locale="locale"
-          ></languages>
+          <languages class="form-control" v-model:locale="locale"></languages>
 
           <h3>{{ t("settings.aceEditorTheme") }}</h3>
           <AceEditorTheme
-            class="input input--block"
+            class="form-control"
             v-model:aceEditorTheme="aceEditorTheme"
             id="aceTheme"
           ></AceEditorTheme>
         </div>
 
-        <div class="card-action">
+        <div
+          class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+        >
           <input
-            class="button button--flat"
+            class="btn btn-blue btn-soft"
             type="submit"
             name="submitProfile"
             :value="t('buttons.update')"
@@ -58,11 +57,11 @@
         v-if="!authStore.user?.lockPassword"
         @submit="updatePassword"
       >
-        <div class="card-title">
+        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
           <h2>{{ t("settings.changePassword") }}</h2>
         </div>
 
-        <div class="card-content">
+        <div class="px-6 py-4 flex flex-col gap-3">
           <input
             :class="passwordClass"
             type="password"
@@ -88,9 +87,11 @@
           />
         </div>
 
-        <div class="card-action">
+        <div
+          class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+        >
           <input
-            class="button button--flat"
+            class="btn btn-blue btn-soft"
             type="submit"
             name="submitPassword"
             :value="t('buttons.update')"
@@ -129,18 +130,19 @@ const dateFormat = ref<boolean>(false);
 const locale = ref<string>("");
 const aceEditorTheme = ref<string>("");
 
+// Horizon's validation states, from css/forms.css.
 const passwordClass = computed(() => {
-  const baseClass = "input input--block";
+  const baseClass = "form-control";
 
   if (password.value === "" && passwordConf.value === "") {
     return baseClass;
   }
 
   if (password.value === passwordConf.value) {
-    return `${baseClass} input--green`;
+    return `${baseClass} is-valid`;
   }
 
-  return `${baseClass} input--red`;
+  return `${baseClass} is-invalid`;
 });
 
 onMounted(async () => {

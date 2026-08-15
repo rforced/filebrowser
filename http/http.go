@@ -105,10 +105,15 @@ func NewHandler(
 	return securityHeaders(stripPrefix(server.BaseURL, r)), nil
 }
 
+const contentSecurityPolicy = `default-src 'self'; ` +
+	`style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://kit.fontawesome.com; ` +
+	`font-src 'self' https://fonts.gstatic.com https://ka-p.fontawesome.com; ` +
+	`img-src 'self' data: blob:; ` +
+	`frame-ancestors 'none';`
+
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy",
-			`default-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none';`)
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)

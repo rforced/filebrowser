@@ -3,11 +3,11 @@
   <div class="row" v-else-if="!layoutStore.loading && settings !== null">
     <div class="column">
       <form class="card" @submit.prevent="save">
-        <div class="card-title">
+        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
           <h2>{{ t("settings.globalSettings") }}</h2>
         </div>
 
-        <div class="card-content">
+        <div class="px-6 py-4 flex flex-col gap-3">
           <p>
             <input type="checkbox" v-model="settings.createUserDir" />
             {{ t("settings.createUserDir") }}
@@ -21,7 +21,7 @@
           <p>
             <label class="small">{{ t("settings.userHomeBasePath") }}</label>
             <input
-              class="input input--block"
+              class="form-control"
               type="text"
               v-model="settings.userHomeBasePath"
             />
@@ -80,7 +80,7 @@
           <p>
             <label for="theme">{{ t("settings.themes.title") }}</label>
             <themes
-              class="input input--block"
+              class="form-control"
               v-model:theme="settings.branding.theme"
               id="theme"
             ></themes>
@@ -89,7 +89,7 @@
           <p>
             <label for="branding-name">{{ t("settings.instanceName") }}</label>
             <input
-              class="input input--block"
+              class="form-control"
               type="text"
               v-model="settings.branding.name"
               id="branding-name"
@@ -101,7 +101,7 @@
               t("settings.brandingDirectoryPath")
             }}</label>
             <input
-              class="input input--block"
+              class="form-control"
               type="text"
               v-model="settings.branding.files"
               id="branding-files"
@@ -118,7 +118,7 @@
                 t("settings.tusUploadsChunkSize")
               }}</label>
               <input
-                class="input input--block"
+                class="form-control"
                 type="text"
                 v-model="formattedChunkSize"
                 id="tus-chunkSize"
@@ -139,9 +139,11 @@
           </div>
         </div>
 
-        <div class="card-action">
+        <div
+          class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+        >
           <input
-            class="button button--flat"
+            class="btn btn-blue btn-soft"
             type="submit"
             :value="t('buttons.update')"
           />
@@ -151,11 +153,11 @@
 
     <div class="column">
       <form class="card" @submit.prevent="save">
-        <div class="card-title">
+        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
           <h2>{{ t("settings.userDefaults") }}</h2>
         </div>
 
-        <div class="card-content">
+        <div class="px-6 py-4 flex flex-col gap-3">
           <p class="small">{{ t("settings.defaultUserDescription") }}</p>
 
           <user-form
@@ -165,9 +167,11 @@
           />
         </div>
 
-        <div class="card-action">
+        <div
+          class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+        >
           <input
-            class="button button--flat"
+            class="btn btn-blue btn-soft"
             type="submit"
             :value="t('buttons.update')"
           />
@@ -184,7 +188,7 @@ import Rules from "@/components/settings/Rules.vue";
 import Themes from "@/components/settings/Themes.vue";
 import UserForm from "@/components/settings/UserForm.vue";
 import { useLayoutStore } from "@/stores/layout";
-import { getTheme, setTheme } from "@/utils/theme";
+import { applyThemePreference, PREFERENCE_KEY } from "@/utils/theme";
 import Errors from "@/views/Errors.vue";
 import { computed, inject, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -246,8 +250,8 @@ const save = async () => {
   applyChunkSize();
   const newSettings: ISettings = { ...settings.value };
 
-  if (newSettings.branding.theme !== getTheme()) {
-    setTheme(newSettings.branding.theme);
+  if (localStorage.getItem(PREFERENCE_KEY) === null) {
+    applyThemePreference(newSettings.branding.theme || "system");
   }
 
   try {

@@ -1,30 +1,42 @@
 <template>
-  <div>
-    <div v-if="uploadStore.totalBytes" class="progress">
+  <div class="flex flex-col min-h-screen">
+    <div
+      v-if="uploadStore.totalBytes"
+      class="fixed top-0 left-0 w-full h-[3px] z-[9999]"
+    >
       <div
-        v-bind:style="{
-          width: sentPercent + '%',
-        }"
+        class="h-full bg-blue-400 dark:bg-teal-500 transition-[width] duration-200"
+        :style="{ width: sentPercent + '%' }"
       ></div>
     </div>
-    <sidebar></sidebar>
-    <main>
-      <router-view></router-view>
-    </main>
-    <prompts></prompts>
-    <upload-files></upload-files>
+
+    <app-header />
+
+    <div class="grow min-w-0 bg-gray-50 dark:bg-gray-900">
+      <router-view />
+    </div>
+
+    <app-footer />
+
+    <prompts />
+    <upload-files />
+    <toasts />
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, watch } from "vue";
+import { useRoute } from "vue-router";
+
 import { useLayoutStore } from "@/stores/layout";
 import { useFileStore } from "@/stores/file";
 import { useUploadStore } from "@/stores/upload";
-import Sidebar from "@/components/Sidebar.vue";
+
+import AppHeader from "@/components/layout/AppHeader.vue";
+import AppFooter from "@/components/layout/AppFooter.vue";
 import Prompts from "@/components/prompts/Prompts.vue";
 import UploadFiles from "@/components/prompts/UploadFiles.vue";
-import { computed, watch } from "vue";
-import { useRoute } from "vue-router";
+import Toasts from "@/components/ui/Toasts.vue";
 
 const layoutStore = useLayoutStore();
 const fileStore = useFileStore();

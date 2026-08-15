@@ -1,72 +1,130 @@
 <template>
   <div
     id="previewer"
+    class="fixed inset-0 z-9999 bg-black/95 overflow-hidden"
     @touchmove.prevent.stop
     @wheel.prevent.stop
     @mousemove="toggleNavigation"
     @touchstart="toggleNavigation"
   >
-    <header-bar v-if="isPdf || is3d || showNav">
-      <action icon="close" :label="$t('buttons.close')" @action="close()" />
-      <title>{{ name }}</title>
-      <action
-        :disabled="layoutStore.loading"
-        v-if="isResizeEnabled && fileStore.req?.type === 'image'"
-        :icon="fullSize ? 'photo_size_select_large' : 'hd'"
-        @action="toggleSize"
-      />
+    <Transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="opacity-0"
+      leave-active-class="transition ease-in duration-200"
+      leave-to-class="opacity-0"
+    >
+      <header
+        v-if="isPdf || is3d || showNav"
+        class="absolute top-0 left-0 right-0 z-20 flex gap-3 items-center justify-between p-3 md:px-6 bg-linear-to-b from-black/70 to-transparent"
+      >
+        <div class="flex gap-2 items-center min-w-0">
+          <button
+            v-tooltip="$t('buttons.close')"
+            type="button"
+            class="w-9 h-9 shrink-0 flex items-center justify-center rounded-md text-white hover:bg-white/20 transition"
+            :aria-label="$t('buttons.close')"
+            @click="close()"
+          >
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
 
-      <template #actions>
-        <action
-          :disabled="layoutStore.loading"
-          v-if="authStore.user?.perm.rename"
-          icon="mode_edit"
-          :label="$t('buttons.rename')"
-          show="rename"
-        />
-        <action
-          :disabled="layoutStore.loading"
-          v-if="authStore.user?.perm.delete"
-          icon="delete"
-          :label="$t('buttons.delete')"
-          @action="deleteFile"
-          id="delete-button"
-        />
-        <action
-          :disabled="layoutStore.loading"
-          v-if="authStore.user?.perm.download"
-          icon="file_download"
-          :label="$t('buttons.download')"
-          @action="download"
-        />
-        <action
-          :disabled="layoutStore.loading"
-          v-if="
-            ['image', 'audio', 'video'].includes(fileStore.req?.type || '') &&
-            authStore.user?.perm.download
-          "
-          icon="open_in_new"
-          :label="t('buttons.openDirect')"
-          @action="openDirect"
-        />
-        <action
-          :disabled="layoutStore.loading"
-          icon="info"
-          :label="$t('buttons.info')"
-          show="info"
-        />
-      </template>
-    </header-bar>
+          <span class="text-white font-medium truncate drop-shadow-md">{{
+            name
+          }}</span>
+        </div>
 
-    <div class="loading delayed" v-if="layoutStore.loading">
-      <div class="spinner">
-        <div class="bounce1"></div>
-        <div class="bounce2"></div>
-        <div class="bounce3"></div>
-      </div>
+        <div class="flex gap-1 items-center shrink-0">
+          <button
+            v-if="isResizeEnabled && fileStore.req?.type === 'image'"
+            v-tooltip="
+              fullSize ? $t('buttons.fitToScreen') : $t('buttons.fullSize')
+            "
+            type="button"
+            class="w-9 h-9 flex items-center justify-center rounded-md text-white hover:bg-white/20 transition disabled:opacity-40"
+            :disabled="layoutStore.loading"
+            @click="toggleSize"
+          >
+            <i
+              class="fa-solid"
+              :class="fullSize ? 'fa-compress' : 'fa-expand'"
+            ></i>
+          </button>
+
+          <button
+            v-if="authStore.user?.perm.rename"
+            v-tooltip="$t('buttons.rename')"
+            type="button"
+            class="w-9 h-9 flex items-center justify-center rounded-md text-white hover:bg-white/20 transition disabled:opacity-40"
+            :disabled="layoutStore.loading"
+            :aria-label="$t('buttons.rename')"
+            @click="layoutStore.showHover('rename')"
+          >
+            <i class="fa-solid fa-pen-to-square"></i>
+          </button>
+
+          <button
+            v-if="authStore.user?.perm.delete"
+            id="delete-button"
+            v-tooltip="$t('buttons.delete')"
+            type="button"
+            class="w-9 h-9 flex items-center justify-center rounded-md text-white hover:bg-red-500/80 transition disabled:opacity-40"
+            :disabled="layoutStore.loading"
+            :aria-label="$t('buttons.delete')"
+            @click="deleteFile"
+          >
+            <i class="fa-solid" :class="buttonIcon('delete', 'fa-trash')"></i>
+          </button>
+
+          <button
+            v-if="authStore.user?.perm.download"
+            v-tooltip="$t('buttons.download')"
+            type="button"
+            class="w-9 h-9 flex items-center justify-center rounded-md text-white hover:bg-white/20 transition disabled:opacity-40"
+            :disabled="layoutStore.loading"
+            :aria-label="$t('buttons.download')"
+            @click="download"
+          >
+            <i class="fa-solid fa-download"></i>
+          </button>
+
+          <button
+            v-if="
+              ['image', 'audio', 'video'].includes(fileStore.req?.type || '') &&
+              authStore.user?.perm.download
+            "
+            v-tooltip="t('buttons.openDirect')"
+            type="button"
+            class="w-9 h-9 flex items-center justify-center rounded-md text-white hover:bg-white/20 transition disabled:opacity-40"
+            :disabled="layoutStore.loading"
+            :aria-label="t('buttons.openDirect')"
+            @click="openDirect"
+          >
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </button>
+
+          <button
+            v-tooltip="$t('buttons.info')"
+            type="button"
+            class="w-9 h-9 flex items-center justify-center rounded-md text-white hover:bg-white/20 transition disabled:opacity-40"
+            :disabled="layoutStore.loading"
+            :aria-label="$t('buttons.info')"
+            @click="layoutStore.showHover('info')"
+          >
+            <i class="fa-solid fa-circle-info"></i>
+          </button>
+        </div>
+      </header>
+    </Transition>
+
+    <div
+      v-if="layoutStore.loading"
+      class="h-full flex items-center justify-center"
+    >
+      <i class="fa-solid fa-spinner fa-spin text-4xl text-white/80"></i>
     </div>
+
     <template v-else>
-      <div class="preview">
+      <div class="h-full flex items-center justify-center text-center">
         <ModelViewer
           v-if="is3d && fileStore.req"
           :src="previewUrl"
@@ -80,6 +138,7 @@
         <audio
           v-else-if="fileStore.req?.type == 'audio'"
           ref="player"
+          class="w-11/12"
           :src="previewUrl"
           controls
           :autoplay="autoPlay"
@@ -90,31 +149,41 @@
           ref="player"
           :source="previewUrl"
           :options="videoOptions"
+        />
+        <object
+          v-else-if="isPdf"
+          class="w-full h-full pt-16"
+          :data="previewUrl"
+        ></object>
+
+        <div
+          v-else-if="fileStore.req?.type == 'blob'"
+          class="flex flex-col items-center gap-6 text-white p-6"
         >
-        </VideoPlayer>
-        <object v-else-if="isPdf" class="pdf" :data="previewUrl"></object>
-        <div v-else-if="fileStore.req?.type == 'blob'" class="info">
-          <div class="title">
-            <i class="material-icons">feedback</i>
-            {{ $t("files.noPreview") }}
+          <div class="flex flex-col items-center gap-3">
+            <i
+              class="fa-solid fa-circle-exclamation text-5xl text-white/70"
+            ></i>
+            <span class="text-lg">{{ $t("files.noPreview") }}</span>
           </div>
-          <div>
-            <a target="_blank" :href="downloadUrl" class="button button--flat">
-              <div>
-                <i class="material-icons">file_download</i
-                >{{ $t("buttons.download") }}
-              </div>
-            </a>
+
+          <div class="flex flex-wrap gap-3 justify-center">
             <a
               target="_blank"
-              :href="previewUrl"
-              class="button button--flat"
-              v-if="!fileStore.req?.isDir"
+              :href="downloadUrl"
+              class="btn btn-flex btn-blue"
             >
-              <div>
-                <i class="material-icons">open_in_new</i
-                >{{ $t("buttons.openFile") }}
-              </div>
+              <i class="fa-solid fa-download"></i>
+              <span>{{ $t("buttons.download") }}</span>
+            </a>
+            <a
+              v-if="!fileStore.req?.isDir"
+              target="_blank"
+              :href="previewUrl"
+              class="btn btn-flex btn-white"
+            >
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              <span>{{ $t("buttons.openFile") }}</span>
             </a>
           </div>
         </div>
@@ -122,25 +191,29 @@
     </template>
 
     <button
+      type="button"
+      class="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-gray-800/60 text-white transition hover:bg-gray-800/90"
+      :class="!hasPrevious || !showNav ? 'opacity-0 invisible' : ''"
+      :aria-label="$t('buttons.previous')"
       @click="prev"
       @mouseover="hoverNav = true"
       @mouseleave="hoverNav = false"
-      :class="{ hidden: !hasPrevious || !showNav }"
-      :aria-label="$t('buttons.previous')"
-      :title="$t('buttons.previous')"
     >
-      <i class="material-icons">chevron_left</i>
+      <i class="fa-solid fa-chevron-left text-lg"></i>
     </button>
+
     <button
+      type="button"
+      class="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-12 h-12 flex items-center justify-center rounded-full bg-gray-800/60 text-white transition hover:bg-gray-800/90"
+      :class="!hasNext || !showNav ? 'opacity-0 invisible' : ''"
+      :aria-label="$t('buttons.next')"
       @click="next"
       @mouseover="hoverNav = true"
       @mouseleave="hoverNav = false"
-      :class="{ hidden: !hasNext || !showNav }"
-      :aria-label="$t('buttons.next')"
-      :title="$t('buttons.next')"
     >
-      <i class="material-icons">chevron_right</i>
+      <i class="fa-solid fa-chevron-right text-lg"></i>
     </button>
+
     <link rel="prefetch" :href="previousRaw" />
     <link rel="prefetch" :href="nextRaw" />
   </div>
@@ -155,8 +228,7 @@ import { files as api } from "@/api";
 import { resizePreview } from "@/utils/constants";
 import url from "@/utils/url";
 import { throttle } from "@/utils/throttle";
-import HeaderBar from "@/components/header/HeaderBar.vue";
-import Action from "@/components/header/Action.vue";
+import { buttonIcon } from "@/utils/buttons";
 import ExtendedImage from "@/components/files/ExtendedImage.vue";
 import VideoPlayer from "@/components/files/VideoPlayer.vue";
 import {

@@ -38,6 +38,19 @@ func TestSecurityHeadersOnEveryRoute(t *testing.T) {
 					t.Errorf("CSP on %s is missing %q: %s", path, directive, csp)
 				}
 			}
+			for _, allowed := range []string{
+				"https://fonts.googleapis.com",
+				"https://kit.fontawesome.com",
+				"https://fonts.gstatic.com",
+				"https://ka-p.fontawesome.com",
+			} {
+				if !strings.Contains(csp, allowed) {
+					t.Errorf("CSP on %s no longer allows %s: %s", path, allowed, csp)
+				}
+			}
+			if strings.Contains(csp, "script-src") {
+				t.Errorf("CSP on %s introduced a script-src exception: %s", path, csp)
+			}
 			if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
 				t.Errorf("Referrer-Policy on %s = %q, want no-referrer", path, got)
 			}

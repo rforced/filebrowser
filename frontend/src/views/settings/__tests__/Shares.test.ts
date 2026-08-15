@@ -288,12 +288,9 @@ describe("Shares.vue", () => {
     await flushPromises();
 
     const deleteButtons = wrapper.findAll("button.action");
-    // Each row has 2 action buttons (delete + copy), so 4 total for 2 rows
     expect(deleteButtons.length).toBe(4);
 
-    const deleteIcons = wrapper
-      .findAll("button.action i.material-icons")
-      .filter((el) => el.text() === "delete");
+    const deleteIcons = wrapper.findAll("button.action i.fa-trash");
     expect(deleteIcons.length).toBe(2);
   });
 });

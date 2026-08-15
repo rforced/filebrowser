@@ -1,13 +1,15 @@
 <template>
-  <div class="card floating">
-    <div class="card-content">
+  <div class="flex flex-col">
+    <div class="px-6 py-4 flex flex-col gap-3">
       <p>
         {{ $t("prompts.discardEditorChanges") }}
       </p>
     </div>
-    <div class="card-action">
+    <div
+      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+    >
       <button
-        class="button button--flat button--grey"
+        class="btn btn-white btn-soft"
         @click="closeHovers"
         :aria-label="$t('buttons.cancel')"
         :title="$t('buttons.cancel')"
@@ -16,7 +18,7 @@
         {{ $t("buttons.cancel") }}
       </button>
       <button
-        class="button button--flat button--blue"
+        class="btn btn-blue btn-soft"
         @click="currentPrompt.saveAction"
         :aria-label="$t('buttons.saveChanges')"
         :title="$t('buttons.saveChanges')"
@@ -27,7 +29,7 @@
       <button
         id="focus-prompt"
         @click="currentPrompt.confirm"
-        class="button button--flat button--red"
+        class="btn btn-red btn-soft"
         :aria-label="$t('buttons.discardChanges')"
         :title="$t('buttons.discardChanges')"
         tabindex="2"

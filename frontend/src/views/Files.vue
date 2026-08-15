@@ -1,25 +1,71 @@
 <template>
-  <div>
-    <header-bar
-      v-if="error || fileStore.req?.type === undefined"
-      showMenu
-      showLogo
-    />
+  <component :is="currentView" v-if="isFullBleed" />
 
-    <breadcrumbs base="/files" />
+  <main v-else class="flex flex-col gap-4 p-4">
+    <Banner :title="title" :subtitle="subtitle">
+      <div class="flex gap-2 items-center">
+        <IconAction
+          v-tooltip="t('buttons.switchView')"
+          :icon="viewIcon"
+          :title="t('buttons.switchView')"
+          @action="switchView"
+        />
+        <IconAction
+          :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
+          :title="t('buttons.selectMultiple')"
+          @action="toggleMultipleSelection"
+        />
+      </div>
+    </Banner>
+
+    <hr class="border-gray-200 dark:border-gray-700" />
+
     <errors v-if="error" :errorCode="error.status" />
-    <component v-else-if="currentView" :is="currentView"></component>
-    <div v-else>
-      <h2 class="message delayed">
-        <div class="spinner">
-          <div class="bounce1"></div>
-          <div class="bounce2"></div>
-          <div class="bounce3"></div>
-        </div>
-        <span>{{ t("files.loading") }}</span>
-      </h2>
-    </div>
-  </div>
+
+    <template v-else>
+      <file-actions v-if="showSidebar" variant="rail" />
+
+      <two-columns v-if="showSidebar">
+        <template #main>
+          <breadcrumbs base="/files" />
+          <component :is="currentView" v-if="currentView" />
+          <Card v-else class="p-10">
+            <div
+              class="flex flex-col items-center gap-3 text-gray-600 dark:text-gray-300"
+            >
+              <i class="fa-solid fa-spinner fa-spin text-3xl"></i>
+              <span class="text-sm font-medium">{{ t("files.loading") }}</span>
+            </div>
+          </Card>
+        </template>
+
+        <template #sidebar>
+          <storage-card v-if="!disableUsedPercentage" />
+          <file-actions variant="stack" />
+          <details-card />
+          <HelpBox
+            :header="t('sidebar.help')"
+            :action="t('sidebar.help')"
+            @action="showHelp"
+          >
+            {{ t("help.help") }}
+          </HelpBox>
+        </template>
+      </two-columns>
+
+      <template v-else>
+        <breadcrumbs base="/files" />
+        <Card class="p-10">
+          <div
+            class="flex flex-col items-center gap-3 text-gray-600 dark:text-gray-300"
+          >
+            <i class="fa-solid fa-spinner fa-spin text-3xl"></i>
+            <span class="text-sm font-medium">{{ t("files.loading") }}</span>
+          </div>
+        </Card>
+      </template>
+    </template>
+  </main>
 </template>
 
 <script setup lang="ts">
@@ -32,19 +78,28 @@ import {
   ref,
   watch,
 } from "vue";
-import { files as api } from "@/api";
-import { storeToRefs } from "pinia";
-import { useFileStore } from "@/stores/file";
-import { useLayoutStore } from "@/stores/layout";
-
-import HeaderBar from "@/components/header/HeaderBar.vue";
-import Breadcrumbs from "@/components/Breadcrumbs.vue";
-import Errors from "@/views/Errors.vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
-import FileListing from "@/views/files/FileListing.vue";
+import { storeToRefs } from "pinia";
+
+import { files as api } from "@/api";
+import { useFileStore } from "@/stores/file";
+import { useLayoutStore } from "@/stores/layout";
 import { StatusError } from "@/api/utils";
-import { name } from "../utils/constants";
+import { name, disableUsedPercentage } from "@/utils/constants";
+import { useFileActions } from "@/composables/useFileActions";
+
+import Breadcrumbs from "@/components/Breadcrumbs.vue";
+import Errors from "@/views/Errors.vue";
+import FileListing from "@/views/files/FileListing.vue";
+import TwoColumns from "@/components/layout/TwoColumns.vue";
+import FileActions from "@/components/files/FileActions.vue";
+import StorageCard from "@/components/files/StorageCard.vue";
+import DetailsCard from "@/components/files/DetailsCard.vue";
+import Banner from "@/components/ui/Banner.vue";
+import Card from "@/components/ui/Card.vue";
+import HelpBox from "@/components/ui/HelpBox.vue";
+import IconAction from "@/components/ui/IconAction.vue";
 
 const Editor = defineAsyncComponent(() => import("@/views/files/Editor.vue"));
 const Preview = defineAsyncComponent(() => import("@/views/files/Preview.vue"));
@@ -57,6 +112,7 @@ const { reload } = storeToRefs(fileStore);
 const route = useRoute();
 
 const { t } = useI18n({});
+const { viewIcon, switchView } = useFileActions();
 
 let fetchDataController = new AbortController();
 
@@ -79,7 +135,36 @@ const currentView = computed(() => {
   }
 });
 
-// Define hooks
+const isFullBleed = computed(
+  () => currentView.value === Editor || currentView.value === Preview
+);
+
+const showSidebar = computed(
+  () => !error.value && fileStore.req?.isDir !== false
+);
+
+const title = computed(() => fileStore.req?.name || t("sidebar.myFiles"));
+
+const subtitle = computed(() => {
+  if (!fileStore.req?.isDir) return undefined;
+
+  const dirs = fileStore.req.numDirs;
+  const files = fileStore.req.numFiles;
+  const parts: string[] = [];
+
+  if (dirs) parts.push(`${dirs} ${t("files.folders").toLowerCase()}`);
+  if (files) parts.push(`${files} ${t("files.files").toLowerCase()}`);
+
+  return parts.length ? parts.join(" · ") : t("files.lonely");
+});
+
+const toggleMultipleSelection = () => {
+  fileStore.toggleMultiple();
+  layoutStore.closeHovers();
+};
+
+const showHelp = () => layoutStore.showHover("help");
+
 onMounted(() => {
   fetchData();
   fileStore.isFiles = true;

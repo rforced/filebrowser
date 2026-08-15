@@ -1,6 +1,6 @@
 <template>
-  <div class="card floating">
-    <div class="card-title">
+  <div class="flex flex-col">
+    <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
       <h2>
         {{
           personalized
@@ -10,7 +10,7 @@
       </h2>
     </div>
 
-    <div class="card-content">
+    <div class="px-6 py-4 flex flex-col gap-3">
       <template v-if="personalized">
         <p v-if="isUploadAction != true">
           {{ $t("prompts.singleConflictResolve") }}
@@ -98,32 +98,35 @@
 
         <div class="result-buttons">
           <button @click="(e) => resolve(e, ['origin'])">
-            <i class="material-icons">done_all</i>
+            <i class="fa-solid fa-check-double"></i>
             {{ $t("buttons.overrideAll") }}
           </button>
           <button
             v-if="isUploadAction != true"
             @click="(e) => resolve(e, ['origin', 'dest'])"
           >
-            <i class="material-icons">folder_copy</i>
+            <i class="fa-solid fa-copy"></i>
             {{ $t("buttons.renameAll") }}
           </button>
           <button @click="(e) => resolve(e, ['dest'])">
-            <i class="material-icons">undo</i>
+            <i class="fa-solid fa-rotate-left"></i>
             {{ $t("buttons.skipAll") }}
           </button>
           <button @click="personalized = true">
-            <i class="material-icons">checklist</i>
+            <i class="fa-solid fa-list-check"></i>
             {{ $t("buttons.singleDecision") }}
           </button>
         </div>
       </template>
     </div>
 
-    <div class="card-action" style="display: flex; justify-content: end">
+    <div
+      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+      style="display: flex; justify-content: end"
+    >
       <div>
         <button
-          class="button button--flat button--grey"
+          class="btn btn-white btn-soft"
           @click="close"
           :aria-label="$t('buttons.cancel')"
           :title="$t('buttons.cancel')"
@@ -134,7 +137,7 @@
         <button
           v-if="personalized"
           id="focus-prompt"
-          class="button button--flat"
+          class="btn btn-blue btn-soft"
           @click="(event) => currentPrompt?.confirm(event, conflict)"
           :aria-label="$t('buttons.ok')"
           :title="$t('buttons.ok')"

@@ -3,12 +3,12 @@
   <div class="row" v-else-if="!layoutStore.loading">
     <div class="column">
       <form @submit="save" class="card">
-        <div class="card-title">
+        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
           <h2 v-if="user?.id === 0">{{ $t("settings.newUser") }}</h2>
           <h2 v-else>{{ $t("settings.user") }} {{ user?.username }}</h2>
         </div>
 
-        <div class="card-content" v-if="user">
+        <div class="px-6 py-4 flex flex-col gap-3" v-if="user">
           <user-form
             v-model:user="user"
             v-model:createUserDir="createUserDir"
@@ -17,12 +17,14 @@
           />
         </div>
 
-        <div class="card-action">
+        <div
+          class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+        >
           <button
             v-if="!isNew"
             @click.prevent="deletePrompt"
             type="button"
-            class="button button--flat button--red"
+            class="btn btn-red btn-soft"
             :aria-label="$t('buttons.delete')"
             :title="$t('buttons.delete')"
           >
@@ -30,7 +32,7 @@
           </button>
           <router-link to="/settings/users">
             <button
-              class="button button--flat button--grey"
+              class="btn btn-white btn-soft"
               :aria-label="$t('buttons.cancel')"
               :title="$t('buttons.cancel')"
             >
@@ -38,7 +40,7 @@
             </button>
           </router-link>
           <input
-            class="button button--flat"
+            class="btn btn-blue btn-soft"
             type="submit"
             :value="$t('buttons.save')"
           />

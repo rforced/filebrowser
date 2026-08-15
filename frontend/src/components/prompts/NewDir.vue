@@ -1,14 +1,14 @@
 <template>
-  <div class="card floating">
-    <div class="card-title">
+  <div class="flex flex-col">
+    <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
       <h2>{{ t("prompts.newDir") }}</h2>
     </div>
 
-    <div class="card-content">
+    <div class="px-6 py-4 flex flex-col gap-3">
       <p>{{ t("prompts.newDirMessage") }}</p>
       <input
         id="focus-prompt"
-        class="input input--block"
+        class="form-control"
         type="text"
         @keyup.enter="submit"
         v-model.trim="name"
@@ -17,9 +17,11 @@
       <CreateFilePath :name="name" :is-dir="true" :path="base" />
     </div>
 
-    <div class="card-action">
+    <div
+      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+    >
       <button
-        class="button button--flat button--grey"
+        class="btn btn-white btn-soft"
         @click="layoutStore.closeHovers"
         :aria-label="t('buttons.cancel')"
         :title="t('buttons.cancel')"
@@ -28,7 +30,7 @@
         {{ t("buttons.cancel") }}
       </button>
       <button
-        class="button button--flat"
+        class="btn btn-blue btn-soft"
         :aria-label="$t('buttons.create')"
         :title="t('buttons.create')"
         @click="submit"

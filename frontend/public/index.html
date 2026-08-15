@@ -5,9 +5,17 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    [{[ if .Domain -]}]
-    <link rel="stylesheet" href="https://kit.fontawesome.com/15eb3be31d.css" crossorigin="anonymous" />
-    [{[ end ]}]
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400..800&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://kit.fontawesome.com/15eb3be31d.css"
+      crossorigin="anonymous"
+    />
 
     <title>
       [{[ if .Name -]}][{[ .Name ]}][{[ else ]}]File Browser[{[ end ]}]
@@ -36,7 +44,7 @@
     />
     <meta
       name="theme-color"
-      content="[{[ if .Color -]}][{[ .Color ]}][{[ else ]}]#2979ff[{[ end ]}]"
+      content="[{[ if .Color -]}][{[ .Color ]}][{[ else ]}]#225885[{[ end ]}]"
     />
 
     <!-- Inject Some Variables and generate the manifest json -->
@@ -78,7 +86,7 @@
         start_url: window.location.origin + window.FileBrowser.BaseURL,
         display: "standalone",
         background_color: "#ffffff",
-        theme_color: window.FileBrowser.Color || "#455a64",
+        theme_color: window.FileBrowser.Color || "#225885",
       };
 
       const stringManifest = JSON.stringify(dynamicManifest);
@@ -89,17 +97,45 @@
         .setAttribute("href", manifestURL);
     </script>
 
+    <script>
+      // Resolve the colour theme before first paint, otherwise a dark-mode user
+      // sees a white flash while the bundle loads. Mirrors Horizon's
+      // components/layouts/master.blade.php; the key and the precedence must
+      // match src/utils/theme.ts.
+      (function () {
+        var stored = localStorage.getItem("color-theme-preference");
+        var preference =
+          stored === "light" || stored === "dark" || stored === "system"
+            ? stored
+            : window.FileBrowser.Theme === "light" ||
+                window.FileBrowser.Theme === "dark"
+              ? window.FileBrowser.Theme
+              : "system";
+        var prefersDark = window.matchMedia(
+          "(prefers-color-scheme: dark)"
+        ).matches;
+        var isDark =
+          preference === "dark" || (preference === "system" && prefersDark);
+        document.documentElement.classList.toggle("dark", isDark);
+        localStorage.setItem("color-theme", isDark ? "dark" : "light");
+      })();
+    </script>
+
     <style>
+      /*
+        Inline so it applies before the bundle's stylesheet arrives. Kept in sync
+        with the #loading rules in src/css/app.css, which take over afterwards.
+      */
       #loading {
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: #fff;
+        inset: 0;
+        background: #f9fafb;
         z-index: 9999;
         transition: 0.1s ease opacity;
-        -webkit-transition: 0.1s ease opacity;
+      }
+
+      html.dark #loading {
+        background: #111827;
       }
 
       #loading.done {
@@ -112,50 +148,37 @@
         position: fixed;
         top: 50%;
         left: 50%;
-        -webkit-transform: translate(-50%, -50%);
         transform: translate(-50%, -50%);
       }
 
       #loading .spinner > div {
         width: 18px;
         height: 18px;
-        background-color: #333;
+        background-color: #225885;
         border-radius: 100%;
         display: inline-block;
-        -webkit-animation: sk-bouncedelay 1.4s infinite ease-in-out both;
         animation: sk-bouncedelay 1.4s infinite ease-in-out both;
       }
 
+      html.dark #loading .spinner > div {
+        background-color: #88ddef;
+      }
+
       #loading .spinner .bounce1 {
-        -webkit-animation-delay: -0.32s;
         animation-delay: -0.32s;
       }
 
       #loading .spinner .bounce2 {
-        -webkit-animation-delay: -0.16s;
         animation-delay: -0.16s;
-      }
-
-      @-webkit-keyframes sk-bouncedelay {
-        0%,
-        80%,
-        100% {
-          -webkit-transform: scale(0);
-        }
-        40% {
-          -webkit-transform: scale(1);
-        }
       }
 
       @keyframes sk-bouncedelay {
         0%,
         80%,
         100% {
-          -webkit-transform: scale(0);
           transform: scale(0);
         }
         40% {
-          -webkit-transform: scale(1);
           transform: scale(1);
         }
       }
@@ -173,6 +196,5 @@
     </div>
 
     <script type="module" src="/src/main.ts"></script>
-
   </body>
 </html>

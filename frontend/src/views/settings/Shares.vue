@@ -3,11 +3,14 @@
   <div class="row" v-else-if="!layoutStore.loading">
     <div class="column">
       <div class="card">
-        <div class="card-title">
+        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
           <h2>{{ t("settings.shareManagement") }}</h2>
         </div>
 
-        <div class="card-content full" v-if="links.length > 0">
+        <div
+          class="px-6 py-4 flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto"
+          v-if="links.length > 0"
+        >
           <table>
             <thead>
               <tr>
@@ -40,7 +43,7 @@
                     :aria-label="t('buttons.delete')"
                     :title="t('buttons.delete')"
                   >
-                    <i class="material-icons">delete</i>
+                    <i class="fa-solid fa-trash"></i>
                   </button>
                 </td>
                 <td class="small">
@@ -50,7 +53,7 @@
                     :title="t('buttons.copyToClipboard')"
                     @click="copyToClipboard(buildLink(link))"
                   >
-                    <i class="material-icons">content_paste</i>
+                    <i class="fa-solid fa-paste"></i>
                   </button>
                 </td>
               </tr>

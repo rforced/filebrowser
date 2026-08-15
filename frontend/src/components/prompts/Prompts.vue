@@ -1,9 +1,14 @@
 <template>
-  <base-modal v-if="modal != null" :prompt="currentPromptName" @closed="close">
+  <Modal
+    v-if="modal != null"
+    :size="size"
+    :close-button="false"
+    @closed="close"
+  >
     <keep-alive>
       <component :is="modal" />
     </keep-alive>
-  </base-modal>
+  </Modal>
 </template>
 
 <script setup lang="ts">
@@ -11,7 +16,7 @@ import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useLayoutStore } from "@/stores/layout";
 
-import BaseModal from "./BaseModal.vue";
+import Modal from "@/components/ui/Modal.vue";
 import Help from "./Help.vue";
 import Info from "./Info.vue";
 import Delete from "./Delete.vue";
@@ -58,12 +63,25 @@ const components = new Map<string, any>([
   ["converge-clean", ConvergeClean],
 ]);
 
-const modal = computed(() => {
-  const modal = components.get(currentPromptName.value!);
-  if (!modal) null;
+/*
+ * Prompts that show a file tree, a directory picker or a conflict list need
+ * more width than a confirmation dialog. Anything unlisted gets the default.
+ */
+const WIDE_PROMPTS = new Set([
+  "move",
+  "copy",
+  "info",
+  "help",
+  "resolve-conflict",
+  "converge-clean",
+  "share",
+]);
 
-  return modal;
-});
+const modal = computed(() => components.get(currentPromptName.value!));
+
+const size = computed(() =>
+  WIDE_PROMPTS.has(currentPromptName.value ?? "") ? "lg" : "md"
+);
 
 const close = () => {
   if (!layoutStore.currentPrompt) return;

@@ -1,12 +1,9 @@
 <template>
   <div
-    class="context-menu"
-    ref="contextMenu"
     v-show="show"
-    :style="{
-      top: `${props.pos.y}px`,
-      left: `${left}px`,
-    }"
+    ref="contextMenu"
+    class="absolute min-w-48 max-w-[80svw] overflow-hidden border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 py-1 rounded-md shadow-lg z-50"
+    :style="{ top: `${props.pos.y}px`, left: `${left}px` }"
   >
     <slot />
   </div>

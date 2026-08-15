@@ -85,7 +85,7 @@ export default {
   >
     <button @click="isOpen = !isOpen" class="dropdown-modal-trigger">
       <slot></slot>
-      <i class="material-icons">chevron_right</i>
+      <i class="fa-solid fa-chevron-right"></i>
     </button>
 
     <teleport to="body">

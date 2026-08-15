@@ -63,3 +63,5 @@ interface IRegexp {
 }
 
 type UserTheme = "light" | "dark" | "";
+type ThemePreference = "light" | "dark" | "system";
+type ResolvedTheme = "light" | "dark";

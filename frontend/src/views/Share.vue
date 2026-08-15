@@ -1,312 +1,257 @@
 <template>
-  <div>
-    <header-bar showMenu showLogo>
-      <title />
+  <main class="flex flex-col gap-4 p-4">
+    <Banner
+      :title="req?.name || t('buttons.share')"
+      :subtitle="
+        req
+          ? req.isDir
+            ? t('download.downloadFolder')
+            : t('download.downloadFile')
+          : undefined
+      "
+    >
+      <div v-if="req" class="flex gap-2 items-center">
+        <IconAction
+          v-if="isSingleFile()"
+          icon="fa-paste"
+          :title="t('buttons.copyDownloadLinkToClipboard')"
+          @action="copyToClipboard(linkSelected())"
+        />
+        <IconAction
+          v-if="req.isDir"
+          :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
+          :title="t('buttons.selectMultiple')"
+          @action="toggleMultipleSelection"
+        />
+        <button
+          v-if="fileStore.selectedCount"
+          type="button"
+          class="btn btn-flex btn-blue btn-soft"
+          @click="download"
+        >
+          <i class="fa-solid fa-download"></i>
+          <span>
+            {{ t("buttons.download") }}
+            <template v-if="fileStore.selectedCount > 1"
+              >({{ fileStore.selectedCount }})</template
+            >
+          </span>
+        </button>
+      </div>
+    </Banner>
 
-      <action
-        v-if="fileStore.selectedCount"
-        icon="file_download"
-        :label="t('buttons.download')"
-        @action="download"
-        :counter="fileStore.selectedCount"
-      />
-      <button
-        v-if="isSingleFile()"
-        class="action copy-clipboard"
-        :aria-label="t('buttons.copyDownloadLinkToClipboard')"
-        :data-title="t('buttons.copyDownloadLinkToClipboard')"
-        @click="copyToClipboard(linkSelected())"
+    <hr class="border-gray-200 dark:border-gray-700" />
+
+    <Card v-if="layoutStore.loading" class="p-10">
+      <div
+        class="flex flex-col items-center gap-3 text-gray-600 dark:text-gray-300"
       >
-        <i class="material-icons">content_paste</i>
-      </button>
-      <action
-        icon="check_circle"
-        :label="t('buttons.selectMultiple')"
-        @action="toggleMultipleSelection"
-      />
-    </header-bar>
-
-    <breadcrumbs :base="'/share/' + hash" />
-
-    <div v-if="layoutStore.loading">
-      <h2 class="message delayed" style="padding-top: 3em !important">
-        <div class="spinner">
-          <div class="bounce1"></div>
-          <div class="bounce2"></div>
-          <div class="bounce3"></div>
-        </div>
-        <span>{{ t("files.loading") }}</span>
-      </h2>
-    </div>
-    <div v-else-if="error">
-      <div v-if="error.status === 401">
-        <div class="card floating" id="password" style="z-index: 9999999">
-          <div v-if="attemptedPasswordLogin" class="share__wrong__password">
-            {{ t("login.wrongCredentials") }}
-          </div>
-          <div class="card-title">
-            <h2>{{ t("login.password") }}</h2>
-          </div>
-
-          <div class="card-content">
-            <input
-              v-focus
-              class="input input--block"
-              type="password"
-              :placeholder="t('login.password')"
-              v-model="password"
-              @keyup.enter="fetchData"
-            />
-          </div>
-          <div class="card-action">
-            <button
-              class="button button--flat"
-              @click="fetchData"
-              :aria-label="t('buttons.submit')"
-              :data-title="t('buttons.submit')"
-            >
-              {{ t("buttons.submit") }}
-            </button>
-          </div>
-        </div>
-        <div class="overlay" />
+        <i class="fa-solid fa-spinner fa-spin text-3xl"></i>
+        <span class="text-sm font-medium">{{ t("files.loading") }}</span>
       </div>
-      <errors v-else :errorCode="error.status" />
-    </div>
-    <div v-else-if="req !== null">
-      <div class="share">
-        <div
-          class="share__box share__box__info"
-          style="
-            position: -webkit-sticky;
-            position: sticky;
-            top: -20.6em;
-            z-index: 999;
-          "
-        >
-          <div class="share__box__header" style="height: 3em">
-            {{
-              req.isDir
-                ? t("download.downloadFolder")
-                : t("download.downloadFile")
-            }}
-          </div>
-          <div
-            v-if="!req.isDir"
-            class="share__box__element share__box__center share__box__icon"
-          >
-            <i class="material-icons">{{ icon }}</i>
-          </div>
-          <div class="share__box__element" style="height: 3em">
-            <strong>{{ $t("prompts.displayName") }}</strong> {{ req.name }}
-          </div>
-          <div v-if="!req.isDir" class="share__box__element" :title="modTime">
-            <strong>{{ $t("prompts.lastModified") }}:</strong> {{ humanTime }}
-          </div>
-          <div class="share__box__element" style="height: 3em">
-            <strong>{{ $t("prompts.size") }}:</strong> {{ humanSize }}
-          </div>
-          <div class="share__box__element share__box__center">
-            <a
-              target="_blank"
-              :href="link"
-              class="button button--flat"
-              style="height: 4em"
-            >
-              <div>
-                <i class="material-icons">file_download</i
-                >{{ t("buttons.download") }}
-              </div>
-            </a>
-            <a
-              target="_blank"
-              :href="inlineLink"
-              class="button button--flat"
-              v-if="!req.isDir"
-            >
-              <div>
-                <i class="material-icons">open_in_new</i
-                >{{ t("buttons.openFile") }}
-              </div>
-            </a>
-            <qrcode-vue
-              v-if="req.isDir"
-              :value="link"
-              :size="100"
-              level="M"
-            ></qrcode-vue>
-          </div>
-          <div v-if="!req.isDir" class="share__box__element share__box__center">
-            <qrcode-vue :value="link" :size="200" level="M"></qrcode-vue>
-          </div>
-          <div
-            v-if="req.isDir"
-            class="share__box__element share__box__header"
-            style="height: 3em"
-          >
-            {{ $t("sidebar.preview") }}
-          </div>
-          <div
-            v-if="req.isDir"
-            class="share__box__element share__box__center share__box__icon"
-            style="padding: 0em !important; height: 12em !important"
-          >
-            <a
-              target="_blank"
-              :href="raw"
-              class="button button--flat"
-              v-if="
-                !fileStore.multiple &&
-                fileStore.selectedCount === 1 &&
-                req.items[fileStore.selected[0]].type === 'image'
-              "
-              style="height: 12em; padding: 0; margin: 0"
-            >
-              <img
-                style="height: 12em"
-                :src="raw"
-                :alt="req.items[fileStore.selected[0]].name"
-              />
-            </a>
-            <div
-              v-else-if="
-                fileStore.multiple &&
-                fileStore.selectedCount === 1 &&
-                req.items[fileStore.selected[0]].type === 'audio'
-              "
-              style="height: 12em; padding-top: 1em; margin: 0"
-            >
-              <button
-                @click="play"
-                v-if="!tag"
-                style="
-                  font-size: 6em !important;
-                  border: 0px;
-                  outline: none;
-                  background: white;
-                "
-                class="material-icons"
-              >
-                play_circle_filled
-              </button>
-              <button
-                @click="play"
-                v-if="tag"
-                style="
-                  font-size: 6em !important;
-                  border: 0px;
-                  outline: none;
-                  background: white;
-                "
-                class="material-icons"
-              >
-                pause_circle_filled
-              </button>
-              <audio
-                id="myaudio"
-                ref="audio"
-                :src="raw"
-                controls
-                :autoplay="tag"
-              ></audio>
-            </div>
-            <video
-              v-else-if="
-                !fileStore.multiple &&
-                fileStore.selectedCount === 1 &&
-                req.items[fileStore.selected[0]].type === 'video'
-              "
-              style="height: 12em; padding: 0; margin: 0"
-              :src="raw"
-              controls
-            >
-              Sorry, your browser doesn't support embedded videos, but don't
-              worry, you can <a :href="raw">download it</a>
-              and watch it with your favorite video player!
-            </video>
+    </Card>
+
+    <template v-else-if="error">
+      <Card v-if="error.status === 401" class="w-full max-w-sm mx-auto">
+        <div class="flex flex-col gap-4 p-6">
+          <div class="flex flex-col items-center gap-2 text-center">
             <i
-              v-else-if="
-                !fileStore.multiple &&
-                fileStore.selectedCount === 1 &&
-                req.items[fileStore.selected[0]].isDir
-              "
-              class="material-icons"
-              >folder
-            </i>
-            <i v-else class="material-icons">call_to_action</i>
+              class="fa-solid fa-lock text-3xl text-gray-500 dark:text-gray-400"
+            ></i>
+            <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+              {{ t("login.password") }}
+            </h2>
           </div>
+
+          <div
+            v-if="attemptedPasswordLogin"
+            class="flex gap-2 items-start rounded-md bg-red-50 dark:bg-red-900/40 px-3 py-2 text-sm text-red-700 dark:text-red-200"
+            role="alert"
+          >
+            <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
+            <span>{{ t("login.wrongCredentials") }}</span>
+          </div>
+
+          <input
+            v-focus
+            v-model="password"
+            class="form-control"
+            type="password"
+            autocomplete="current-password"
+            :placeholder="t('login.password')"
+            @keyup.enter="fetchData"
+          />
+
+          <button type="button" class="btn btn-blue w-full" @click="fetchData">
+            {{ t("buttons.submit") }}
+          </button>
         </div>
-        <div
-          id="shareList"
-          v-if="req.isDir && req.items.length > 0"
-          class="share__box share__box__items"
-        >
-          <div class="share__box__header" v-if="req.isDir">
-            {{ t("files.files") }}
-          </div>
-          <div id="listing" class="list file-icons">
-            <item
-              v-for="item in req.items.slice(0, showLimit)"
-              :key="base64(item.name)"
-              v-bind:index="item.index"
-              v-bind:name="item.name"
-              v-bind:isDir="item.isDir"
-              v-bind:url="item.url"
-              v-bind:modified="item.modified"
-              v-bind:type="item.type"
-              v-bind:size="item.size"
-              readOnly
-            >
-            </item>
+      </Card>
+
+      <errors v-else :errorCode="error.status" />
+    </template>
+
+    <template v-else-if="req !== null">
+      <breadcrumbs :base="'/share/' + hash" />
+
+      <two-columns>
+        <template #main>
+          <!-- Directory contents -->
+          <template v-if="req.isDir">
+            <Card v-if="req.items.length === 0" class="p-10">
+              <div
+                class="flex flex-col items-center gap-2 text-center text-gray-600 dark:text-gray-300"
+              >
+                <i class="fa-solid fa-folder-open text-4xl"></i>
+                <div class="text-sm font-medium">{{ t("files.lonely") }}</div>
+              </div>
+            </Card>
+
+            <Card v-else id="listing" class="file-icons overflow-hidden">
+              <item
+                v-for="item in req.items.slice(0, showLimit)"
+                :key="base64(item.name)"
+                :index="item.index"
+                :name="item.name"
+                :isDir="item.isDir"
+                :url="item.url"
+                :modified="item.modified"
+                :type="item.type"
+                :size="item.size"
+                readOnly
+              />
+
+              <button
+                v-if="req.items.length > showLimit"
+                type="button"
+                class="w-full px-4 py-3 text-sm font-medium text-blue-600 dark:text-teal hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                @click="showLimit += 100"
+              >
+                + {{ req.items.length - showLimit }}
+              </button>
+            </Card>
+          </template>
+
+          <!-- Single-file preview -->
+          <Card
+            v-else
+            class="flex flex-col items-center justify-center gap-4 p-10"
+          >
+            <i class="fa-solid text-6xl" :class="[icon.icon, icon.color]"></i>
             <div
-              v-if="req.items.length > showLimit"
-              class="item"
-              @click="showLimit += 100"
+              class="text-sm font-medium text-gray-700 dark:text-gray-200 break-all text-center"
             >
+              {{ req.name }}
+            </div>
+          </Card>
+        </template>
+
+        <template #sidebar>
+          <Card class="flex flex-col gap-4 p-6">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+              {{
+                req.isDir
+                  ? t("download.downloadFolder")
+                  : t("download.downloadFile")
+              }}
+            </h3>
+
+            <div class="flex flex-col gap-3">
               <div>
-                <p class="name">+ {{ req.items.length - showLimit }}</p>
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                  {{ t("prompts.displayName") }}
+                </div>
+                <div class="font-medium text-sm break-all">{{ req.name }}</div>
+              </div>
+
+              <div v-if="!req.isDir" :title="modTime">
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                  {{ t("prompts.lastModified") }}
+                </div>
+                <div class="font-medium text-sm">{{ humanTime }}</div>
+              </div>
+
+              <div>
+                <div class="text-sm text-gray-600 dark:text-gray-300">
+                  {{ req.isDir ? t("files.files") : t("prompts.size") }}
+                </div>
+                <div class="font-medium text-sm">{{ humanSize }}</div>
               </div>
             </div>
 
-            <div
-              :class="{ active: fileStore.multiple }"
-              id="multiple-selection"
-            >
-              <p>{{ t("files.multipleSelectionEnabled") }}</p>
-              <div
-                @click="() => (fileStore.multiple = false)"
-                tabindex="0"
-                role="button"
-                :data-title="t('buttons.clear')"
-                :aria-label="t('buttons.clear')"
-                class="action"
+            <div class="flex flex-col gap-2">
+              <a
+                target="_blank"
+                :href="link"
+                class="btn btn-menu btn-blue btn-soft"
               >
-                <i class="material-icons">clear</i>
-              </div>
+                <i class="fa-solid fa-download fa-fw"></i>
+                <span>{{ t("buttons.download") }}</span>
+              </a>
+
+              <a
+                v-if="!req.isDir"
+                target="_blank"
+                :href="inlineLink"
+                class="btn btn-menu btn-white btn-soft"
+              >
+                <i class="fa-solid fa-arrow-up-right-from-square fa-fw"></i>
+                <span>{{ t("buttons.openFile") }}</span>
+              </a>
             </div>
-          </div>
-        </div>
-        <div
-          v-else-if="req.isDir && req.items.length === 0"
-          class="share__box share__box__items"
+          </Card>
+
+          <!-- Scan-to-download -->
+          <Card class="flex flex-col items-center gap-3 p-6">
+            <qrcode-vue
+              :value="link"
+              :size="180"
+              level="M"
+              class="rounded-xs"
+            />
+          </Card>
+        </template>
+      </two-columns>
+    </template>
+
+    <!-- Multiple-selection mode indicator -->
+    <Transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="translate-y-full"
+      leave-active-class="transition ease-in duration-200"
+      leave-to-class="translate-y-full"
+    >
+      <div
+        v-if="fileStore.multiple"
+        id="multiple-selection"
+        class="fixed bottom-0 left-0 w-full z-[99999] bg-blue-500 dark:bg-teal-600 text-white dark:text-blue-900 flex items-center justify-between gap-4 px-4 py-3"
+      >
+        <p class="text-sm font-medium">
+          {{ t("files.multipleSelectionEnabled") }}
+        </p>
+        <button
+          type="button"
+          class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-black/10 transition"
+          :aria-label="t('buttons.clear')"
+          @click="fileStore.multiple = false"
         >
-          <h2 class="message">
-            <span>{{ t("files.lonely") }}</span>
-          </h2>
-        </div>
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
-    </div>
-  </div>
+    </Transition>
+  </main>
 </template>
 
 <script setup lang="ts">
 import { pub as api } from "@/api";
 import { base64url, filesize } from "@/utils";
 import dayjs from "dayjs";
-import { createURL } from "@/api/utils";
-import HeaderBar from "@/components/header/HeaderBar.vue";
-import Action from "@/components/header/Action.vue";
 import Breadcrumbs from "@/components/Breadcrumbs.vue";
+import Banner from "@/components/ui/Banner.vue";
+import Card from "@/components/ui/Card.vue";
+import IconAction from "@/components/ui/IconAction.vue";
+import TwoColumns from "@/components/layout/TwoColumns.vue";
+import { fileIcon } from "@/utils/fileIcons";
 import Errors from "@/views/Errors.vue";
 import QrcodeVue from "qrcode.vue";
 import Item from "@/components/files/ListingItem.vue";
@@ -323,8 +268,6 @@ const showLimit = ref<number>(100);
 const password = ref<string>("");
 const attemptedPasswordLogin = ref<boolean>(false);
 const hash = ref<string>("");
-const audio = ref<HTMLAudioElement>();
-const tag = ref<boolean>(false);
 
 const $showError = inject<IToastError>("$showError")!;
 const $showSuccess = inject<IToastSuccess>("$showSuccess")!;
@@ -344,25 +287,20 @@ const req = computed(() => fileStore.req);
 
 // Define computes
 
-const icon = computed(() => {
-  if (req.value === null) return "insert_drive_file";
-  if (req.value.isDir) return "folder";
-  if (req.value.type === "image") return "insert_photo";
-  if (req.value.type === "audio") return "volume_up";
-  if (req.value.type === "video") return "movie";
-  return "insert_drive_file";
-});
+const icon = computed(() =>
+  fileIcon({
+    isDir: req.value?.isDir,
+    type: req.value?.type,
+    extension: req.value?.name
+      .slice(req.value.name.lastIndexOf("."))
+      .toLowerCase(),
+    name: req.value?.name,
+  })
+);
 
 const link = computed(() =>
   req.value ? api.getDownloadURL(req.value, false, password.value) : ""
 );
-const raw = computed(() => {
-  if (!req.value || !req.value.items[fileStore.selected[0]]) return "";
-  return createURL(
-    `api/public/dl/${hash.value}${req.value.items[fileStore.selected[0]].path}`,
-    { ...(password.value && { password: password.value }) }
-  );
-});
 const inlineLink = computed(() =>
   req.value ? api.getDownloadURL(req.value, true, password.value) : ""
 );
@@ -384,15 +322,6 @@ const modTime = computed(() =>
 
 // Functions
 const base64 = (name: string) => base64url(name);
-const play = () => {
-  if (tag.value) {
-    audio.value?.pause();
-    tag.value = false;
-  } else {
-    audio.value?.play();
-    tag.value = true;
-  }
-};
 const fetchData = async () => {
   fileStore.reload = false;
   fileStore.selected = [];
@@ -524,20 +453,3 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", keyEvent);
 });
 </script>
-
-<style scoped>
-#listing.list {
-  height: auto;
-}
-
-#shareList {
-  overflow-y: scroll;
-}
-
-@media (min-width: 930px) {
-  #shareList {
-    height: calc(100vh - 9.8em);
-    overflow-y: auto;
-  }
-}
-</style>

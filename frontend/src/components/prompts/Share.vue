@@ -1,11 +1,11 @@
 <template>
-  <div class="card floating" id="share">
-    <div class="card-title">
+  <div class="flex flex-col" id="share">
+    <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
       <h2>{{ t("buttons.share") }}</h2>
     </div>
 
     <template v-if="listing">
-      <div class="card-content">
+      <div class="px-6 py-4 flex flex-col gap-3">
         <table>
           <tr>
             <th>#</th>
@@ -29,7 +29,7 @@
                 :title="t('buttons.copyToClipboard')"
                 @click="copyToClipboard(buildLink(link))"
               >
-                <i class="material-icons">content_paste</i>
+                <i class="fa-solid fa-paste"></i>
               </button>
             </td>
             <td class="small">
@@ -39,16 +39,18 @@
                 :aria-label="t('buttons.delete')"
                 :title="t('buttons.delete')"
               >
-                <i class="material-icons">delete</i>
+                <i class="fa-solid fa-trash"></i>
               </button>
             </td>
           </tr>
         </table>
       </div>
 
-      <div class="card-action">
+      <div
+        class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+      >
         <button
-          class="button button--flat button--grey"
+          class="btn btn-white btn-soft"
           @click="layoutStore.closeHovers"
           :aria-label="t('buttons.close')"
           :title="t('buttons.close')"
@@ -58,7 +60,7 @@
         </button>
         <button
           id="focus-prompt"
-          class="button button--flat button--blue"
+          class="btn btn-blue btn-soft"
           @click="() => switchListing()"
           :aria-label="t('buttons.new')"
           :title="t('buttons.new')"
@@ -70,9 +72,9 @@
     </template>
 
     <template v-else>
-      <div class="card-content">
+      <div class="px-6 py-4 flex flex-col gap-3">
         <p>{{ t("settings.shareDuration") }}</p>
-        <div class="input-group input">
+        <div class="form-control">
           <vue-number-input
             center
             controls
@@ -97,7 +99,7 @@
         </div>
         <p>{{ t("settings.password") }}</p>
         <input
-          class="input input--block"
+          class="form-control"
           type="password"
           v-model.trim="password"
           required
@@ -105,9 +107,11 @@
         />
       </div>
 
-      <div class="card-action">
+      <div
+        class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+      >
         <button
-          class="button button--flat button--grey"
+          class="btn btn-white btn-soft"
           @click="() => switchListing()"
           :aria-label="t('buttons.cancel')"
           :title="t('buttons.cancel')"
@@ -117,7 +121,7 @@
         </button>
         <button
           id="focus-prompt"
-          class="button button--flat button--blue"
+          class="btn btn-blue btn-soft"
           @click="submit"
           :aria-label="t('buttons.share')"
           :title="t('buttons.share')"

@@ -1,6 +1,6 @@
 <template>
-  <div class="card floating">
-    <div class="card-content">
+  <div class="flex flex-col">
+    <div class="px-6 py-4 flex flex-col gap-3">
       <p v-if="!fileStore.isListing || fileStore.selectedCount === 1">
         {{ t("prompts.deleteMessageSingle") }}
       </p>
@@ -10,10 +10,12 @@
         }}
       </p>
     </div>
-    <div class="card-action">
+    <div
+      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+    >
       <button
         @click="layoutStore.closeHovers"
-        class="button button--flat button--grey"
+        class="btn btn-white btn-soft"
         :aria-label="t('buttons.cancel')"
         :title="t('buttons.cancel')"
         tabindex="2"
@@ -23,7 +25,7 @@
       <button
         id="focus-prompt"
         @click="submit"
-        class="button button--flat button--red"
+        class="btn btn-red btn-soft"
         :aria-label="t('buttons.delete')"
         :title="t('buttons.delete')"
         tabindex="1"

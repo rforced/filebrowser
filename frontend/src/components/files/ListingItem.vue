@@ -1,9 +1,15 @@
 <template>
   <div
-    class="item"
+    class="item group relative cursor-pointer select-none transition"
+    :class="[layoutClass, stateClass, muted ? 'opacity-40' : '']"
     role="button"
     tabindex="0"
     :draggable="isDraggable"
+    :data-dir="isDir"
+    :data-type="type"
+    :aria-label="name"
+    :aria-selected="isSelected"
+    :data-ext="getExtension(name).toLowerCase()"
     @dragstart="dragStart"
     @dragover="dragOver"
     @drop="drop"
@@ -15,29 +21,55 @@
     @touchend="handleTouchEnd"
     @touchcancel="handleTouchCancel"
     @touchmove="handleTouchMove"
-    :data-dir="isDir"
-    :data-type="type"
-    :aria-label="name"
-    :aria-selected="isSelected"
-    :data-ext="getExtension(name).toLowerCase()"
     @contextmenu="contextMenu"
   >
-    <div>
+    <!-- Icon / thumbnail -->
+    <div
+      class="shrink-0 flex items-center justify-center"
+      :class="iconWrapClass"
+    >
       <img
-        v-if="!readOnly && type === 'image' && isThumbsEnabled"
+        v-if="showThumbnail"
         v-lazy="thumbnailUrl"
         :alt="name"
+        class="object-cover"
+        :class="isGallery ? 'w-full h-full' : 'w-full h-full rounded-xs'"
       />
-      <i v-else class="material-icons"></i>
+      <i
+        v-else
+        class="fa-solid"
+        :class="[
+          icon.icon,
+          isSelected ? 'text-current' : icon.color,
+          iconSizeClass,
+        ]"
+      ></i>
     </div>
 
-    <div>
-      <p class="name">{{ name }}</p>
+    <!-- Metadata -->
+    <div :class="metaWrapClass">
+      <p class="name truncate" :class="isDir ? 'font-semibold' : ''">
+        {{ name }}
+      </p>
 
-      <p v-if="isDir" class="size" data-order="-1">&mdash;</p>
-      <p v-else class="size" :data-order="humanSize()">{{ humanSize() }}</p>
+      <p
+        v-if="isDir"
+        class="size text-sm tabular-nums"
+        :class="[sizeClass, secondaryClass]"
+        data-order="-1"
+      >
+        &mdash;
+      </p>
+      <p
+        v-else
+        class="size text-sm tabular-nums"
+        :class="[sizeClass, secondaryClass]"
+        :data-order="humanSize()"
+      >
+        {{ humanSize() }}
+      </p>
 
-      <p class="modified">
+      <p class="modified text-sm" :class="[modifiedClass, secondaryClass]">
         <time :datetime="modified">{{ humanTime() }}</time>
       </p>
     </div>
@@ -45,17 +77,29 @@
 </template>
 
 <script setup lang="ts">
+import { computed, inject, ref } from "vue";
+import { useRouter } from "vue-router";
+import dayjs from "dayjs";
+
 import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 
 import { enableThumbs } from "@/utils/constants";
 import { filesize } from "@/utils";
-import dayjs from "dayjs";
 import { files as api } from "@/api";
 import * as upload from "@/utils/upload";
-import { computed, inject, ref } from "vue";
-import { useRouter } from "vue-router";
+import { fileIcon, isMutedFile } from "@/utils/fileIcons";
+
+/*
+ * A single row/tile in the listing.
+ *
+ * The interaction model (multi-select, shift-range, drag-to-move, long-press) is
+ * carried over unchanged; only presentation moved to utility classes. The `item`
+ * class name is load-bearing — the drag handlers in FileListing.vue and in this
+ * file walk up the DOM looking for it — so it stays even though nothing styles
+ * it any more.
+ */
 
 const touches = ref<number>(0);
 
@@ -83,6 +127,93 @@ const props = defineProps<{
 const authStore = useAuthStore();
 const fileStore = useFileStore();
 const layoutStore = useLayoutStore();
+
+// --- presentation -------------------------------------------------------
+
+const viewMode = computed(() => authStore.user?.viewMode ?? "list");
+const isList = computed(() => viewMode.value === "list");
+const isGallery = computed(() => viewMode.value === "mosaic gallery");
+
+const icon = computed(() =>
+  fileIcon({
+    isDir: props.isDir,
+    type: props.type,
+    extension: getExtension(props.name).toLowerCase(),
+    name: props.name,
+  })
+);
+
+const muted = computed(() =>
+  isMutedFile({
+    name: props.name,
+    extension: getExtension(props.name).toLowerCase(),
+  })
+);
+
+const layoutClass = computed(() => {
+  if (isList.value) {
+    return "flex items-center gap-3 w-full px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 last:border-0";
+  }
+  if (isGallery.value) {
+    return "flex flex-col w-full h-48 rounded-lg overflow-hidden shadow-xs ring-1 ring-black/5 dark:ring-white/10 bg-white dark:bg-gray-800";
+  }
+  return "flex items-center gap-3 w-full p-3 rounded-lg shadow-xs ring-1 ring-black/5 dark:ring-white/10 bg-white dark:bg-gray-800 hover:shadow-md";
+});
+
+const stateClass = computed(() => {
+  if (isSelected.value) {
+    // Horizon's selection treatment: a translucent wash rather than a solid
+    // fill, so the file-type icon colours stay legible.
+    return "bg-blue-500/20 dark:bg-blue-500/30 text-blue-900 dark:text-blue-50";
+  }
+  return isList.value
+    ? "hover:bg-gray-100 dark:hover:bg-gray-700"
+    : "hover:bg-gray-50 dark:hover:bg-gray-700";
+});
+
+const iconWrapClass = computed(() => {
+  if (isList.value) return "w-8 h-8";
+  if (isGallery.value)
+    return "w-full flex-1 min-h-0 bg-gray-50 dark:bg-gray-900";
+  return "w-12 h-12";
+});
+
+const iconSizeClass = computed(() => {
+  if (isList.value) return "text-xl";
+  if (isGallery.value) return "text-5xl";
+  return "text-3xl";
+});
+
+const metaWrapClass = computed(() => {
+  if (isList.value) return "flex-1 min-w-0 flex items-center gap-3";
+  if (isGallery.value) return "w-full px-3 py-2 min-w-0 shrink-0";
+  return "flex-1 min-w-0";
+});
+
+// In list mode the metadata columns line up; elsewhere they stack under the name.
+const sizeClass = computed(() =>
+  isList.value ? "w-24 text-right shrink-0" : isGallery.value ? "hidden" : ""
+);
+
+const modifiedClass = computed(() =>
+  isList.value
+    ? "w-40 text-right shrink-0 hidden sm:block"
+    : isGallery.value
+      ? "hidden"
+      : ""
+);
+
+const secondaryClass = computed(() =>
+  isSelected.value
+    ? "text-blue-800 dark:text-blue-100"
+    : "text-gray-600 dark:text-gray-300"
+);
+
+const showThumbnail = computed(
+  () => !props.readOnly && props.type === "image" && enableThumbs
+);
+
+// --- behaviour (unchanged) ---------------------------------------------
 
 const singleClick = computed(
   () => !props.readOnly && authStore.user?.singleClick
@@ -113,10 +244,6 @@ const thumbnailUrl = computed(() => {
   };
 
   return api.getPreviewURL(file as Resource, "thumb");
-});
-
-const isThumbsEnabled = computed(() => {
-  return enableThumbs;
 });
 
 const humanSize = () => {

@@ -1,21 +1,43 @@
 <template>
-  <div class="breadcrumbs">
+  <nav
+    class="flex items-center gap-0.5 text-sm text-gray-600 dark:text-gray-300 flex-wrap"
+    :aria-label="t('files.home')"
+  >
     <component
       :is="element"
+      v-tooltip="t('files.home')"
       :to="base || ''"
       :aria-label="t('files.home')"
-      :title="t('files.home')"
+      class="flex items-center gap-1.5 px-2 py-1 rounded-md transition"
+      :class="interactive"
     >
-      <i class="material-icons">home</i>
+      <i class="fa-solid fa-hard-drive"></i>
+      <span class="sr-only">{{ t("files.home") }}</span>
     </component>
 
-    <span v-for="(link, index) in items" :key="index">
-      <span class="chevron"
-        ><i class="material-icons">keyboard_arrow_right</i></span
+    <template v-for="(link, index) in items" :key="index">
+      <i
+        class="fa-solid fa-chevron-right text-xs text-gray-400 dark:text-gray-500 mx-0.5"
+      ></i>
+
+      <!-- The final crumb is the current location: emphasised, never a link. -->
+      <span
+        v-if="index === items.length - 1"
+        class="px-2 py-1 font-semibold text-gray-900 dark:text-gray-100 break-all"
+        aria-current="page"
+        >{{ link.name }}</span
       >
-      <component :is="element" :to="link.url">{{ link.name }}</component>
-    </span>
-  </div>
+
+      <component
+        :is="element"
+        v-else
+        :to="link.url"
+        class="px-2 py-1 rounded-md transition break-all"
+        :class="interactive"
+        >{{ link.name }}</component
+      >
+    </template>
+  </nav>
 </template>
 
 <script setup lang="ts">
@@ -71,13 +93,9 @@ const items = computed(() => {
   return breadcrumbs;
 });
 
-const element = computed(() => {
-  if (props.noLink) {
-    return "span";
-  }
+const element = computed(() => (props.noLink ? "span" : "router-link"));
 
-  return "router-link";
-});
+const interactive = computed(() =>
+  props.noLink ? "" : "hover:bg-gray-200 dark:hover:bg-gray-700"
+);
 </script>
-
-<style></style>

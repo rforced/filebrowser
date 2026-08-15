@@ -1,11 +1,13 @@
 import path from "node:path";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
+import tailwindcss from "@tailwindcss/vite";
 import VueI18nPlugin from "@intlify/unplugin-vue-i18n/vite";
 import { compression } from "vite-plugin-compression2";
 
 const plugins = [
   vue(),
+  tailwindcss(),
   VueI18nPlugin({
     include: [path.resolve(__dirname, "./src/i18n/**/*.json")],
   }),
@@ -27,10 +29,6 @@ export default defineConfig(({ command }) => {
       resolve,
       server: {
         proxy: {
-          "/api/command": {
-            target: "ws://127.0.0.1:8080",
-            ws: true,
-          },
           "/api": "http://127.0.0.1:8080",
         },
       },

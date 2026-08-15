@@ -1,10 +1,10 @@
 <template>
-  <div class="card floating">
-    <div class="card-title">
+  <div class="flex flex-col">
+    <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
       <h2>{{ t("prompts.convergeClean") }}</h2>
     </div>
 
-    <div class="card-content">
+    <div class="px-6 py-4 flex flex-col gap-3">
       <p>{{ t("prompts.convergeCleanMessage") }}</p>
 
       <table class="converge-kinds">
@@ -40,10 +40,12 @@
       </p>
     </div>
 
-    <div class="card-action">
+    <div
+      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+    >
       <button
         @click="layoutStore.closeHovers"
-        class="button button--flat button--grey"
+        class="btn btn-white btn-soft"
         :disabled="cleaning"
         :aria-label="t('buttons.cancel')"
         :title="t('buttons.cancel')"
@@ -54,7 +56,7 @@
       <button
         id="focus-prompt"
         @click="submit"
-        class="button button--flat button--red"
+        class="btn btn-red btn-soft"
         :disabled="scanning || cleaning || total === 0"
         :aria-label="t('buttons.delete')"
         :title="t('buttons.delete')"

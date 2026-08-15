@@ -55,8 +55,6 @@ vi.mock("@/utils/css", () => ({ default: vi.fn() }));
 vi.mock("@/utils/buttons", () => ({
   default: { loading: vi.fn(), done: vi.fn(), success: vi.fn() },
 }));
-vi.mock("@/components/header/HeaderBar.vue", () => ({ default: {} }));
-vi.mock("@/components/header/Action.vue", () => ({ default: {} }));
 vi.mock("@/components/Search.vue", () => ({ default: {} }));
 vi.mock("@/components/files/ListingItem.vue", () => ({ default: {} }));
 vi.mock("@/components/ContextMenu.vue", () => ({ default: {} }));

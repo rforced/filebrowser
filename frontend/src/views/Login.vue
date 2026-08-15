@@ -1,35 +1,90 @@
 <template>
-  <div id="login">
-    <form @submit="submit">
-      <img :src="logoURL" alt="File Browser" />
-      <h1>{{ name }}</h1>
-      <p v-if="reason != null" class="logout-message">
-        {{ t(`login.logout_reasons.${reason}`) }}
-      </p>
-      <div v-if="error !== ''" class="wrong">{{ error }}</div>
+  <div
+    class="min-h-screen flex flex-col items-center justify-center gap-6 bg-gray-50 dark:bg-gray-900 p-4"
+  >
+    <Card class="w-full max-w-sm">
+      <form class="flex flex-col gap-4 p-6 sm:p-8" @submit="submit">
+        <div class="flex flex-col items-center gap-3">
+          <img
+            :src="logoURL"
+            :alt="name"
+            class="dark:invert dark:brightness-0 max-w-[180px]"
+          />
+          <h1
+            class="text-xl font-semibold text-blue-600 dark:text-gray-100 text-center break-words"
+          >
+            {{ name }}
+          </h1>
+        </div>
 
-      <input
-        autofocus
-        class="input input--block"
-        type="text"
-        autocapitalize="off"
-        v-model="username"
-        :placeholder="t('login.username')"
-      />
-      <input
-        class="input input--block"
-        type="password"
-        v-model="password"
-        :placeholder="t('login.password')"
-      />
-      <input
-        class="button button--block"
-        type="submit"
-        :value="t('login.submit')"
-        :disabled="loading"
-      />
-    </form>
-    <span v-if="version" class="version">{{ version }}</span>
+        <div
+          v-if="reason != null"
+          class="flex gap-2 items-start rounded-md bg-blue-50 dark:bg-gray-900 px-3 py-2 text-sm text-blue-700 dark:text-gray-300"
+        >
+          <i
+            class="fa-solid fa-circle-info mt-0.5 text-blue-400 dark:text-teal"
+          ></i>
+          <span>{{ t(`login.logout_reasons.${reason}`) }}</span>
+        </div>
+
+        <div
+          v-if="error !== ''"
+          class="flex gap-2 items-start rounded-md bg-red-50 dark:bg-red-900/40 px-3 py-2 text-sm text-red-700 dark:text-red-200"
+          role="alert"
+        >
+          <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
+          <span>{{ error }}</span>
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-col gap-1">
+            <label for="login-username" class="form-label">{{
+              t("login.username")
+            }}</label>
+            <input
+              id="login-username"
+              v-model="username"
+              autofocus
+              class="form-control"
+              type="text"
+              autocapitalize="off"
+              autocomplete="username"
+              :placeholder="t('login.username')"
+            />
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <label for="login-password" class="form-label">{{
+              t("login.password")
+            }}</label>
+            <input
+              id="login-password"
+              v-model="password"
+              class="form-control"
+              type="password"
+              autocomplete="current-password"
+              :placeholder="t('login.password')"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          class="btn btn-flex btn-blue w-full"
+          :disabled="loading"
+        >
+          <i v-if="loading" class="fa-solid fa-spinner fa-spin"></i>
+          <span>{{ t("login.submit") }}</span>
+        </button>
+      </form>
+    </Card>
+
+    <div class="flex flex-col items-center gap-3">
+      <theme-switch />
+      <span v-if="version" class="text-xs text-gray-500 dark:text-gray-400">{{
+        version
+      }}</span>
+    </div>
   </div>
 </template>
 
@@ -46,6 +101,8 @@ import {
 import { inject, ref, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
+import Card from "@/components/ui/Card.vue";
+import ThemeSwitch from "@/components/ui/ThemeSwitch.vue";
 
 // Define refs
 const error = ref<string>("");

@@ -1,10 +1,10 @@
 <template>
-  <div class="card floating">
-    <div class="card-title">
+  <div class="flex flex-col">
+    <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
       <h2>{{ t("prompts.copy") }}</h2>
     </div>
 
-    <div class="card-content">
+    <div class="px-6 py-4 flex flex-col gap-3">
       <p>{{ t("prompts.copyMessage") }}</p>
       <file-list
         ref="fileList"
@@ -14,12 +14,12 @@
     </div>
 
     <div
-      class="card-action"
+      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
       style="display: flex; align-items: center; justify-content: space-between"
     >
       <template v-if="authStore.user?.perm.create">
         <button
-          class="button button--flat"
+          class="btn btn-blue btn-soft"
           @click="fileList?.createDir()"
           :aria-label="t('sidebar.newFolder')"
           :title="t('sidebar.newFolder')"
@@ -30,7 +30,7 @@
       </template>
       <div>
         <button
-          class="button button--flat button--grey"
+          class="btn btn-white btn-soft"
           @click="layoutStore.closeHovers"
           :aria-label="t('buttons.cancel')"
           :title="t('buttons.cancel')"
@@ -40,7 +40,7 @@
         </button>
         <button
           id="focus-prompt"
-          class="button button--flat"
+          class="btn btn-blue btn-soft"
           @click="copy"
           :aria-label="t('buttons.copy')"
           :title="t('buttons.copy')"

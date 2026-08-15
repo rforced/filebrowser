@@ -1,42 +1,43 @@
 <template>
-  <div>
-    <header-bar v-if="showHeader" showMenu showLogo />
-
-    <h2 class="message">
-      <i class="material-icons">{{ info.icon }}</i>
-      <span>{{ t(info.message) }}</span>
-    </h2>
-  </div>
+  <Card class="p-10">
+    <div
+      class="flex flex-col items-center gap-3 text-center text-gray-600 dark:text-gray-300"
+    >
+      <i class="fa-solid text-4xl" :class="[info.icon, info.color]"></i>
+      <div class="text-sm font-medium">{{ t(info.message) }}</div>
+    </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
-import HeaderBar from "@/components/header/HeaderBar.vue";
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import Card from "@/components/ui/Card.vue";
 
 const { t } = useI18n({});
 
 const errors: {
-  [key: number]: {
-    icon: string;
-    message: string;
-  };
+  [key: number]: { icon: string; message: string; color: string };
 } = {
   0: {
-    icon: "cloud_off",
+    icon: "fa-cloud-arrow-down",
     message: "errors.connection",
+    color: "text-gray-500 dark:text-gray-400",
   },
   403: {
-    icon: "error",
+    icon: "fa-lock",
     message: "errors.forbidden",
+    color: "text-amber-600 dark:text-amber-400",
   },
   404: {
-    icon: "gps_off",
+    icon: "fa-location-crosshairs",
     message: "errors.notFound",
+    color: "text-gray-500 dark:text-gray-400",
   },
   500: {
-    icon: "error_outline",
+    icon: "fa-triangle-exclamation",
     message: "errors.internal",
+    color: "text-red-600 dark:text-red-300",
   },
 };
 

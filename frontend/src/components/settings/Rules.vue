@@ -19,13 +19,13 @@
         :placeholder="$t('settings.insertPath')"
       />
 
-      <button class="button button--red" @click="remove($event, index)">
+      <button class="btn btn-red btn-soft" @click="remove($event, index)">
         -
       </button>
     </div>
 
     <div>
-      <button class="button" @click="create" default="false">
+      <button class="btn btn-blue btn-soft" @click="create" default="false">
         {{ $t("buttons.new") }}
       </button>
     </div>

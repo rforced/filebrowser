@@ -1,369 +1,212 @@
 <template>
-  <div>
-    <header-bar showMenu showLogo>
-      <search />
-      <title />
-      <action
-        class="search-button"
-        icon="search"
-        :label="t('buttons.search')"
-        @action="openSearch()"
-      />
-
-      <template #actions>
-        <action
-          v-if="headerButtons.convergeClean"
-          id="converge-clean-button"
-          icon="cleaning_services"
-          :label="t('buttons.cleanConvergeOutput')"
-          show="converge-clean"
-        />
-
-        <template v-if="!isMobile">
-          <action
-            v-if="headerButtons.share"
-            icon="share"
-            :label="t('buttons.share')"
-            show="share"
-          />
-          <action
-            v-if="headerButtons.rename"
-            icon="mode_edit"
-            :label="t('buttons.rename')"
-            show="rename"
-          />
-          <action
-            v-if="headerButtons.copy"
-            id="copy-button"
-            icon="content_copy"
-            :label="t('buttons.copyFile')"
-            show="copy"
-          />
-          <action
-            v-if="headerButtons.move"
-            id="move-button"
-            icon="forward"
-            :label="t('buttons.moveFile')"
-            show="move"
-          />
-          <action
-            v-if="headerButtons.delete"
-            id="delete-button"
-            icon="delete"
-            :label="t('buttons.delete')"
-            show="delete"
-          />
-        </template>
-
-        <action
-          :icon="viewIcon"
-          :label="t('buttons.switchView')"
-          @action="switchView"
-        />
-        <action
-          v-if="headerButtons.download"
-          icon="file_download"
-          :label="t('buttons.download')"
-          @action="download"
-          :counter="fileStore.selectedCount"
-        />
-        <action
-          v-if="headerButtons.upload"
-          icon="file_upload"
-          id="upload-button"
-          :label="t('buttons.upload')"
-          @action="uploadFunc"
-        />
-        <action icon="info" :label="t('buttons.info')" show="info" />
-        <action
-          icon="check_circle"
-          :label="t('buttons.selectMultiple')"
-          @action="toggleMultipleSelection"
-        />
-      </template>
-    </header-bar>
-
-    <div
-      v-if="isMobile"
-      id="file-selection"
-      :class="{
-        'file-selection-margin-bottom': fileStore.multiple,
-      }"
-    >
-      <span v-if="fileStore.selectedCount > 0">
-        {{ t("prompts.filesSelected", fileStore.selectedCount) }}
-      </span>
-      <action
-        v-if="headerButtons.share"
-        icon="share"
-        :label="t('buttons.share')"
-        show="share"
-      />
-      <action
-        v-if="headerButtons.rename"
-        icon="mode_edit"
-        :label="t('buttons.rename')"
-        show="rename"
-      />
-      <action
-        v-if="headerButtons.copy"
-        icon="content_copy"
-        :label="t('buttons.copyFile')"
-        show="copy"
-      />
-      <action
-        v-if="headerButtons.move"
-        icon="forward"
-        :label="t('buttons.moveFile')"
-        show="move"
-      />
-      <action
-        v-if="headerButtons.delete"
-        icon="delete"
-        :label="t('buttons.delete')"
-        show="delete"
-      />
-    </div>
-
-    <div v-if="layoutStore.loading">
-      <h2 class="message delayed">
-        <div class="spinner">
-          <div class="bounce1"></div>
-          <div class="bounce2"></div>
-          <div class="bounce3"></div>
-        </div>
-        <span>{{ t("files.loading") }}</span>
-      </h2>
-    </div>
-    <template v-else>
+  <div class="flex flex-col gap-4">
+    <!-- Loading -->
+    <Card v-if="layoutStore.loading" class="p-10">
       <div
-        v-if="
-          (fileStore.req?.numDirs ?? 0) + (fileStore.req?.numFiles ?? 0) == 0
-        "
+        class="flex flex-col items-center gap-3 text-gray-600 dark:text-gray-300"
       >
-        <h2 class="message">
-          <span>{{ t("files.lonely") }}</span>
-        </h2>
-        <input
-          style="display: none"
-          type="file"
-          id="upload-input"
-          @change="uploadInput($event)"
-          multiple
-        />
-        <input
-          style="display: none"
-          type="file"
-          id="upload-folder-input"
-          @change="uploadInput($event)"
-          webkitdirectory
-          multiple
-        />
+        <i class="fa-solid fa-spinner fa-spin text-3xl"></i>
+        <span class="text-sm font-medium">{{ t("files.loading") }}</span>
       </div>
+    </Card>
+
+    <template v-else>
+      <!-- Empty -->
+      <Card v-if="isEmpty" class="p-10">
+        <div
+          class="flex flex-col items-center gap-2 text-center text-gray-600 dark:text-gray-300"
+        >
+          <i class="fa-solid fa-folder-open text-4xl"></i>
+          <div class="text-sm font-medium">{{ t("files.lonely") }}</div>
+        </div>
+      </Card>
+
+      <!-- Listing -->
       <div
         v-else
         id="listing"
         ref="listing"
         class="file-icons"
         data-clear-on-click="true"
-        :class="authStore.user?.viewMode ?? ''"
         @click="handleEmptyAreaClick"
+        @contextmenu="showContextMenu"
       >
-        <div>
-          <div class="item header">
-            <div>
-              <p
-                :class="{ active: nameSorted }"
-                class="name"
-                role="button"
-                tabindex="0"
-                @click="sort('name')"
-                :title="t('files.sortByName')"
+        <Card class="overflow-hidden">
+          <!--
+            Column headers. Only meaningful in list mode; the tile modes have no
+            columns to sort by position.
+          -->
+          <div
+            v-if="isList"
+            class="flex items-center gap-3 px-4 py-2.5 bg-slate-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+            data-clear-on-click="true"
+          >
+            <div class="w-8 shrink-0"></div>
+            <div class="flex-1 min-w-0 flex items-center gap-3">
+              <button
+                type="button"
+                class="flex-1 min-w-0 flex items-center gap-1.5 text-left text-xs font-medium uppercase tracking-wider transition"
+                :class="sortHeaderClass(nameSorted)"
                 :aria-label="t('files.sortByName')"
+                @click.stop="sort('name')"
               >
                 <span>{{ t("files.name") }}</span>
-                <i class="material-icons">{{ nameIcon }}</i>
-              </p>
+                <i
+                  class="fa-solid text-[0.65rem]"
+                  :class="[nameIcon, sortIconClass(nameSorted)]"
+                ></i>
+              </button>
 
-              <p
-                :class="{ active: sizeSorted }"
-                class="size"
-                role="button"
-                tabindex="0"
-                @click="sort('size')"
-                :title="t('files.sortBySize')"
+              <button
+                type="button"
+                class="w-24 shrink-0 flex items-center justify-end gap-1.5 text-xs font-medium uppercase tracking-wider transition"
+                :class="sortHeaderClass(sizeSorted)"
                 :aria-label="t('files.sortBySize')"
+                @click.stop="sort('size')"
               >
                 <span>{{ t("files.size") }}</span>
-                <i class="material-icons">{{ sizeIcon }}</i>
-              </p>
-              <p
-                :class="{ active: modifiedSorted }"
-                class="modified"
-                role="button"
-                tabindex="0"
-                @click="sort('modified')"
-                :title="t('files.sortByLastModified')"
+                <i
+                  class="fa-solid text-[0.65rem]"
+                  :class="[sizeIcon, sortIconClass(sizeSorted)]"
+                ></i>
+              </button>
+
+              <button
+                type="button"
+                class="w-40 shrink-0 hidden sm:flex items-center justify-end gap-1.5 text-xs font-medium uppercase tracking-wider transition"
+                :class="sortHeaderClass(modifiedSorted)"
                 :aria-label="t('files.sortByLastModified')"
+                @click.stop="sort('modified')"
               >
                 <span>{{ t("files.lastModified") }}</span>
-                <i class="material-icons">{{ modifiedIcon }}</i>
-              </p>
+                <i
+                  class="fa-solid text-[0.65rem]"
+                  :class="[modifiedIcon, sortIconClass(modifiedSorted)]"
+                ></i>
+              </button>
             </div>
           </div>
-        </div>
 
-        <h2 data-clear-on-click="true" v-if="fileStore.req?.numDirs ?? false">
-          {{ t("files.folders") }}
-        </h2>
-        <div
-          v-if="fileStore.req?.numDirs ?? false"
-          data-clear-on-click="true"
-          @contextmenu="showContextMenu"
-        >
-          <item
-            v-for="item in dirs"
-            :key="base64(item.name)"
-            v-bind:index="item.index"
-            v-bind:name="item.name"
-            v-bind:isDir="item.isDir"
-            v-bind:url="item.url"
-            v-bind:modified="item.modified"
-            v-bind:type="item.type"
-            v-bind:size="item.size"
-            v-bind:path="item.path"
-          >
-          </item>
-        </div>
+          <!-- Folders -->
+          <template v-if="fileStore.req?.numDirs">
+            <h2
+              v-if="!isList"
+              class="px-4 pt-3 pb-1 text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider"
+              data-clear-on-click="true"
+            >
+              {{ t("files.folders") }}
+            </h2>
 
-        <h2 data-clear-on-click="true" v-if="fileStore.req?.numFiles ?? false">
-          {{ t("files.files") }}
-        </h2>
-        <div
-          v-if="fileStore.req?.numFiles ?? false"
-          data-clear-on-click="true"
-          @contextmenu="showContextMenu"
-        >
-          <item
-            v-for="item in files"
-            :key="base64(item.name)"
-            v-bind:index="item.index"
-            v-bind:name="item.name"
-            v-bind:isDir="item.isDir"
-            v-bind:url="item.url"
-            v-bind:modified="item.modified"
-            v-bind:type="item.type"
-            v-bind:size="item.size"
-            v-bind:path="item.path"
-          >
-          </item>
-        </div>
-        <context-menu
-          :show="isContextMenuVisible"
-          :pos="contextMenuPos"
-          @hide="hideContextMenu"
-        >
-          <action
-            v-if="headerButtons.share"
-            icon="share"
-            :label="t('buttons.share')"
-            show="share"
-          />
-          <action
-            v-if="headerButtons.rename"
-            icon="mode_edit"
-            :label="t('buttons.rename')"
-            show="rename"
-          />
-          <action
-            v-if="headerButtons.copy"
-            id="copy-button"
-            icon="content_copy"
-            :label="t('buttons.copyFile')"
-            show="copy"
-          />
-          <action
-            v-if="headerButtons.move"
-            id="move-button"
-            icon="forward"
-            :label="t('buttons.moveFile')"
-            show="move"
-          />
-          <action
-            v-if="headerButtons.delete"
-            id="delete-button"
-            icon="delete"
-            :label="t('buttons.delete')"
-            show="delete"
-          />
-          <action
-            v-if="headerButtons.download"
-            icon="file_download"
-            :label="t('buttons.download')"
-            @action="download"
-            :counter="fileStore.selectedCount"
-          />
-          <action
-            v-if="headerButtons.extract"
-            icon="unarchive"
-            :label="t('buttons.extract')"
-            @action="extractArchive"
-          />
-          <action icon="info" :label="t('buttons.info')" show="info" />
-        </context-menu>
+            <div :class="groupClass" data-clear-on-click="true">
+              <item
+                v-for="item in dirs"
+                :key="base64(item.name)"
+                :index="item.index"
+                :name="item.name"
+                :isDir="item.isDir"
+                :url="item.url"
+                :modified="item.modified"
+                :type="item.type"
+                :size="item.size"
+                :path="item.path"
+              />
+            </div>
+          </template>
 
-        <input
-          style="display: none"
-          type="file"
-          id="upload-input"
-          @change="uploadInput($event)"
-          multiple
-        />
-        <input
-          style="display: none"
-          type="file"
-          id="upload-folder-input"
-          @change="uploadInput($event)"
-          webkitdirectory
-          multiple
-        />
+          <!-- Files -->
+          <template v-if="fileStore.req?.numFiles">
+            <h2
+              v-if="!isList"
+              class="px-4 pt-3 pb-1 text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider"
+              data-clear-on-click="true"
+            >
+              {{ t("files.files") }}
+            </h2>
 
-        <div :class="{ active: fileStore.multiple }" id="multiple-selection">
-          <p>{{ t("files.multipleSelectionEnabled") }}</p>
-          <div
-            @click="() => (fileStore.multiple = false)"
-            tabindex="0"
-            role="button"
-            :title="t('buttons.clear')"
-            :aria-label="t('buttons.clear')"
-            class="action"
-          >
-            <i class="material-icons">clear</i>
-          </div>
-        </div>
+            <div :class="groupClass" data-clear-on-click="true">
+              <item
+                v-for="item in files"
+                :key="base64(item.name)"
+                :index="item.index"
+                :name="item.name"
+                :isDir="item.isDir"
+                :url="item.url"
+                :modified="item.modified"
+                :type="item.type"
+                :size="item.size"
+                :path="item.path"
+              />
+            </div>
+          </template>
+        </Card>
       </div>
+
+      <!-- Right-click menu, driven by the same action list as the sidebar. -->
+      <context-menu
+        :show="isContextMenuVisible"
+        :pos="contextMenuPos"
+        @hide="hideContextMenu"
+      >
+        <button
+          v-for="action in actions"
+          :key="action.id"
+          type="button"
+          class="w-full text-left flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm transition hover:bg-blue-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-inherit"
+          :disabled="!action.enabled"
+          @click="action.run"
+        >
+          <i class="fa-solid fa-fw" :class="action.icon"></i>
+          <span>{{ action.label }}</span>
+        </button>
+      </context-menu>
     </template>
+
+    <!-- Upload inputs, kept mounted so the sidebar's Upload action can click them. -->
+    <input
+      id="upload-input"
+      class="hidden"
+      type="file"
+      multiple
+      @change="uploadInput($event)"
+    />
+    <input
+      id="upload-folder-input"
+      class="hidden"
+      type="file"
+      webkitdirectory
+      multiple
+      @change="uploadInput($event)"
+    />
+
+    <!-- Multiple-selection mode indicator -->
+    <Transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="translate-y-full"
+      leave-active-class="transition ease-in duration-200"
+      leave-to-class="translate-y-full"
+    >
+      <div
+        v-if="fileStore.multiple"
+        id="multiple-selection"
+        class="fixed bottom-0 left-0 w-full z-[99999] bg-blue-500 dark:bg-teal-600 text-white dark:text-blue-900 flex items-center justify-between gap-4 px-4 py-3"
+      >
+        <p class="text-sm font-medium">
+          {{ t("files.multipleSelectionEnabled") }}
+        </p>
+        <button
+          type="button"
+          class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-black/10 transition"
+          :aria-label="t('buttons.clear')"
+          @click="fileStore.multiple = false"
+        >
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useAuthStore } from "@/stores/auth";
-import { useClipboardStore } from "@/stores/clipboard";
-import { useFileStore } from "@/stores/file";
-import { useLayoutStore } from "@/stores/layout";
-
-import { users, files as api } from "@/api";
-import * as upload from "@/utils/upload";
-import buttons from "@/utils/buttons";
-import css from "@/utils/css";
-import { throttle } from "@/utils/throttle";
-import { base64url } from "@/utils";
-
-import HeaderBar from "@/components/header/HeaderBar.vue";
-import Action from "@/components/header/Action.vue";
-import Search from "@/components/Search.vue";
-import Item from "@/components/files/ListingItem.vue";
-import ContextMenu from "@/components/ContextMenu.vue";
 import {
   computed,
   inject,
@@ -376,12 +219,26 @@ import {
 import { useRoute, onBeforeRouteUpdate } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { storeToRefs } from "pinia";
+
+import { useAuthStore } from "@/stores/auth";
+import { useClipboardStore } from "@/stores/clipboard";
+import { useFileStore } from "@/stores/file";
+import { useLayoutStore } from "@/stores/layout";
+
+import { users, files as api } from "@/api";
+import * as upload from "@/utils/upload";
+import buttons from "@/utils/buttons";
+import { throttle } from "@/utils/throttle";
+import { base64url } from "@/utils";
 import { removePrefix } from "@/api/utils";
+import { useFileActions } from "@/composables/useFileActions";
+
+import Item from "@/components/files/ListingItem.vue";
+import ContextMenu from "@/components/ContextMenu.vue";
+import Card from "@/components/ui/Card.vue";
 
 const showLimit = ref<number>(50);
-const columnWidth = ref<number>(280);
 const dragCounter = ref<number>(0);
-const width = ref<number>(window.innerWidth);
 const itemWeight = ref<number>(0);
 const isContextMenuVisible = ref<boolean>(false);
 const contextMenuPos = ref<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -402,7 +259,28 @@ onBeforeRouteUpdate(() => {
 
 const { t } = useI18n();
 
+// The action list is shared with the sidebar stack and the mobile rail.
+const { actions } = useFileActions();
+
 const listing = ref<HTMLElement | null>(null);
+
+const viewMode = computed(() => authStore.user?.viewMode ?? "list");
+const isList = computed(() => viewMode.value === "list");
+
+/*
+ * Tile modes lay out as a responsive grid. `auto-fill` with a minimum track
+ * width replaces the old JS that measured `main` on every resize and wrote a
+ * percentage width into a stylesheet rule.
+ */
+const groupClass = computed(() =>
+  isList.value
+    ? "flex flex-col"
+    : "grid gap-3 p-3 grid-cols-[repeat(auto-fill,minmax(min(100%,14rem),1fr))]"
+);
+
+const isEmpty = computed(
+  () => (fileStore.req?.numDirs ?? 0) + (fileStore.req?.numFiles ?? 0) === 0
+);
 
 const nameSorted = computed(() =>
   fileStore.req ? fileStore.req.sorting.by === "name" : false
@@ -445,73 +323,35 @@ const files = computed((): Resource[] => {
   return items.value.files.slice(0, _showLimit);
 });
 
-const nameIcon = computed(() => {
-  if (nameSorted.value && !ascOrdered.value) {
-    return "arrow_upward";
-  }
-
-  return "arrow_downward";
-});
-
-const sizeIcon = computed(() => {
-  if (sizeSorted.value && ascOrdered.value) {
-    return "arrow_downward";
-  }
-
-  return "arrow_upward";
-});
-
-const modifiedIcon = computed(() => {
-  if (modifiedSorted.value && ascOrdered.value) {
-    return "arrow_downward";
-  }
-
-  return "arrow_upward";
-});
-
-const viewIcon = computed(() => {
-  const icons = {
-    list: "view_module",
-    mosaic: "grid_view",
-    "mosaic gallery": "view_list",
-  };
-  return authStore.user === null
-    ? icons["list"]
-    : icons[authStore.user.viewMode];
-});
-
-const isConvergeCase = computed(
-  () =>
-    fileStore.req?.isDir === true &&
-    fileStore.req.items.some((item) => !item.isDir && item.name === "inputs.in")
+const nameIcon = computed(() =>
+  nameSorted.value && !ascOrdered.value
+    ? "fa-arrow-up-a-z"
+    : "fa-arrow-down-a-z"
 );
 
-const headerButtons = computed(() => {
-  const selectedIsArchive =
-    fileStore.selectedCount === 1 &&
-    fileStore.req !== null &&
-    !fileStore.req.items[fileStore.selected[0]]?.isDir &&
-    isArchiveFile(fileStore.req.items[fileStore.selected[0]]?.name ?? "");
+const sizeIcon = computed(() =>
+  sizeSorted.value && ascOrdered.value
+    ? "fa-arrow-down-wide-short"
+    : "fa-arrow-up-short-wide"
+);
 
-  return {
-    upload: authStore.user?.perm.create,
-    download: authStore.user?.perm.download,
-    delete: fileStore.selectedCount > 0 && authStore.user?.perm.delete,
-    rename: fileStore.selectedCount === 1 && authStore.user?.perm.rename,
-    share:
-      fileStore.selectedCount === 1 &&
-      authStore.user?.perm.share &&
-      authStore.user?.perm.download,
-    move: fileStore.selectedCount > 0 && authStore.user?.perm.rename,
-    copy: fileStore.selectedCount > 0 && authStore.user?.perm.create,
-    extract: selectedIsArchive && authStore.user?.perm.create,
-    convergeClean: isConvergeCase.value && authStore.user?.perm.delete,
-  };
-});
+const modifiedIcon = computed(() =>
+  modifiedSorted.value && ascOrdered.value
+    ? "fa-arrow-down-wide-short"
+    : "fa-arrow-up-short-wide"
+);
 
-const isMobile = computed(() => {
-  return width.value <= 736;
-});
+/* The active sort column is emphasised; the others read as secondary. */
+const sortHeaderClass = (active: boolean) =>
+  active
+    ? "text-gray-900 dark:text-white font-semibold"
+    : "text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white";
+
+/* Inactive sort arrows only appear on hover, as they did before. */
+const sortIconClass = (active: boolean) =>
+  active
+    ? "opacity-100 text-blue-500 dark:text-teal"
+    : "opacity-0 group-hover:opacity-60 transition-opacity";
 
 watch(req, () => {
   // Reset the show value
@@ -531,9 +371,6 @@ watch(req, () => {
 });
 
 onMounted(() => {
-  // Check the columns size for the first time.
-  columnsResize();
-
   // How much every listing item affects the window height
   setItemWeight();
 
@@ -671,7 +508,6 @@ const copyCut = (event: Event | KeyboardEvent): void => {
 const paste = async (event: Event) => {
   if ((event.target as HTMLElement).tagName?.toLowerCase() === "input") return;
 
-  // TODO router location should it be
   const items: any[] = [];
 
   for (const item of clipboardStore.items) {
@@ -752,18 +588,6 @@ const paste = async (event: Event) => {
   action(false, false);
 };
 
-const columnsResize = () => {
-  // Update the columns size based on the window width.
-  const items_ = css(["#listing.mosaic .item", ".mosaic#listing .item"]);
-  if (items_ === null) return;
-
-  let columns = Math.floor(
-    (document.querySelector("main")?.offsetWidth ?? 0) / columnWidth.value
-  );
-  if (columns === 0) columns = 1;
-  items_.style.width = `calc(${100 / columns}% - 1em)`;
-};
-
 const scrollEvent = throttle(() => {
   const totalItems =
     (fileStore.req?.numDirs ?? 0) + (fileStore.req?.numFiles ?? 0);
@@ -830,7 +654,6 @@ const drop = async (event: DragEvent) => {
     el.dataset.dir === "true"
   ) {
     // Get url from ListingItem instance
-    // TODO: Don't know what is happening here
     path = el.__vue__.url;
   }
 
@@ -947,15 +770,15 @@ const sort = async (by: string) => {
   let asc = false;
 
   if (by === "name") {
-    if (nameIcon.value === "arrow_upward") {
+    if (nameIcon.value === "fa-arrow-up-a-z") {
       asc = true;
     }
   } else if (by === "size") {
-    if (sizeIcon.value === "arrow_upward") {
+    if (sizeIcon.value === "fa-arrow-up-short-wide") {
       asc = true;
     }
   } else if (by === "modified") {
-    if (modifiedIcon.value === "arrow_upward") {
+    if (modifiedIcon.value === "fa-arrow-up-short-wide") {
       asc = true;
     }
   }
@@ -973,19 +796,7 @@ const sort = async (by: string) => {
   fileStore.reload = true;
 };
 
-const openSearch = () => {
-  layoutStore.showHover("search");
-};
-
-const toggleMultipleSelection = () => {
-  fileStore.toggleMultiple();
-  layoutStore.closeHovers();
-};
-
 const windowsResize = throttle(() => {
-  columnsResize();
-  width.value = window.innerWidth;
-
   // Listing element is not displayed
   if (listing.value == null) return;
 
@@ -995,120 +806,6 @@ const windowsResize = throttle(() => {
   // Fill but not fit the window
   fillWindow();
 }, 100);
-
-const archiveExtensions = [
-  ".zip",
-  ".tar",
-  ".tar.gz",
-  ".tgz",
-  ".tar.zst",
-  ".tzst",
-  ".tar.lz4",
-  ".tlz4",
-  ".zst",
-  ".lz4",
-];
-
-const isArchiveFile = (name: string): boolean => {
-  const lower = name.toLowerCase();
-  return archiveExtensions.some((ext) => lower.endsWith(ext));
-};
-
-const archiveBaseName = (name: string): string => {
-  const lower = name.toLowerCase();
-  for (const ext of [".tar.gz", ".tar.zst", ".tar.lz4"]) {
-    if (lower.endsWith(ext)) return name.slice(0, -ext.length);
-  }
-  for (const ext of [
-    ".tgz",
-    ".tzst",
-    ".tlz4",
-    ".zip",
-    ".tar",
-    ".zst",
-    ".lz4",
-  ]) {
-    if (lower.endsWith(ext)) return name.slice(0, -ext.length);
-  }
-  return name;
-};
-
-const extractArchive = () => {
-  if (fileStore.req === null || fileStore.selectedCount !== 1) return;
-  const item = fileStore.req.items[fileStore.selected[0]];
-  if (!item || item.isDir) return;
-
-  const destination = archiveBaseName(item.name);
-  layoutStore.showHover({
-    prompt: "extract",
-    props: { destination },
-  });
-};
-
-const download = () => {
-  if (fileStore.req === null) return;
-
-  if (
-    fileStore.selectedCount === 1 &&
-    !fileStore.req.items[fileStore.selected[0]].isDir
-  ) {
-    api.download(null, fileStore.req.items[fileStore.selected[0]].url);
-    return;
-  }
-
-  layoutStore.showHover({
-    prompt: "download",
-    confirm: (format: any) => {
-      layoutStore.closeHovers();
-
-      const files = [];
-
-      if (fileStore.selectedCount > 0 && fileStore.req !== null) {
-        for (const i of fileStore.selected) {
-          files.push(fileStore.req.items[i].url);
-        }
-      } else {
-        files.push(route.path);
-      }
-
-      api.download(format, ...files);
-    },
-  });
-};
-
-const switchView = async () => {
-  layoutStore.closeHovers();
-
-  const modes = {
-    list: "mosaic",
-    mosaic: "mosaic gallery",
-    "mosaic gallery": "list",
-  };
-
-  const data = {
-    id: authStore.user?.id,
-    viewMode: (modes[authStore.user?.viewMode ?? "list"] ||
-      "list") as ViewModeType,
-  };
-
-  users.update(data, ["viewMode"]).catch($showError);
-
-  authStore.updateUser(data);
-
-  setItemWeight();
-  fillWindow();
-};
-
-const uploadFunc = () => {
-  if (
-    typeof window.DataTransferItem !== "undefined" &&
-    typeof DataTransferItem.prototype.webkitGetAsEntry !== "undefined"
-  ) {
-    layoutStore.showHover("upload");
-  } else {
-    document.getElementById("upload-input")?.click();
-  }
-};
 
 const setItemWeight = () => {
   // Listing element is not displayed
@@ -1154,7 +851,7 @@ const revealPreviousItem = () => {
 
   nextTick(() => {
     const items = document.querySelectorAll("#listing .item");
-    items[index].scrollIntoView({ block: "center" });
+    items[index]?.scrollIntoView({ block: "center" });
   });
 
   return true;
@@ -1182,12 +879,3 @@ const handleEmptyAreaClick = (e: MouseEvent) => {
   }
 };
 </script>
-<style scoped>
-#listing {
-  min-height: calc(100vh - 8rem);
-}
-
-.file-selection-margin-bottom {
-  margin-bottom: 3.5rem;
-}
-</style>

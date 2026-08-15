@@ -13,7 +13,7 @@
     </div>
 
     <div v-else-if="error" class="model-status model-error">
-      <i class="material-icons">feedback</i>
+      <i class="fa-solid fa-circle-exclamation"></i>
       <span>{{ error }}</span>
     </div>
 
@@ -24,7 +24,7 @@
         :title="t('buttons.resetView')"
         @click="resetView"
       >
-        <i class="material-icons">center_focus_strong</i>
+        <i class="fa-solid fa-crosshairs"></i>
       </button>
       <button
         class="model-button"
@@ -33,7 +33,7 @@
         :title="t('buttons.wireframe')"
         @click="toggleWireframe"
       >
-        <i class="material-icons">grid_on</i>
+        <i class="fa-solid fa-border-all"></i>
       </button>
     </div>
   </div>

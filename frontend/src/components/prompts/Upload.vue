@@ -1,14 +1,16 @@
 <template>
-  <div class="card floating">
-    <div class="card-title">
+  <div class="flex flex-col">
+    <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
       <h2>{{ t("prompts.upload") }}</h2>
     </div>
 
-    <div class="card-content">
+    <div class="px-6 py-4 flex flex-col gap-3">
       <p>{{ t("prompts.uploadMessage") }}</p>
     </div>
 
-    <div class="card-action full">
+    <div
+      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
+    >
       <div
         @click="uploadFile"
         @keypress.enter="uploadFile"
@@ -16,7 +18,7 @@
         id="focus-prompt"
         tabindex="1"
       >
-        <i class="material-icons">insert_drive_file</i>
+        <i class="fa-solid fa-file"></i>
         <div class="title">{{ t("buttons.file") }}</div>
       </div>
       <div
@@ -25,7 +27,7 @@
         class="action"
         tabindex="2"
       >
-        <i class="material-icons">folder</i>
+        <i class="fa-solid fa-folder"></i>
         <div class="title">{{ t("buttons.folder") }}</div>
       </div>
     </div>

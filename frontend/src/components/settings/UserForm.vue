@@ -3,7 +3,7 @@
     <p v-if="!isDefault && props.user !== null">
       <label for="username">{{ t("settings.username") }}</label>
       <input
-        class="input input--block"
+        class="form-control"
         type="text"
         v-model="user.username"
         id="username"
@@ -13,7 +13,7 @@
     <p v-if="!isDefault">
       <label for="password">{{ t("settings.password") }}</label>
       <input
-        class="input input--block"
+        class="form-control"
         type="password"
         :placeholder="passwordPlaceholder"
         v-model="user.password"
@@ -26,7 +26,7 @@
       <input
         :disabled="createUserDirData ?? false"
         :placeholder="scopePlaceholder"
-        class="input input--block"
+        class="form-control"
         type="text"
         v-model="user.scope"
         id="scope"
@@ -40,7 +40,7 @@
     <p>
       <label for="locale">{{ t("settings.language") }}</label>
       <languages
-        class="input input--block"
+        class="form-control"
         id="locale"
         v-model:locale="user.locale"
       ></languages>

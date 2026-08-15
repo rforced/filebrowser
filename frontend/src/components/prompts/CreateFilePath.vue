@@ -1,19 +1,20 @@
 <template>
-  <div>
-    <div class="path-container" ref="container">
-      <template v-for="(item, index) in path" :key="index">
-        /
-        <span class="path-item">
-          <span
-            v-if="isDir === true || index < path.length - 1"
-            class="material-icons"
-            >folder
-          </span>
-          <span v-else class="material-icons">insert_drive_file</span>
-          {{ item }}
-        </span>
-      </template>
-    </div>
+  <div
+    ref="container"
+    class="flex items-center gap-1 overflow-x-auto max-w-full text-sm text-gray-600 dark:text-gray-400 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+  >
+    <template v-for="(item, index) in path" :key="index">
+      <span class="text-gray-400 dark:text-gray-600">/</span>
+      <span class="flex items-center gap-1 whitespace-nowrap">
+        <i
+          class="fa-solid fa-fw text-xs"
+          :class="
+            isDir === true || index < path.length - 1 ? 'fa-folder' : 'fa-file'
+          "
+        ></i>
+        {{ item }}
+      </span>
+    </template>
   </div>
 </template>
 
@@ -60,32 +61,3 @@ watch(path, () => {
   });
 });
 </script>
-
-<style scoped>
-.path-container {
-  display: flex;
-  align-items: center;
-  margin: 0.2em 0;
-  gap: 0.25em;
-  overflow-x: auto;
-  max-width: 100%;
-  scrollbar-width: none;
-  opacity: 0.5;
-}
-
-.path-container::-webkit-scrollbar {
-  display: none;
-}
-
-.path-item {
-  display: flex;
-  align-items: center;
-  margin: 0.2em 0;
-  gap: 0.25em;
-  white-space: nowrap;
-}
-
-.path-item > span {
-  font-size: 0.9em;
-}
-</style>
