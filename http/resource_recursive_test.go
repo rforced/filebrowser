@@ -99,9 +99,13 @@ func TestResourceGetRecursiveHandler(t *testing.T) {
 		t.Fatalf("expected 200, got %d (%s)", recorder.Code, recorder.Body.String())
 	}
 
-	var entries []RecursiveEntry
-	if err := json.Unmarshal(recorder.Body.Bytes(), &entries); err != nil {
+	var listing RecursiveListing
+	if err := json.Unmarshal(recorder.Body.Bytes(), &listing); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
+	}
+	entries := listing.Items
+	if listing.Truncated {
+		t.Error("a small tree should not report a truncated listing")
 	}
 
 	got := make(map[string]bool, len(entries))
@@ -156,12 +160,15 @@ func TestResourceRecursiveListsTree(t *testing.T) {
 		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
 	}
 
-	var entries []RecursiveEntry
-	if err := json.Unmarshal(rec.Body.Bytes(), &entries); err != nil {
+	var listing RecursiveListing
+	if err := json.Unmarshal(rec.Body.Bytes(), &listing); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(entries) != 2 {
-		t.Fatalf("got %d entries, want 2: %+v", len(entries), entries)
+	if len(listing.Items) != 2 {
+		t.Fatalf("got %d entries, want 2: %+v", len(listing.Items), listing.Items)
+	}
+	if listing.Truncated {
+		t.Error("a two-entry tree should not report a truncated listing")
 	}
 }
 

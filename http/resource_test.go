@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,5 +97,45 @@ func TestResourcePostCreatesDirectory(t *testing.T) {
 	}
 	if !info.IsDir() {
 		t.Fatal("expected a directory")
+	}
+}
+
+func TestUploadRefusesToOverwriteWithoutOverride(t *testing.T) {
+	root := t.TempDir()
+	userScope := filepath.Join(root, "user")
+	if err := os.MkdirAll(userScope, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(userScope, "keep.txt"), []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	key := []byte("test-signing-key")
+	st := scopedUserStorage(t, userScope, users.Permissions{Create: true, Modify: true}, key)
+	if err := st.Settings.Save(&settings.Settings{Key: key}); err != nil {
+		t.Fatal(err)
+	}
+	token := issueToken(t, st)
+
+	post := func(query string) *httptest.ResponseRecorder {
+		req, _ := http.NewRequest(http.MethodPost, "/keep.txt"+query, strings.NewReader("replacement"))
+		req.Header.Set("X-Auth", token)
+		rec := httptest.NewRecorder()
+		handle(resourcePostHandler(diskcache.NewNoOp()), "", st, &settings.Server{}).ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := post(""); rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 without override, got %d body=%q", rec.Code, rec.Body.String())
+	}
+	if got, _ := os.ReadFile(filepath.Join(userScope, "keep.txt")); string(got) != "original" {
+		t.Fatalf("VULNERABLE: the file was overwritten without override: %q", got)
+	}
+
+	if rec := post("?override=true"); rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with override=true, got %d body=%q", rec.Code, rec.Body.String())
+	}
+	if got, _ := os.ReadFile(filepath.Join(userScope, "keep.txt")); string(got) != "replacement" {
+		t.Errorf("override=true did not write: %q", got)
 	}
 }

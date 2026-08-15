@@ -33,7 +33,13 @@ async function fetchConflictEntries(
   recursive: boolean
 ): Promise<ServerConflictEntry[]> {
   if (recursive) {
-    return await api.fetchAll(basePath);
+    const listing = await api.fetchAll(basePath);
+    if (listing.truncated) {
+      console.warn(
+        "Conflict detection is incomplete: the destination listing was truncated by the server."
+      );
+    }
+    return listing.items ?? [];
   }
 
   const destination = await api.fetch(basePath);

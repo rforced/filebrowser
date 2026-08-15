@@ -37,10 +37,10 @@ export async function fetch(url: string, signal?: AbortSignal) {
   return data;
 }
 
-export async function fetchAll(url: string): Promise<RecursiveEntry[]> {
+export async function fetchAll(url: string): Promise<RecursiveListing> {
   url = removePrefix(url);
   const res = await fetchURL(`/api/resources/recursive${url}`, {});
-  return (await res.json()) as RecursiveEntry[];
+  return (await res.json()) as RecursiveListing;
 }
 
 async function resourceAction(url: string, method: ApiMethod, content?: any) {

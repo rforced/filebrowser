@@ -72,3 +72,8 @@ interface RecursiveEntry {
   modified: string;
   isDir: boolean;
 }
+
+interface RecursiveListing {
+  items: RecursiveEntry[];
+  truncated: boolean;
+}

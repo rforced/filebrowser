@@ -423,7 +423,13 @@ func patchAction(ctx context.Context, action, src, dst string, d *data, fileCach
 	}
 }
 
-// RecursiveEntry is a single file/directory entry returned by the recursive listing endpoint.
+var (
+	recursiveMaxEntries = 100000
+	recursiveMaxDepth   = 32
+)
+
+var errWalkLimit = errors.New("recursive listing limit reached")
+
 type RecursiveEntry struct {
 	Path    string    `json:"path"`
 	Name    string    `json:"name"`
@@ -432,9 +438,19 @@ type RecursiveEntry struct {
 	IsDir   bool      `json:"isDir"`
 }
 
-// resourceGetRecursiveHandler returns a flat list of every file and directory
-// under the requested path, walking the tree recursively on the server side
-// so the client only needs a single HTTP call.
+type RecursiveListing struct {
+	Items     []RecursiveEntry `json:"items"`
+	Truncated bool             `json:"truncated"`
+}
+
+func listingDepth(root, p string) int {
+	rel := strings.Trim(strings.TrimPrefix(filepath.ToSlash(p), filepath.ToSlash(root)), "/")
+	if rel == "" {
+		return 0
+	}
+	return strings.Count(rel, "/") + 1
+}
+
 var resourceGetRecursiveHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 	rootPath := r.URL.Path
 	if rootPath == "" {
@@ -451,11 +467,9 @@ var resourceGetRecursiveHandler = withUser(func(w http.ResponseWriter, r *http.R
 	}
 
 	entries := make([]RecursiveEntry, 0)
+	truncated := false
 
 	err = afero.Walk(d.user.Fs, rootPath, func(fPath string, info os.FileInfo, err error) error {
-		// Walking a large tree is expensive, and every entry is stat'ed through
-		// the scoped filesystem. Stop as soon as nobody is waiting for the
-		// answer instead of finishing the walk for a client that has gone.
 		if ctxErr := r.Context().Err(); ctxErr != nil {
 			return ctxErr
 		}
@@ -490,29 +504,42 @@ var resourceGetRecursiveHandler = withUser(func(w http.ResponseWriter, r *http.R
 			}
 		}
 
+		if len(entries) >= recursiveMaxEntries {
+			truncated = true
+			return errWalkLimit
+		}
+
 		entries = append(entries, RecursiveEntry{
-			// afero.Walk joins paths with the OS separator, so on Windows fPath
-			// uses backslashes. The web API contract is forward slashes, so
-			// normalize it here (mirrors search/search.go).
 			Path:    filepath.ToSlash(fPath),
 			Name:    info.Name(),
 			Size:    info.Size(),
 			ModTime: info.ModTime(),
 			IsDir:   info.IsDir(),
 		})
+
+		if info.IsDir() && listingDepth(rootPath, fPath) >= recursiveMaxDepth {
+			truncated = true
+			return filepath.SkipDir
+		}
+
 		return nil
 	})
+	if errors.Is(err, errWalkLimit) {
+		err = nil
+	}
 	if err != nil {
-		// Once the request is done there is nobody left to answer, whatever the
-		// walk reported. Asking for a status here only produces a second header
-		// write on a connection that is already gone.
 		if r.Context().Err() != nil {
 			return 0, err
 		}
 		return http.StatusInternalServerError, err
 	}
 
-	return renderJSON(w, r, entries)
+	if truncated {
+		log.Printf("recursive listing of %s truncated at %d entries / depth %d",
+			rootPath, recursiveMaxEntries, recursiveMaxDepth)
+	}
+
+	return renderJSON(w, r, RecursiveListing{Items: entries, Truncated: truncated})
 })
 
 type DiskUsageResponse struct {

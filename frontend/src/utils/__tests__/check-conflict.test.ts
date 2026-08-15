@@ -33,9 +33,11 @@ function mockListing(entries: ServerEntry[]) {
   vi.mocked(api.fetch).mockResolvedValue({ items: entries } as Resource);
 }
 
-// The recursive walk of the destination, used only for nested (folder) uploads.
-function mockRecursiveListing(entries: ServerEntry[]) {
-  vi.mocked(api.fetchAll).mockResolvedValue(entries);
+function mockRecursiveListing(entries: ServerEntry[], truncated = false) {
+  vi.mocked(api.fetchAll).mockResolvedValue({
+    items: entries,
+    truncated,
+  } as RecursiveListing);
 }
 
 // A move/copy/drag item carries name (raw) and to (URL-encoded) but no
