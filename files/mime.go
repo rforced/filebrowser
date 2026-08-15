@@ -1,55 +1,27 @@
 package files
 
-// This file contains code primarily sourced from::
+// This file contains code primarily sourced from:
 // github.com/kataras/iris
+//
+// The table below is registered with the standard library's mime package at
+// init so that file classification does not depend on whether the host happens
+// to ship /etc/mime.types. It is data rather than logic — nothing here parses
+// untrusted input — so it is kept whole rather than pruned to the formats in
+// current use.
 
 import (
 	"mime"
 )
 
 const (
-	// ContentBinaryHeaderValue header value for binary data.
-	ContentBinaryHeaderValue = "application/octet-stream"
-	// ContentWebassemblyHeaderValue header value for web assembly files.
-	ContentWebassemblyHeaderValue = "application/wasm"
-	// ContentHTMLHeaderValue is the  string of text/html response header's content type value.
-	ContentHTMLHeaderValue = "text/html"
 	// ContentJSONHeaderValue header value for JSON data.
 	ContentJSONHeaderValue = "application/json"
-	// ContentJSONProblemHeaderValue header value for JSON API problem error.
-	// Read more at: https://tools.ietf.org/html/rfc7807
-	ContentJSONProblemHeaderValue = "application/problem+json"
-	// ContentXMLProblemHeaderValue header value for XML API problem error.
-	// Read more at: https://tools.ietf.org/html/rfc7807
-	ContentXMLProblemHeaderValue = "application/problem+xml"
 	// ContentJavascriptHeaderValue header value for JSONP & Javascript data.
 	ContentJavascriptHeaderValue = "text/javascript"
 	// ContentTextHeaderValue header value for Text data.
 	ContentTextHeaderValue = "text/plain"
 	// ContentXMLHeaderValue header value for XML data.
 	ContentXMLHeaderValue = "text/xml"
-	// ContentXMLUnreadableHeaderValue obsolete header value for XML.
-	ContentXMLUnreadableHeaderValue = "application/xml"
-	// ContentMarkdownHeaderValue custom key/content type, the real is the text/html.
-	ContentMarkdownHeaderValue = "text/markdown"
-	// ContentYAMLHeaderValue header value for YAML data.
-	ContentYAMLHeaderValue = "application/x-yaml"
-	// ContentYAMLTextHeaderValue header value for YAML plain text.
-	ContentYAMLTextHeaderValue = "text/yaml"
-	// ContentProtobufHeaderValue header value for Protobuf messages data.
-	ContentProtobufHeaderValue = "application/x-protobuf"
-	// ContentMsgPackHeaderValue header value for MsgPack data.
-	ContentMsgPackHeaderValue = "application/msgpack"
-	// ContentMsgPack2HeaderValue alternative header value for MsgPack data.
-	ContentMsgPack2HeaderValue = "application/x-msgpack"
-	// ContentFormHeaderValue header value for post form data.
-	ContentFormHeaderValue = "application/x-www-form-urlencoded"
-	// ContentFormMultipartHeaderValue header value for post multipart form data.
-	ContentFormMultipartHeaderValue = "multipart/form-data"
-	// ContentMultipartRelatedHeaderValue header value for multipart related data.
-	ContentMultipartRelatedHeaderValue = "multipart/related"
-	// ContentGRPCHeaderValue Content-Type header value for gRPC.
-	ContentGRPCHeaderValue = "application/grpc"
 )
 
 var types = map[string]string{

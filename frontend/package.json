@@ -26,7 +26,6 @@
     "dompurify": "^3.4.13",
     "filesize": "^11.0.22",
     "marked": "^18.0.9",
-    "marked-katex-extension": "^5.1.10",
     "material-icons": "^1.13.14",
     "normalize.css": "^8.0.1",
     "pinia": "^4.0.2",
