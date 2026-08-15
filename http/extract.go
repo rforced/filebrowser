@@ -1,6 +1,8 @@
 package fbhttp
 
 import (
+	"archive/tar"
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mholt/archives"
 	"github.com/spf13/afero"
 )
 
@@ -42,43 +43,54 @@ type extractProgress struct {
 	Error string `json:"error,omitzero"`
 }
 
-// supportedArchiveExts lists the extensions we allow extraction for.
-var supportedArchiveExts = []string{
-	".zip",
-	".tar",
-	".tar.gz", ".tgz",
-	".tar.zst", ".tzst",
-	".tar.lz4", ".tlz4",
-	".zst",
-	".lz4",
+// archiveKind describes how one supported extension is read: which container
+// holds the members, and which stream codec wraps it.
+type archiveKind struct {
+	ext  string
+	cont container
+	comp compression
+}
+
+// supportedArchiveKinds is the whole set of formats we extract, longest
+// extension first so that ".tar.gz" is matched before ".gz". Each entry is a
+// decoder compiled into the binary and pointed at untrusted input, so the list
+// is kept to what is actually used.
+var supportedArchiveKinds = []archiveKind{
+	{".tar.gz", containerTar, compressGzip},
+	{".tar.zst", containerTar, compressZstd},
+	{".tar.lz4", containerTar, compressLz4},
+	{".tgz", containerTar, compressGzip},
+	{".tzst", containerTar, compressZstd},
+	{".tlz4", containerTar, compressLz4},
+	{".zip", containerZip, compressNone},
+	{".gz", containerNone, compressGzip},
+	{".zst", containerNone, compressZstd},
+	{".lz4", containerNone, compressLz4},
+}
+
+// archiveKindFor returns the format for a filename, matching the longest
+// extension.
+func archiveKindFor(name string) (archiveKind, bool) {
+	lower := strings.ToLower(name)
+	for _, kind := range supportedArchiveKinds {
+		if strings.HasSuffix(lower, kind.ext) {
+			return kind, true
+		}
+	}
+	return archiveKind{}, false
 }
 
 // isArchiveFile checks whether a filename has a supported archive extension.
 func isArchiveFile(name string) bool {
-	lower := strings.ToLower(name)
-	for _, ext := range supportedArchiveExts {
-		if strings.HasSuffix(lower, ext) {
-			return true
-		}
-	}
-	return false
+	_, ok := archiveKindFor(name)
+	return ok
 }
 
 // archiveBaseName strips the archive extension from a filename to produce
 // the default extraction folder name.
 func archiveBaseName(name string) string {
-	lower := strings.ToLower(name)
-	// Try multi-part extensions first (longest match).
-	for _, ext := range []string{".tar.gz", ".tar.zst", ".tar.lz4"} {
-		if strings.HasSuffix(lower, ext) {
-			return name[:len(name)-len(ext)]
-		}
-	}
-	// Single extensions.
-	for _, ext := range []string{".tgz", ".tzst", ".tlz4", ".zip", ".tar", ".zst", ".lz4"} {
-		if strings.HasSuffix(lower, ext) {
-			return name[:len(name)-len(ext)]
-		}
+	if kind, ok := archiveKindFor(name); ok {
+		return name[:len(name)-len(kind.ext)]
 	}
 	return name
 }
@@ -220,7 +232,14 @@ var extractHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *da
 	return 0, nil
 })
 
-// performExtraction identifies the archive format and extracts its contents.
+// extractState carries the running limits across one extraction, so that a
+// bomb is caught on the aggregate rather than per entry.
+type extractState struct {
+	fileCount  int
+	totalBytes int64
+}
+
+// performExtraction opens the archive and dispatches on its declared format.
 func performExtraction(
 	ctx context.Context,
 	afs afero.Fs,
@@ -229,186 +248,276 @@ func performExtraction(
 	overwrite bool,
 	progress func(extractProgress),
 ) error {
-	// Open the source file for format identification.
+	kind, ok := archiveKindFor(path.Base(srcPath))
+	if !ok {
+		return errors.New("unsupported archive format")
+	}
+
 	srcFile, err := afs.Open(srcPath)
 	if err != nil {
 		return fmt.Errorf("failed to open archive: %w", err)
 	}
 	defer srcFile.Close()
 
-	// Identify the archive format.
-	format, reader, err := archives.Identify(ctx, path.Base(srcPath), srcFile)
-	if err != nil {
-		return fmt.Errorf("failed to identify archive format: %w", err)
+	// The format was chosen from the filename, so confirm the bytes agree
+	// before handing the stream to that decoder.
+	if magic := kind.comp.magic(); magic != nil {
+		if err := checkMagic(srcFile, magic, kind.ext); err != nil {
+			return err
+		}
+	} else if kind.cont == containerZip {
+		if err := checkMagic(srcFile, []byte("PK"), ".zip"); err != nil {
+			return err
+		}
+	} else if kind.cont == containerTar {
+		if err := checkTarMagic(srcFile); err != nil {
+			return err
+		}
 	}
 
-	// Ensure the destination directory exists.
 	if err := afs.MkdirAll(destDir, 0750); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
-	var totalBytes int64
-	var fileCount int
+	state := &extractState{}
 
-	// Handle the different format types.
-	switch f := format.(type) {
-	case archives.Extractor:
-		// Handles: zip, tar, CompressedArchive (tar.gz, tar.zst, tar.lz4)
-		err = f.Extract(ctx, reader, func(_ context.Context, info archives.FileInfo) error {
-			return extractFileHandler(ctx, afs, destDir, info, overwrite, &fileCount, &totalBytes, progress)
-		})
-		if err != nil {
-			return fmt.Errorf("extraction failed: %w", err)
+	switch kind.cont {
+	case containerZip:
+		info, statErr := srcFile.Stat()
+		if statErr != nil {
+			return fmt.Errorf("failed to stat archive: %w", statErr)
 		}
+		return extractZip(ctx, afs, srcFile, info.Size(), destDir, overwrite, state, progress)
 
-	case archives.Decompressor:
-		// Handles standalone compressed files: .zst, .lz4
-		// Decompress to a single file named after the archive without the compression extension.
-		decompReader, err := f.OpenReader(reader)
-		if err != nil {
-			return fmt.Errorf("failed to open decompressor: %w", err)
+	case containerTar:
+		cr, crErr := kind.comp.newReader(srcFile)
+		if crErr != nil {
+			return fmt.Errorf("failed to open decompressor: %w", crErr)
 		}
-		defer decompReader.Close()
+		defer cr.Close()
+		return extractTar(ctx, afs, cr, destDir, overwrite, state, progress)
 
-		outputName := archiveBaseName(path.Base(srcPath))
-		outputPath := path.Join(destDir, outputName)
-
-		if !overwrite {
-			if _, err := afs.Stat(outputPath); err == nil {
-				return errors.New("destination file already exists")
-			}
-		}
-
-		outFile, err := afs.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0640)
-		if err != nil {
-			return fmt.Errorf("failed to create output file: %w", err)
-		}
-		defer outFile.Close()
-
-		fileCount = 1
-		progress(extractProgress{Total: 1, Current: 0, CurrentFile: outputName})
-
-		written, err := io.Copy(outFile, io.LimitReader(decompReader, extractMaxTotalBytes+1))
-		if err != nil {
-			return fmt.Errorf("decompression failed: %w", err)
-		}
-		if written > extractMaxTotalBytes {
-			return errors.New("decompressed size exceeds maximum allowed size")
-		}
-
-		progress(extractProgress{Total: 1, Current: 1, CurrentFile: outputName})
+	case containerNone:
+		return extractSingle(ctx, afs, srcFile, kind, srcPath, destDir, overwrite, progress)
 
 	default:
 		return errors.New("unsupported archive format")
+	}
+}
+
+// extractZip walks a zip archive. Members are read through the central
+// directory, so a name is known before any of its content is decompressed.
+func extractZip(
+	ctx context.Context,
+	afs afero.Fs,
+	r io.ReaderAt,
+	size int64,
+	destDir string,
+	overwrite bool,
+	state *extractState,
+	progress func(extractProgress),
+) error {
+	zr, err := zip.NewReader(r, size)
+	if err != nil {
+		return fmt.Errorf("failed to read zip archive: %w", err)
+	}
+
+	for _, member := range zr.File {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		name, err := safeArchiveName(member.Name)
+		if err != nil {
+			return err
+		}
+		if name == "" {
+			continue
+		}
+
+		mode := member.Mode()
+		// Skip anything that is not a plain file or directory. A zip can carry
+		// a symlink as a member whose body is the link target; honouring one
+		// would let an archive plant a link pointing anywhere on the host.
+		if !mode.IsRegular() && !mode.IsDir() {
+			continue
+		}
+
+		if err := state.count(); err != nil {
+			return err
+		}
+		progress(extractProgress{Current: state.fileCount, CurrentFile: name})
+
+		target := path.Join(destDir, name)
+
+		if mode.IsDir() || strings.HasSuffix(member.Name, "/") {
+			if err := afs.MkdirAll(target, 0750); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", name, err)
+			}
+			continue
+		}
+
+		rc, err := member.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open archived file %s: %w", name, err)
+		}
+		err = writeExtractedFile(afs, target, name, rc, overwrite, state)
+		rc.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// extractFileHandler handles a single file entry during archive extraction.
-// It enforces security limits and writes the file to the destination.
-func extractFileHandler(
+// extractTar walks a tar stream.
+func extractTar(
 	ctx context.Context,
 	afs afero.Fs,
+	r io.Reader,
 	destDir string,
-	info archives.FileInfo,
 	overwrite bool,
-	fileCount *int,
-	totalBytes *int64,
+	state *extractState,
 	progress func(extractProgress),
 ) error {
-	// Check context cancellation.
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	tr := tar.NewReader(r)
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		header, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read tar archive: %w", err)
+		}
+
+		name, err := safeArchiveName(header.Name)
+		if err != nil {
+			return err
+		}
+		if name == "" {
+			continue
+		}
+
+		// Only plain files and directories are materialized. Symlinks and hard
+		// links are the classic way an archive escapes its extraction
+		// directory, and device nodes have no business here at all.
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := state.count(); err != nil {
+				return err
+			}
+			progress(extractProgress{Current: state.fileCount, CurrentFile: name})
+			if err := afs.MkdirAll(path.Join(destDir, name), 0750); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", name, err)
+			}
+		case tar.TypeReg:
+			if err := state.count(); err != nil {
+				return err
+			}
+			progress(extractProgress{Current: state.fileCount, CurrentFile: name})
+			if err := writeExtractedFile(afs, path.Join(destDir, name), name, tr, overwrite, state); err != nil {
+				return err
+			}
+		default:
+			continue
+		}
+	}
+}
+
+// extractSingle decompresses a bare compressed file (.gz, .zst, .lz4) into one
+// output file named after the archive with its extension removed.
+func extractSingle(
+	ctx context.Context,
+	afs afero.Fs,
+	src io.Reader,
+	kind archiveKind,
+	srcPath string,
+	destDir string,
+	overwrite bool,
+	progress func(extractProgress),
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
-	// Enforce file count limit.
-	*fileCount++
-	if *fileCount > extractMaxFiles {
+	cr, err := kind.comp.newReader(src)
+	if err != nil {
+		return fmt.Errorf("failed to open decompressor: %w", err)
+	}
+	defer cr.Close()
+
+	outputName := archiveBaseName(path.Base(srcPath))
+	if outputName == "" {
+		return errors.New("cannot determine output file name")
+	}
+	outputPath := path.Join(destDir, outputName)
+
+	progress(extractProgress{Total: 1, Current: 0, CurrentFile: outputName})
+
+	state := &extractState{}
+	if err := writeExtractedFile(afs, outputPath, outputName, cr, overwrite, state); err != nil {
+		return err
+	}
+
+	progress(extractProgress{Total: 1, Current: 1, CurrentFile: outputName})
+	return nil
+}
+
+// count records one more member and enforces the entry-count ceiling.
+func (s *extractState) count() error {
+	s.fileCount++
+	if s.fileCount > extractMaxFiles {
 		return fmt.Errorf("archive exceeds maximum file count of %d", extractMaxFiles)
 	}
+	return nil
+}
 
-	// Sanitize the file path to prevent zip-slip attacks.
-	cleanName := path.Clean(info.NameInArchive)
-	if cleanName == "." || cleanName == "" {
-		return nil
+// writeExtractedFile creates target and copies src into it, charging the bytes
+// against the archive-wide budget. The copy is bounded rather than trusting any
+// size the archive declares, so a member that claims to be small but decodes
+// forever is cut off.
+func writeExtractedFile(
+	afs afero.Fs,
+	target string,
+	name string,
+	src io.Reader,
+	overwrite bool,
+	state *extractState,
+) error {
+	if err := afs.MkdirAll(path.Dir(target), 0750); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", path.Dir(target), err)
 	}
 
-	// Reject any path that attempts to escape the destination directory.
-	if strings.HasPrefix(cleanName, "..") || strings.HasPrefix(cleanName, "/") {
-		return fmt.Errorf("illegal file path in archive: %s", info.NameInArchive)
-	}
-	// Extra check: ensure no path component is "..".
-	for _, part := range strings.Split(cleanName, "/") {
-		if part == ".." {
-			return fmt.Errorf("illegal file path in archive: %s", info.NameInArchive)
-		}
-	}
-
-	targetPath := path.Join(destDir, cleanName)
-
-	// Reject symbolic links to prevent symlink attacks.
-	if info.LinkTarget != "" {
-		return nil // Silently skip symlinks for security.
-	}
-
-	// Send progress update.
-	progress(extractProgress{
-		Total:       0, // Unknown total for archives.
-		Current:     *fileCount,
-		CurrentFile: cleanName,
-	})
-
-	if info.IsDir() {
-		return afs.MkdirAll(targetPath, 0750)
-	}
-
-	// Ensure parent directory exists.
-	parentDir := path.Dir(targetPath)
-	if err := afs.MkdirAll(parentDir, 0750); err != nil {
-		return fmt.Errorf("failed to create directory %s: %w", parentDir, err)
-	}
-
-	// Check if file exists when not overwriting.
 	if !overwrite {
-		if _, err := afs.Stat(targetPath); err == nil {
-			return fmt.Errorf("file already exists: %s", cleanName)
+		if _, err := afs.Stat(target); err == nil {
+			return fmt.Errorf("file already exists: %s", name)
 		}
 	}
 
-	// Open the archived file for reading.
-	if info.Open == nil {
-		return nil // No content to extract (e.g., empty file entry).
-	}
-
-	srcFile, err := info.Open()
-	if err != nil {
-		return fmt.Errorf("failed to open archived file %s: %w", cleanName, err)
-	}
-	defer srcFile.Close()
-
-	// Create the output file.
-	outFile, err := afs.OpenFile(targetPath, writeFileFlags(), 0640)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", cleanName, err)
-	}
-	defer outFile.Close()
-
-	// Copy with size limit enforcement.
-	remaining := extractMaxTotalBytes - *totalBytes
+	remaining := extractMaxTotalBytes - state.totalBytes
 	if remaining <= 0 {
 		return errors.New("archive exceeds maximum total decompressed size")
 	}
 
-	written, err := io.Copy(outFile, io.LimitReader(srcFile, remaining+1))
+	outFile, err := afs.OpenFile(target, writeFileFlags(), 0640)
 	if err != nil {
-		return fmt.Errorf("failed to write file %s: %w", cleanName, err)
+		return fmt.Errorf("failed to create file %s: %w", name, err)
+	}
+	defer outFile.Close()
+
+	written, err := io.Copy(outFile, io.LimitReader(src, remaining+1))
+	if err != nil {
+		return fmt.Errorf("failed to write file %s: %w", name, err)
 	}
 
-	*totalBytes += written
-	if *totalBytes > extractMaxTotalBytes {
+	state.totalBytes += written
+	if state.totalBytes > extractMaxTotalBytes {
 		return errors.New("archive exceeds maximum total decompressed size")
 	}
 

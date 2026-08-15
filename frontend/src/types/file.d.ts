@@ -43,8 +43,7 @@ type ResourceType =
   | "model"
   | "textImmutable";
 
-type DownloadFormat =
-  "zip" | "tar" | "targz" | "tarbz2" | "tarxz" | "tarlz4" | "tarsz" | null;
+type DownloadFormat = "zip" | "targz" | "tarlz4" | "tarzst" | null;
 
 interface ClipItem {
   from: string;

@@ -3,15 +3,13 @@ package fbhttp
 import (
 	"errors"
 	"fmt"
-	"io/fs"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
 	gopath "path"
 	"path/filepath"
 	"strings"
-
-	"github.com/mholt/archives"
 
 	"github.com/rforced/filebrowser/v2/files"
 	"github.com/rforced/filebrowser/v2/fileutils"
@@ -39,28 +37,21 @@ func parseQueryFiles(r *http.Request, f *files.FileInfo, _ *users.User) ([]strin
 	return fileSlice, nil
 }
 
-func parseQueryAlgorithm(r *http.Request) (string, archives.Archival, error) {
+// parseQueryAlgorithm maps the ?algo= value to the archive format to produce.
+// The set is deliberately small: every additional format is another encoder
+// compiled into the binary and another decoder a downloader has to run.
+func parseQueryAlgorithm(r *http.Request) (ext string, cont container, comp compression, err error) {
 	switch r.URL.Query().Get("algo") {
 	case "zip", "true", "":
-		return ".zip", archives.Zip{}, nil
-	case "tar":
-		return ".tar", archives.Tar{}, nil
+		return ".zip", containerZip, compressNone, nil
 	case "targz":
-		return ".tar.gz", archives.CompressedArchive{Compression: archives.Gz{}, Archival: archives.Tar{}}, nil
-	case "tarbz2":
-		return ".tar.bz2", archives.CompressedArchive{Compression: archives.Bz2{}, Archival: archives.Tar{}}, nil
-	case "tarxz":
-		return ".tar.xz", archives.CompressedArchive{Compression: archives.Xz{}, Archival: archives.Tar{}}, nil
+		return ".tar.gz", containerTar, compressGzip, nil
 	case "tarlz4":
-		return ".tar.lz4", archives.CompressedArchive{Compression: archives.Lz4{}, Archival: archives.Tar{}}, nil
-	case "tarsz":
-		return ".tar.sz", archives.CompressedArchive{Compression: archives.Sz{}, Archival: archives.Tar{}}, nil
-	case "tarbr":
-		return ".tar.br", archives.CompressedArchive{Compression: archives.Brotli{}, Archival: archives.Tar{}}, nil
+		return ".tar.lz4", containerTar, compressLz4, nil
 	case "tarzst":
-		return ".tar.zst", archives.CompressedArchive{Compression: archives.Zstd{}, Archival: archives.Tar{}}, nil
+		return ".tar.zst", containerTar, compressZstd, nil
 	default:
-		return "", nil, errors.New("format not implemented")
+		return "", 0, 0, errors.New("format not implemented")
 	}
 }
 
@@ -106,7 +97,7 @@ var rawHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) 
 	return rawDirHandler(w, r, d, file)
 })
 
-func getFiles(d *data, path, commonPath string) ([]archives.FileInfo, error) {
+func getFiles(d *data, path, commonPath string) ([]archiveEntry, error) {
 	if !d.Check(path) {
 		return nil, nil
 	}
@@ -120,7 +111,7 @@ func getFiles(d *data, path, commonPath string) ([]archives.FileInfo, error) {
 		return nil, err
 	}
 
-	var archiveFiles []archives.FileInfo
+	var archiveFiles []archiveEntry
 
 	if path != commonPath {
 		nameInArchive := strings.TrimPrefix(path, commonPath)
@@ -140,10 +131,10 @@ func getFiles(d *data, path, commonPath string) ([]archives.FileInfo, error) {
 			return nil, fmt.Errorf("refusing unsafe archive entry name: %q", nameInArchive)
 		}
 
-		archiveFiles = append(archiveFiles, archives.FileInfo{
-			FileInfo:      info,
-			NameInArchive: nameInArchive,
-			Open: func() (fs.File, error) {
+		archiveFiles = append(archiveFiles, archiveEntry{
+			info:          info,
+			nameInArchive: nameInArchive,
+			open: func() (io.ReadCloser, error) {
 				return d.user.Fs.Open(path)
 			},
 		})
@@ -181,14 +172,16 @@ func rawDirHandler(w http.ResponseWriter, r *http.Request, d *data, file *files.
 		return http.StatusInternalServerError, err
 	}
 
-	extension, archiver, err := parseQueryAlgorithm(r)
+	// An unknown ?algo= is the caller naming a format we do not produce, which
+	// is a bad request rather than a server fault.
+	extension, cont, comp, err := parseQueryAlgorithm(r)
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return http.StatusBadRequest, err
 	}
 
 	commonDir := fileutils.CommonPrefix(filepath.Separator, filenames...)
 
-	var allFiles []archives.FileInfo
+	var allFiles []archiveEntry
 	for _, fname := range filenames {
 		archiveFiles, err := getFiles(d, fname, commonDir)
 		if err != nil {
@@ -216,7 +209,7 @@ func rawDirHandler(w http.ResponseWriter, r *http.Request, d *data, file *files.
 	name += extension
 	w.Header().Set("Content-Disposition", "attachment; filename*=utf-8''"+url.PathEscape(name))
 
-	if err := archiver.Archive(r.Context(), w, allFiles); err != nil {
+	if err := writeArchive(r.Context(), w, cont, comp, allFiles); err != nil {
 		return http.StatusInternalServerError, err
 	}
 

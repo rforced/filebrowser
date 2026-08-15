@@ -59,8 +59,8 @@ func TestIsArchiveFile(t *testing.T) {
 		want     bool
 	}{
 		{"zip file", "archive.zip", true},
-		{"tar file", "archive.tar", true},
 		{"tar.gz file", "archive.tar.gz", true},
+		{"gz file", "notes.txt.gz", true},
 		{"tgz file", "archive.tgz", true},
 		{"tar.zst file", "archive.tar.zst", true},
 		{"tzst file", "archive.tzst", true},
@@ -77,6 +77,9 @@ func TestIsArchiveFile(t *testing.T) {
 		{"just a dot", ".", false},
 		{"partial match", "file.zi", false},
 		{"tar in name but not ext", "tarfile.txt", false},
+		// Bare .tar is deliberately unsupported: the formats in use all carry a
+		// compression extension.
+		{"bare tar not supported", "archive.tar", false},
 	}
 
 	for _, tt := range tests {
@@ -96,8 +99,8 @@ func TestArchiveBaseName(t *testing.T) {
 		want     string
 	}{
 		{"zip", "archive.zip", "archive"},
-		{"tar", "archive.tar", "archive"},
 		{"tar.gz", "archive.tar.gz", "archive"},
+		{"gz", "notes.txt.gz", "notes.txt"},
 		{"tgz", "archive.tgz", "archive"},
 		{"tar.zst", "archive.tar.zst", "archive"},
 		{"tzst", "archive.tzst", "archive"},
@@ -108,6 +111,7 @@ func TestArchiveBaseName(t *testing.T) {
 		{"uppercase", "ARCHIVE.ZIP", "ARCHIVE"},
 		{"mixed case tar.gz", "Archive.Tar.Gz", "Archive"},
 		{"no extension", "noext", "noext"},
+		{"bare tar left alone", "archive.tar", "archive.tar"},
 		{"dots in name", "my.archive.file.tar.gz", "my.archive.file"},
 		{"multiple dots zip", "a.b.c.zip", "a.b.c"},
 	}
@@ -122,49 +126,61 @@ func TestArchiveBaseName(t *testing.T) {
 	}
 }
 
-// testSanitizeArchivePath mirrors the path validation logic in extractFileHandler
-// to verify that malicious paths are properly rejected.
-func testSanitizeArchivePath(name string) string {
-	cleanName := path.Clean(name)
-	if cleanName == "." || cleanName == "" {
-		return ""
-	}
-	if strings.HasPrefix(cleanName, "..") || strings.HasPrefix(cleanName, "/") {
-		return ""
-	}
-	for _, part := range strings.Split(cleanName, "/") {
-		if part == ".." {
-			return ""
-		}
-	}
-	return cleanName
-}
-
+// TestPathTraversalPrevention exercises the real guard used by both extractors,
+// rather than a copy of it in the test file. A mirrored implementation can drift
+// from production and go on passing while the code it stands for stops
+// protecting anything.
 func TestPathTraversalPrevention(t *testing.T) {
 	tests := []struct {
 		name        string
 		archivePath string
-		wantEmpty   bool
+		// wantErr means the name must be rejected outright; wantSkip means it
+		// carries no member (empty or "."), so it is silently ignored.
+		wantErr  bool
+		wantSkip bool
+		want     string
 	}{
-		{"parent traversal", "../../../etc/passwd", true},
-		{"mid traversal", "foo/../../bar", true},
-		{"absolute path", "/absolute/path", true},
-		{"simple parent", "../relative", true},
-		{"dot only", ".", true},
-		{"empty", "", true},
-		{"valid simple", "file.txt", false},
-		{"valid nested", "dir/subdir/file.txt", false},
-		{"valid deep", "a/b/c/d.txt", false},
+		{name: "parent traversal", archivePath: "../../../etc/passwd", wantErr: true},
+		{name: "mid traversal", archivePath: "foo/../../bar", wantErr: true},
+		{name: "absolute path", archivePath: "/absolute/path", wantErr: true},
+		{name: "simple parent", archivePath: "../relative", wantErr: true},
+		{name: "bare parent", archivePath: "..", wantErr: true},
+		{name: "dot only", archivePath: ".", wantSkip: true},
+		{name: "empty", archivePath: "", wantSkip: true},
+		{name: "valid simple", archivePath: "file.txt", want: "file.txt"},
+		{name: "valid nested", archivePath: "dir/subdir/file.txt", want: "dir/subdir/file.txt"},
+		{name: "valid deep", archivePath: "a/b/c/d.txt", want: "a/b/c/d.txt"},
+		{name: "inner traversal normalized away", archivePath: "a/b/../c.txt", want: "a/c.txt"},
+		// A backslash is a legal POSIX filename byte. It must be neutralized,
+		// never translated into a separator, or "..\..\x" becomes a traversal.
+		{name: "backslash neutralized", archivePath: `..\..\evil.sh`, want: ".._.._evil.sh"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := testSanitizeArchivePath(tt.archivePath)
-			if tt.wantEmpty && result != "" {
-				t.Errorf("expected path %q to be rejected, got %q", tt.archivePath, result)
+			got, err := safeArchiveName(tt.archivePath)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected %q to be rejected, got %q", tt.archivePath, got)
+				}
+				return
 			}
-			if !tt.wantEmpty && result == "" {
-				t.Errorf("expected path %q to be accepted, got empty", tt.archivePath)
+			if err != nil {
+				t.Fatalf("unexpected error for %q: %v", tt.archivePath, err)
+			}
+			if tt.wantSkip {
+				if got != "" {
+					t.Errorf("expected %q to yield no member, got %q", tt.archivePath, got)
+				}
+				return
+			}
+			if got != tt.want {
+				t.Errorf("safeArchiveName(%q) = %q, want %q", tt.archivePath, got, tt.want)
+			}
+			// Whatever comes back must never escape when joined to a destination.
+			if joined := path.Join("/dest", got); !strings.HasPrefix(joined, "/dest/") {
+				t.Errorf("VULNERABLE: %q joined to /dest escaped: %q", tt.archivePath, joined)
 			}
 		})
 	}
