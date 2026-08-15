@@ -3,7 +3,7 @@
   <div class="row" v-else-if="!layoutStore.loading">
     <div class="column">
       <form @submit="save" class="card">
-        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
+        <div class="card-title">
           <h2 v-if="user?.id === 0">{{ $t("settings.newUser") }}</h2>
           <h2 v-else>{{ $t("settings.user") }} {{ user?.username }}</h2>
         </div>

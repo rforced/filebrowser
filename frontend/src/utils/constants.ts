@@ -19,6 +19,7 @@ const hideLoginButton = window.FileBrowser.HideLoginButton;
 const domain: string = window.FileBrowser.Domain;
 const teamId: string = window.FileBrowser.TeamID;
 const filesystemId: string = window.FileBrowser.FilesystemID;
+const cspNonce: string = window.FileBrowser.Nonce ?? "";
 
 export {
   name,
@@ -41,4 +42,5 @@ export {
   domain,
   teamId,
   filesystemId,
+  cspNonce,
 };

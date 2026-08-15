@@ -3,7 +3,7 @@
   <div class="row" v-else-if="!layoutStore.loading">
     <div class="column">
       <div class="card">
-        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
+        <div class="card-title">
           <h2>{{ t("settings.shareManagement") }}</h2>
         </div>
 

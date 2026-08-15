@@ -3,7 +3,7 @@
   <div class="row" v-else-if="!layoutStore.loading && settings !== null">
     <div class="column">
       <form class="card" @submit.prevent="save">
-        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
+        <div class="card-title">
           <h2>{{ t("settings.globalSettings") }}</h2>
         </div>
 
@@ -153,7 +153,7 @@
 
     <div class="column">
       <form class="card" @submit.prevent="save">
-        <div class="text-lg font-medium text-gray-900 dark:text-gray-100">
+        <div class="card-title">
           <h2>{{ t("settings.userDefaults") }}</h2>
         </div>
 

@@ -43,13 +43,7 @@
           <storage-card v-if="!disableUsedPercentage" />
           <file-actions variant="stack" />
           <details-card />
-          <HelpBox
-            :header="t('sidebar.help')"
-            :action="t('sidebar.help')"
-            @action="showHelp"
-          >
-            {{ t("help.help") }}
-          </HelpBox>
+          <HelpBox v-if="domain" />
         </template>
       </two-columns>
 
@@ -86,7 +80,7 @@ import { files as api } from "@/api";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { StatusError } from "@/api/utils";
-import { name, disableUsedPercentage } from "@/utils/constants";
+import { name, disableUsedPercentage, domain } from "@/utils/constants";
 import { useFileActions } from "@/composables/useFileActions";
 
 import Breadcrumbs from "@/components/Breadcrumbs.vue";
@@ -162,8 +156,6 @@ const toggleMultipleSelection = () => {
   fileStore.toggleMultiple();
   layoutStore.closeHovers();
 };
-
-const showHelp = () => layoutStore.showHover("help");
 
 onMounted(() => {
   fetchData();

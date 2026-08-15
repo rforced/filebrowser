@@ -8,11 +8,10 @@
       class="outline-hidden focus:ring-3 ring-offset-4 ring-offset-gray-200 dark:ring-offset-gray-900 rounded-xs shrink-0"
       :aria-label="name"
     >
-      <img
-        :src="logoURL"
-        :alt="name"
-        class="dark:invert dark:brightness-0 max-w-[140px] md:max-w-[165px]"
-      />
+      <span
+        class="font-semibold text-base md:text-lg whitespace-nowrap text-blue-600 dark:text-gray-100"
+        >{{ name }}</span
+      >
     </router-link>
 
     <div v-if="isLoggedIn && showSearch" class="flex-1 min-w-0 max-w-lg">
@@ -71,7 +70,7 @@ import { storeToRefs } from "pinia";
 
 import { useAuthStore } from "@/stores/auth";
 import * as auth from "@/utils/auth";
-import { hideLoginButton, logoURL, logoutPage, name } from "@/utils/constants";
+import { hideLoginButton, logoutPage, name } from "@/utils/constants";
 import Search from "@/components/Search.vue";
 
 withDefaults(defineProps<{ showSearch?: boolean }>(), { showSearch: true });

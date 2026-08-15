@@ -151,9 +151,10 @@
 import { files as api } from "@/api";
 import buttons, { buttonIcon } from "@/utils/buttons";
 import url from "@/utils/url";
-import ace, { Ace, version as ace_version } from "ace-builds";
+import ace, { Ace } from "ace-builds";
 import "ace-builds/src-noconflict/ext-language_tools";
 import modelist from "ace-builds/src-noconflict/ext-modelist";
+import { ACE_ASSET_DIR, clampMode } from "@/utils/aceAssets";
 import DOMPurify from "dompurify";
 
 import Breadcrumbs from "@/components/Breadcrumbs.vue";
@@ -233,10 +234,7 @@ onMounted(() => {
     }
   });
 
-  ace.config.set(
-    "basePath",
-    `https://cdn.jsdelivr.net/npm/ace-builds@${ace_version}/src-min-noconflict/`
-  );
+  ace.config.set("basePath", window.__prependStaticUrl(`${ACE_ASSET_DIR}/`));
 
   if (!layoutStore.loading) {
     initEditor(fileContent);
@@ -285,7 +283,8 @@ const initEditor = (fileContent: string) => {
     showPrintMargin: false,
     readOnly: fileStore.req?.type === "textImmutable",
     theme: getEditorTheme(authStore.user?.aceEditorTheme ?? ""),
-    mode: modelist.getModeForPath(fileStore.req!.name).mode,
+    mode: clampMode(modelist.getModeForPath(fileStore.req!.name).mode),
+    useWorker: false,
     wrap: true,
     enableBasicAutocompletion: true,
     enableLiveAutocompletion: true,

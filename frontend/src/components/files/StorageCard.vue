@@ -16,6 +16,9 @@
         <div class="text-sm text-gray-600 dark:text-gray-300">
           {{ t("files.storageOf", { total: usage.total }) }}
         </div>
+        <div class="text-sm text-gray-600 dark:text-gray-300">
+          {{ t("files.storageAvailable", { available: usage.available }) }}
+        </div>
       </div>
     </div>
   </Card>
@@ -34,7 +37,12 @@ import Gauge from "@/components/ui/Gauge.vue";
 const { t } = useI18n();
 const route = useRoute();
 
-const DEFAULT = { used: "0 B", total: "0 B", usedPercentage: 0 };
+const DEFAULT = {
+  used: "0 B",
+  total: "0 B",
+  available: "0 B",
+  usedPercentage: 0,
+};
 
 const usage = reactive({ ...DEFAULT });
 
@@ -52,11 +60,12 @@ const fetchUsage = async () => {
     Object.assign(usage, {
       used: filesize(result.used),
       total: filesize(result.total),
-      usedPercentage: Math.round((result.used / result.total) * 100),
+      available: filesize(Math.max(0, result.total - result.used)),
+      usedPercentage: result.total
+        ? Math.round((result.used / result.total) * 100)
+        : 0,
     });
   } catch {
-    // A failed usage probe is not worth a toast — the card just shows zeroes.
-    // The listing itself is what matters and it reports its own errors.
     Object.assign(usage, DEFAULT);
   }
 };

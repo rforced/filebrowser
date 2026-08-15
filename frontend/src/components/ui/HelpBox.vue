@@ -7,28 +7,34 @@
 
     <div class="flex flex-col gap-2 text-sm min-w-0">
       <h3 class="font-medium text-blue-800 dark:text-gray-100">
-        {{ header }}
+        {{ t("help.needHelp") }}
       </h3>
 
       <div class="text-blue-700 dark:text-gray-300">
-        <slot />
+        {{ t("help.documentationBody") }}
       </div>
 
-      <button
-        v-if="action"
-        type="button"
-        class="inline-block text-left font-medium text-blue-700 dark:text-teal hover:underline"
-        @click="emit('action')"
+      <a
+        :href="href"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-block font-medium text-blue-700 dark:text-teal hover:underline"
       >
-        <span>{{ action }}</span>
+        <span>{{ t("help.viewDocumentation") }}</span>
         <i class="fa-solid fa-arrow-right ml-1"></i>
-      </button>
+      </a>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{ header: string; action?: string }>();
+import { computed } from "vue";
+import { useI18n } from "vue-i18n";
+import { domain } from "@/utils/constants";
 
-const emit = defineEmits<{ (e: "action"): void }>();
+const props = withDefaults(defineProps<{ path?: string }>(), {
+  path: "admin_guides/file_system_administration.html",
+});
+const { t } = useI18n();
+const href = computed(() => `${domain}/docs/${props.path}`);
 </script>

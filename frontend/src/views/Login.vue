@@ -5,13 +5,8 @@
     <Card class="w-full max-w-sm">
       <form class="flex flex-col gap-4 p-6 sm:p-8" @submit="submit">
         <div class="flex flex-col items-center gap-3">
-          <img
-            :src="logoURL"
-            :alt="name"
-            class="dark:invert dark:brightness-0 max-w-[180px]"
-          />
           <h1
-            class="text-xl font-semibold text-blue-600 dark:text-gray-100 text-center break-words"
+            class="text-2xl font-semibold text-blue-600 dark:text-gray-100 text-center break-words"
           >
             {{ name }}
           </h1>
@@ -92,8 +87,8 @@
 import { StatusError } from "@/api/utils";
 import * as auth from "@/utils/auth";
 import {
+  cspNonce,
   name,
-  logoURL,
   recaptcha,
   recaptchaKey,
   version,
@@ -125,6 +120,10 @@ let recaptchaScript: HTMLScriptElement | null = null;
 onMounted(() => {
   if (recaptcha && recaptchaKey) {
     recaptchaScript = document.createElement("script");
+    if (cspNonce) {
+      recaptchaScript.nonce = cspNonce;
+      recaptchaScript.setAttribute("nonce", cspNonce);
+    }
     recaptchaScript.src =
       "https://www.google.com/recaptcha/enterprise.js?render=" + recaptchaKey;
     document.head.appendChild(recaptchaScript);

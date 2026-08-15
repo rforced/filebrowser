@@ -1,13 +1,63 @@
+import fs from "node:fs";
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import vue from "@vitejs/plugin-vue";
 import tailwindcss from "@tailwindcss/vite";
 import VueI18nPlugin from "@intlify/unplugin-vue-i18n/vite";
 import { compression } from "vite-plugin-compression2";
 
+import { ACE_ASSET_DIR, BUNDLED_MODES } from "./src/utils/aceAssets";
+
+const ACE_SOURCE_DIR = path.resolve(
+  __dirname,
+  "node_modules/ace-builds/src-min-noconflict"
+);
+
+const aceAssetFiles = (): string[] => {
+  const themes = fs
+    .readdirSync(ACE_SOURCE_DIR)
+    .filter((file) => file.startsWith("theme-") && file.endsWith(".js"));
+
+  const modes = BUNDLED_MODES.map((mode) => `mode-${mode}.js`).filter((file) =>
+    fs.existsSync(path.join(ACE_SOURCE_DIR, file))
+  );
+
+  return [...themes, ...modes];
+};
+
+const aceAssets = (): Plugin => ({
+  name: "ace-assets",
+
+  configureServer(server) {
+    server.middlewares.use((req, res, next) => {
+      const prefix = `/${ACE_ASSET_DIR}/`;
+      if (!req.url?.startsWith(prefix)) return next();
+
+      const file = path.basename(req.url.split("?")[0]);
+      const full = path.join(ACE_SOURCE_DIR, file);
+
+      if (!fs.existsSync(full)) return next();
+
+      res.setHeader("Content-Type", "text/javascript");
+      fs.createReadStream(full).pipe(res);
+    });
+  },
+
+  generateBundle() {
+    for (const file of aceAssetFiles()) {
+      this.emitFile({
+        type: "asset",
+        fileName: `${ACE_ASSET_DIR}/${file}`,
+        source: fs.readFileSync(path.join(ACE_SOURCE_DIR, file)),
+      });
+    }
+  },
+});
+
 const plugins = [
   vue(),
   tailwindcss(),
+  aceAssets(),
   VueI18nPlugin({
     include: [path.resolve(__dirname, "./src/i18n/**/*.json")],
   }),
