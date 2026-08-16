@@ -50,3 +50,24 @@
 @utility invalid-feedback {
   @apply ml-1 text-red-500 dark:text-red-400 text-sm;
 }
+
+.dark .vue-number-input .vue-number-input__input {
+  background-color: var(--color-gray-800);
+  border-color: rgb(255 255 255 / 0.7);
+  color: var(--color-gray-100);
+  color-scheme: dark;
+}
+
+.dark .vue-number-input .vue-number-input__button {
+  background-color: transparent;
+}
+
+.dark .vue-number-input .vue-number-input__button::before,
+.dark .vue-number-input .vue-number-input__button::after {
+  background-color: var(--color-gray-100);
+}
+
+.dark .vue-number-input .vue-number-input__button:disabled::before,
+.dark .vue-number-input .vue-number-input__button:disabled::after {
+  background-color: var(--color-gray-500);
+}

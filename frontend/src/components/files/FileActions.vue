@@ -91,16 +91,12 @@ const route = useRoute();
 const { actions } = useFileActions();
 
 const STACK_LAYOUT: string[][][] = [
-  [["new-folder", "new-file"], ["upload"]],
-  [["create-job"], ["converge-clean"]],
   [
-    ["download"],
-    ["info", "rename"],
-    ["copy", "move"],
-    ["share"],
-    ["extract"],
-    ["delete"],
+    ["new-folder", "new-file"],
+    ["upload", "download"],
   ],
+  [["create-job"], ["converge-clean"]],
+  [["info", "rename"], ["copy", "move"], ["share"], ["extract"], ["delete"]],
 ];
 
 interface StackEntry {

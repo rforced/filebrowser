@@ -76,7 +76,7 @@
     <template v-else>
       <div class="px-6 py-4 flex flex-col gap-3">
         <p>{{ t("settings.shareDuration") }}</p>
-        <div class="form-control">
+        <div class="flex gap-2">
           <vue-number-input
             center
             controls
@@ -86,9 +86,10 @@
             @keyup.enter="submit"
             v-model="time"
             tabindex="1"
+            class="flex-1 min-w-0"
           />
           <select
-            class="right"
+            class="shrink-0 rounded-md border border-gray-300 dark:border-white/70 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 sm:text-sm dark:[color-scheme:dark]"
             v-model="unit"
             :aria-label="t('time.unit')"
             tabindex="2"

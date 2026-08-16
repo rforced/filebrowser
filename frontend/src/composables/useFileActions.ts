@@ -271,8 +271,8 @@ export const useFileActions = () => {
         id: "converge-clean",
         icon: "fa-broom",
         label: t("buttons.cleanConvergeOutput"),
-        visible: isConvergeCase.value && !!perm.value?.delete,
-        enabled: true,
+        visible: !!perm.value?.delete,
+        enabled: isConvergeCase.value,
         run: () => showPrompt("converge-clean"),
       },
     ].filter((action) => action.visible);
