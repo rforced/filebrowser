@@ -8,7 +8,7 @@
       v-tooltip="t('files.home')"
       :to="base || ''"
       :aria-label="t('files.home')"
-      class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition"
+      class="flex items-center gap-1.5 min-h-9 px-2.5 py-1.5 rounded-md transition"
       :class="interactive"
     >
       <i class="fa-solid fa-hard-drive text-lg"></i>

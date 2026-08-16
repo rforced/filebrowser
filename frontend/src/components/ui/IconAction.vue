@@ -29,7 +29,7 @@ const props = withDefaults(
     href?: string;
     enabled?: boolean;
     external?: boolean;
-    size?: "sm" | "md";
+    size?: "sm" | "md" | "lg";
     hoverColor?: string;
   }>(),
   {
@@ -46,6 +46,7 @@ const emit = defineEmits<{ (e: "action", event: MouseEvent): void }>();
 const SIZES = {
   sm: "w-7 h-7 text-sm",
   md: "w-8 h-8",
+  lg: "w-11 h-11 text-lg",
 };
 
 const onClick = (event: MouseEvent) => {

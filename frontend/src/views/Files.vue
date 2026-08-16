@@ -8,11 +8,13 @@
           v-tooltip="t('buttons.switchView')"
           :icon="viewIcon"
           :title="t('buttons.switchView')"
+          size="lg"
           @action="switchView"
         />
         <IconAction
           :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
           :title="t('buttons.selectMultiple')"
+          size="lg"
           @action="toggleMultipleSelection"
         />
       </div>

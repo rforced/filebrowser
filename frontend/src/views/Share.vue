@@ -15,12 +15,14 @@
           v-if="isSingleFile()"
           icon="fa-paste"
           :title="t('buttons.copyDownloadLinkToClipboard')"
+          size="lg"
           @action="copyToClipboard(linkSelected())"
         />
         <IconAction
           v-if="req.isDir"
           :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
           :title="t('buttons.selectMultiple')"
+          size="lg"
           @action="toggleMultipleSelection"
         />
         <button
