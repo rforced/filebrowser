@@ -1,6 +1,11 @@
 <template>
   <main class="flex flex-col gap-4 p-4">
-    <Banner :title="t('sidebar.settings')" :subtitle="activeLabel" />
+    <Banner :title="t('sidebar.settings')" :subtitle="activeLabel">
+      <router-link to="/files/" class="btn btn-flex btn-white btn-soft">
+        <i class="fa-solid fa-folder-open"></i>
+        <span>{{ t("sidebar.myFiles") }}</span>
+      </router-link>
+    </Banner>
 
     <hr class="border-gray-200 dark:border-gray-700" />
 
