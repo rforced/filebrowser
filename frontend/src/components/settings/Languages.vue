@@ -17,6 +17,7 @@ export default {
     const locales = {
       de: "Deutsch",
       en: "English",
+      hi: "हिन्दी",
       it: "Italiano",
       ja: "日本語",
       "zh-cn": "中文 (简体)",
