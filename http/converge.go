@@ -350,6 +350,26 @@ type convergeSummaryResponse struct {
 	Progress     *convergeProgress `json:"progress,omitempty"`
 }
 
+type convergeRunEvidence struct {
+	start    time.Time
+	done     time.Time
+	hasStart bool
+	hasDone  bool
+	activity time.Time
+	logPath  string
+	logMod   time.Time
+}
+
+func (e *convergeRunEvidence) stamp() time.Time {
+	stamp := e.activity
+	for _, t := range []time.Time{e.start, e.done, e.logMod} {
+		if t.After(stamp) {
+			stamp = t
+		}
+	}
+	return stamp
+}
+
 type convergeSummaryScan struct {
 	tallies  map[string]*convergeGroup
 	count    int
@@ -359,18 +379,23 @@ type convergeSummaryScan struct {
 	logPath string
 	logMod  time.Time
 
-	startMod map[string]time.Time
-	doneIn   map[string]bool
-	activity map[string]time.Time
+	runs map[string]*convergeRunEvidence
 }
 
 func newConvergeSummaryScan() *convergeSummaryScan {
 	return &convergeSummaryScan{
-		tallies:  map[string]*convergeGroup{},
-		startMod: map[string]time.Time{},
-		doneIn:   map[string]bool{},
-		activity: map[string]time.Time{},
+		tallies: map[string]*convergeGroup{},
+		runs:    map[string]*convergeRunEvidence{},
 	}
+}
+
+func (s *convergeSummaryScan) run(dir string) *convergeRunEvidence {
+	e, ok := s.runs[dir]
+	if !ok {
+		e = &convergeRunEvidence{}
+		s.runs[dir] = e
+	}
+	return e
 }
 
 func (s *convergeSummaryScan) tally(kind string, size int64) {
@@ -390,12 +415,18 @@ func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, count
 
 	switch name {
 	case convergeStartMarker:
-		if info.ModTime().After(s.startMod[runDir]) {
-			s.startMod[runDir] = info.ModTime()
+		e := s.run(runDir)
+		e.hasStart = true
+		if info.ModTime().After(e.start) {
+			e.start = info.ModTime()
 		}
 		return
 	case convergeDoneMarker:
-		s.doneIn[runDir] = true
+		e := s.run(runDir)
+		e.hasDone = true
+		if info.ModTime().After(e.done) {
+			e.done = info.ModTime()
+		}
 		return
 	}
 
@@ -418,12 +449,19 @@ func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, count
 			modTime: info.ModTime(),
 		})
 	case "out", "log":
-		if info.ModTime().After(s.activity[runDir]) {
-			s.activity[runDir] = info.ModTime()
+		e := s.run(runDir)
+		if info.ModTime().After(e.activity) {
+			e.activity = info.ModTime()
 		}
-		if name == convergeLogName && info.ModTime().After(s.logMod) {
-			s.logPath = fPath
-			s.logMod = info.ModTime()
+		if name == convergeLogName {
+			if info.ModTime().After(e.logMod) {
+				e.logPath = fPath
+				e.logMod = info.ModTime()
+			}
+			if info.ModTime().After(s.logMod) {
+				s.logPath = fPath
+				s.logMod = info.ModTime()
+			}
 		}
 	}
 }
@@ -441,31 +479,41 @@ func (s *convergeSummaryScan) groups() []convergeGroup {
 	return groups
 }
 
-func (s *convergeSummaryScan) status(now time.Time) (string, *time.Time) {
-	runDir := ""
-	var newest time.Time
-	for dir, mod := range s.startMod {
-		if runDir == "" || mod.After(newest) {
-			runDir, newest = dir, mod
+// chooseRun picks the run directory with the newest evidence of any kind, so
+// a marker-less run from an old CONVERGE still outweighs an older finished one.
+func (s *convergeSummaryScan) chooseRun() *convergeRunEvidence {
+	var chosen *convergeRunEvidence
+	chosenDir := ""
+	for dir, e := range s.runs {
+		if e.stamp().IsZero() {
+			continue
+		}
+		if chosen == nil || e.stamp().After(chosen.stamp()) ||
+			(e.stamp().Equal(chosen.stamp()) && dir > chosenDir) {
+			chosen, chosenDir = e, dir
 		}
 	}
+	return chosen
+}
 
-	if runDir == "" {
+func resolveConvergeStatus(e *convergeRunEvidence, logTail []byte, now time.Time) (string, *time.Time) {
+	if e == nil {
 		return "idle", nil
 	}
 
-	activity := s.activity[runDir]
-	if activity.Before(newest) {
-		activity = newest
+	stamp := e.stamp()
+	switch {
+	case e.hasDone:
+		return "completed", &stamp
+	case convergeLogSaysComplete(logTail):
+		return "completed", &stamp
+	case now.Sub(stamp) <= convergeActiveWindow:
+		return "running", &stamp
+	case e.hasStart || e.logPath != "":
+		return "interrupted", &stamp
+	default:
+		return "idle", nil
 	}
-
-	if s.doneIn[runDir] {
-		return "completed", &activity
-	}
-	if now.Sub(activity) <= convergeActiveWindow {
-		return "running", &activity
-	}
-	return "interrupted", &activity
 }
 
 func convergeWalkRunDir(ctx context.Context, d *data, runDir, dir string, scan *convergeSummaryScan) {
@@ -610,7 +658,7 @@ func convergeDeckTimes(d *data, dir string) (start, end *float64, unit string) {
 	return start, end, unit
 }
 
-func convergeLogProgress(d *data, logPath, unit string) *float64 {
+func convergeReadLogTail(d *data, logPath string) []byte {
 	if logPath == "" || !d.CheckRules(logPath) {
 		return nil
 	}
@@ -635,7 +683,25 @@ func convergeLogProgress(d *data, logPath, unit string) *float64 {
 	if err != nil {
 		return nil
 	}
+	return tail
+}
 
+var convergeCompletionMarks = []string{"normal termination"}
+
+func convergeLogSaysComplete(tail []byte) bool {
+	if len(tail) == 0 {
+		return false
+	}
+	lower := strings.ToLower(string(tail))
+	for _, mark := range convergeCompletionMarks {
+		if strings.Contains(lower, mark) {
+			return true
+		}
+	}
+	return false
+}
+
+func convergeLogCurrentTime(tail []byte, unit string) *float64 {
 	key := "time="
 	if unit == "deg" {
 		key = "crank="
@@ -687,7 +753,17 @@ var convergeSummaryHandler = func(w http.ResponseWriter, r *http.Request, d *dat
 		return errToStatus(err), err
 	}
 
-	status, lastActivity := scan.status(time.Now())
+	run := scan.chooseRun()
+	var logTail []byte
+	if run != nil {
+		logTail = convergeReadLogTail(d, run.logPath)
+	}
+	status, lastActivity := resolveConvergeStatus(run, logTail, time.Now())
+
+	logPath := scan.logPath
+	if run != nil && run.logPath != "" {
+		logPath = run.logPath
+	}
 
 	resp := &convergeSummaryResponse{
 		IsCase:       true,
@@ -697,12 +773,12 @@ var convergeSummaryHandler = func(w http.ResponseWriter, r *http.Request, d *dat
 		Size:         scan.size,
 		Restarts:     convergeRestartsFromMatches(scan.restarts),
 		Job:          convergeJobFromSpec(d, dir),
-		LogPath:      scan.logPath,
+		LogPath:      logPath,
 		LastActivity: lastActivity,
 	}
 
 	start, end, unit := convergeDeckTimes(d, dir)
-	if current := convergeLogProgress(d, scan.logPath, unit); current != nil {
+	if current := convergeLogCurrentTime(logTail, unit); current != nil {
 		resp.Progress = &convergeProgress{
 			Current: *current,
 			Unit:    unit,

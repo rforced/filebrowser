@@ -639,7 +639,7 @@ func TestConvergeSummaryStatuses(t *testing.T) {
 	}{
 		{
 			name:  "idle without markers",
-			build: func(t *testing.T, caseDir string) {},
+			build: func(_ *testing.T, _ string) {},
 			want:  "idle",
 		},
 		{
@@ -698,6 +698,72 @@ func TestConvergeSummaryStatuses(t *testing.T) {
 				writeCaseFile(t, caseDir, "data", "stream0", "thermo.out")
 			},
 			want: "running",
+		},
+
+		{
+			name: "completed via log epilogue without markers",
+			build: func(t *testing.T, caseDir string) {
+				log := writeCaseFile(t, caseDir,
+					"solver chatter\nnormal termination\nProgram used 8092.551994 seconds.\n",
+					"outputs_1", "converge.log")
+				if err := os.Chtimes(log, old, old); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "completed",
+		},
+		{
+			name: "running from stream writes alone",
+			build: func(t *testing.T, caseDir string) {
+				writeCaseFile(t, caseDir, "data", "stream0", "thermo.out")
+			},
+			want: "running",
+		},
+		{
+			name: "interrupted when the log just stops",
+			build: func(t *testing.T, caseDir string) {
+				log := writeCaseFile(t, caseDir,
+					"solver chatter\n   time=   -2.672e-02, crank=   -4.809e+02, dt=    5.000e-07\n",
+					"outputs_1", "converge.log")
+				if err := os.Chtimes(log, old, old); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "interrupted",
+		},
+		{
+			name: "stale streams with no log or markers stay unjudged",
+			build: func(t *testing.T, caseDir string) {
+				out := writeCaseFile(t, caseDir, "data", "stream0", "thermo.out")
+				if err := os.Chtimes(out, old, old); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "idle",
+		},
+		{
+			name: "done without start",
+			build: func(t *testing.T, caseDir string) {
+				writeCaseFile(t, caseDir, "", "outputs_1", "converge.done")
+			},
+			want: "completed",
+		},
+		{
+			name: "newer marker-less crash outweighs an old completed run",
+			build: func(t *testing.T, caseDir string) {
+				older := old.Add(-time.Hour)
+				for _, name := range []string{"converge.start", "converge.done"} {
+					p := writeCaseFile(t, caseDir, "", "outputs_1", name)
+					if err := os.Chtimes(p, older, older); err != nil {
+						t.Fatal(err)
+					}
+				}
+				log := writeCaseFile(t, caseDir, "still going\n", "outputs_2", "converge.log")
+				if err := os.Chtimes(log, old, old); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "interrupted",
 		},
 	}
 
