@@ -14,21 +14,18 @@
     </div>
 
     <div
-      class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
-      style="display: flex; align-items: center; justify-content: space-between"
+      class="flex flex-wrap items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
     >
-      <template v-if="authStore.user?.perm.create">
-        <button
-          class="btn btn-blue btn-soft"
-          @click="fileList?.createDir()"
-          :aria-label="t('sidebar.newFolder')"
-          :title="t('sidebar.newFolder')"
-          style="justify-self: left"
-        >
-          <span>{{ t("sidebar.newFolder") }}</span>
-        </button>
-      </template>
-      <div>
+      <button
+        v-if="authStore.user?.perm.create"
+        class="btn btn-blue btn-soft"
+        @click="fileList?.createDir()"
+        :aria-label="t('sidebar.newFolder')"
+        :title="t('sidebar.newFolder')"
+      >
+        <span>{{ t("sidebar.newFolder") }}</span>
+      </button>
+      <div class="flex items-center gap-2 ml-auto">
         <button
           class="btn btn-white btn-soft"
           @click="layoutStore.closeHovers"

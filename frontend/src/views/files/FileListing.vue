@@ -113,6 +113,11 @@
             </div>
           </template>
 
+          <hr
+            v-if="isList && fileStore.req?.numDirs && fileStore.req?.numFiles"
+            class="border-gray-200 dark:border-gray-700"
+          />
+
           <!-- Files -->
           <template v-if="fileStore.req?.numFiles">
             <h2
@@ -148,7 +153,7 @@
         @hide="hideContextMenu"
       >
         <button
-          v-for="action in actions"
+          v-for="action in contextActions"
           :key="action.id"
           type="button"
           class="w-full text-left flex items-center gap-2 whitespace-nowrap px-3 py-2 text-sm transition hover:bg-blue-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-inherit"
@@ -259,19 +264,18 @@ onBeforeRouteUpdate(() => {
 
 const { t } = useI18n();
 
-// The action list is shared with the sidebar stack and the mobile rail.
 const { actions } = useFileActions();
+
+const contextActions = computed(() =>
+  actions.value.filter((action) => action.id !== "converge-clean")
+);
 
 const listing = ref<HTMLElement | null>(null);
 
 const viewMode = computed(() => authStore.user?.viewMode ?? "list");
+
 const isList = computed(() => viewMode.value === "list");
 
-/*
- * Tile modes lay out as a responsive grid. `auto-fill` with a minimum track
- * width replaces the old JS that measured `main` on every resize and wrote a
- * percentage width into a stylesheet rule.
- */
 const groupClass = computed(() =>
   isList.value
     ? "flex flex-col"

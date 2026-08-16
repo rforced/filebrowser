@@ -1,24 +1,60 @@
 <template>
-  <div>
-    <ul class="file-list">
+  <div class="flex flex-col gap-3">
+    <ul
+      v-if="items.length"
+      class="file-list rounded-md border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700 max-h-64 overflow-y-auto"
+    >
       <li
-        @click="itemClick"
-        @touchstart="touchstart"
-        @dblclick="next"
+        v-for="item in items"
+        :key="item.name"
         role="button"
         tabindex="0"
         :aria-label="item.name"
         :aria-selected="selected == item.url"
-        :key="item.name"
-        v-for="item in items"
         :data-url="item.url"
+        class="group flex items-center gap-3 px-3 py-2 text-sm cursor-pointer select-none transition"
+        :class="
+          selected == item.url
+            ? 'bg-blue-500/20 dark:bg-blue-500/30 text-blue-900 dark:text-blue-50'
+            : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+        "
+        @click="itemClick"
+        @touchstart="touchstart"
+        @dblclick="next"
       >
-        {{ item.name }}
+        <i
+          class="fa-solid fa-fw shrink-0"
+          :class="
+            item.name === '..'
+              ? 'fa-arrow-turn-up text-gray-500 dark:text-gray-400'
+              : [
+                  'fa-folder',
+                  selected == item.url
+                    ? 'text-current'
+                    : 'text-blue-500 dark:text-blue-100',
+                ]
+          "
+        ></i>
+        <span class="flex-1 min-w-0 truncate">{{ item.name }}</span>
+        <button
+          type="button"
+          class="action shrink-0 opacity-60 group-hover:opacity-100"
+          :data-url="item.url"
+          :aria-label="$t('buttons.openFolder')"
+          :title="$t('buttons.openFolder')"
+          @click.stop="next"
+          @dblclick.stop
+        >
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
       </li>
     </ul>
 
-    <p>
-      {{ $t("prompts.currentlyNavigating") }} <code>{{ nav }}</code
+    <p class="text-sm text-gray-600 dark:text-gray-300">
+      {{ $t("prompts.currentlyNavigating") }}
+      <code
+        class="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-900"
+        >{{ nav }}</code
       >.
     </p>
   </div>

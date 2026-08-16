@@ -16,7 +16,7 @@
           {{ $t("prompts.singleConflictResolve") }}
         </p>
         <div class="conflict-list-container">
-          <div>
+          <div class="border-b border-gray-200 dark:border-gray-700 pb-2">
             <p>
               <input
                 @change="toogleCheckAll"
@@ -46,10 +46,16 @@
                 <span>{{ item.name }}</span>
 
                 <template v-if="item.checked.length == 2">
-                  <span v-if="isUploadAction != true" class="result-rename">
+                  <span
+                    v-if="isUploadAction != true"
+                    class="result-badge bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                  >
                     {{ $t("prompts.rename") }}
                   </span>
-                  <span v-else class="result-error">
+                  <span
+                    v-else
+                    class="result-badge bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                  >
                     {{ $t("prompts.forbiddenError") }}
                   </span>
                 </template>
@@ -57,11 +63,14 @@
                   v-else-if="
                     item.checked.length == 1 && item.checked[0] == 'origin'
                   "
-                  class="result-override"
+                  class="result-badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
                 >
                   {{ $t("prompts.override") }}
                 </span>
-                <span v-else class="result-skip">
+                <span
+                  v-else
+                  class="result-badge bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200"
+                >
                   {{ $t("prompts.skip") }}
                 </span>
               </div>
@@ -96,24 +105,38 @@
           {{ $t("prompts.fastConflictResolve", { count: conflict.length }) }}
         </p>
 
-        <div class="result-buttons">
-          <button @click="(e) => resolve(e, ['origin'])">
-            <i class="fa-solid fa-check-double"></i>
+        <div class="flex flex-col gap-1">
+          <button
+            type="button"
+            class="action w-full justify-start text-left text-sm font-medium"
+            @click="(e) => resolve(e, ['origin'])"
+          >
+            <i class="fa-solid fa-check-double fa-fw"></i>
             {{ $t("buttons.overrideAll") }}
           </button>
           <button
             v-if="isUploadAction != true"
+            type="button"
+            class="action w-full justify-start text-left text-sm font-medium"
             @click="(e) => resolve(e, ['origin', 'dest'])"
           >
-            <i class="fa-solid fa-copy"></i>
+            <i class="fa-solid fa-copy fa-fw"></i>
             {{ $t("buttons.renameAll") }}
           </button>
-          <button @click="(e) => resolve(e, ['dest'])">
-            <i class="fa-solid fa-rotate-left"></i>
+          <button
+            type="button"
+            class="action w-full justify-start text-left text-sm font-medium"
+            @click="(e) => resolve(e, ['dest'])"
+          >
+            <i class="fa-solid fa-rotate-left fa-fw"></i>
             {{ $t("buttons.skipAll") }}
           </button>
-          <button @click="personalized = true">
-            <i class="fa-solid fa-list-check"></i>
+          <button
+            type="button"
+            class="action w-full justify-start text-left text-sm font-medium"
+            @click="personalized = true"
+          >
+            <i class="fa-solid fa-list-check fa-fw"></i>
             {{ $t("buttons.singleDecision") }}
           </button>
         </div>
@@ -122,30 +145,27 @@
 
     <div
       class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
-      style="display: flex; justify-content: end"
     >
-      <div>
-        <button
-          class="btn btn-white btn-soft"
-          @click="close"
-          :aria-label="$t('buttons.cancel')"
-          :title="$t('buttons.cancel')"
-          tabindex="4"
-        >
-          {{ $t("buttons.cancel") }}
-        </button>
-        <button
-          v-if="personalized"
-          id="focus-prompt"
-          class="btn btn-blue btn-soft"
-          @click="(event) => currentPrompt?.confirm(event, conflict)"
-          :aria-label="$t('buttons.ok')"
-          :title="$t('buttons.ok')"
-          tabindex="1"
-        >
-          {{ $t("buttons.ok") }}
-        </button>
-      </div>
+      <button
+        class="btn btn-white btn-soft"
+        @click="close"
+        :aria-label="$t('buttons.cancel')"
+        :title="$t('buttons.cancel')"
+        tabindex="4"
+      >
+        {{ $t("buttons.cancel") }}
+      </button>
+      <button
+        v-if="personalized"
+        id="focus-prompt"
+        class="btn btn-blue btn-soft"
+        @click="(event) => currentPrompt?.confirm(event, conflict)"
+        :aria-label="$t('buttons.ok')"
+        :title="$t('buttons.ok')"
+        tabindex="1"
+      >
+        {{ $t("buttons.ok") }}
+      </button>
     </div>
   </div>
 </template>
@@ -235,12 +255,7 @@ const toogleCheckAll = (e: Event) => {
 .conflict-list-container > div {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border-bottom: solid 1px var(--textPrimary);
   gap: 0.5rem 0.25rem;
-}
-
-.conflict-list-container > div:last-child {
-  border-bottom: none;
 }
 
 .conflict-list-container > div > div {
@@ -251,60 +266,23 @@ const toogleCheckAll = (e: Event) => {
 
 .conflict-file-name {
   grid-column: 1 / -1;
-  color: var(--textPrimary);
   font-size: 0.8rem;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   padding: 0.5rem 0.25rem;
 }
 
 .conflict-file-value {
-  color: var(--textPrimary);
   font-size: 0.9rem;
   margin: 0;
 }
 
-.result-rename,
-.result-override,
-.result-error,
-.result-skip {
+.result-badge {
   font-size: 0.75rem;
-  line-height: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
   border-radius: 0.75rem;
   padding: 0.15rem 0.5rem;
-}
-
-.result-override {
-  background-color: var(--input-green);
-}
-
-.result-error {
-  background-color: var(--icon-red);
-}
-.result-rename {
-  background-color: var(--icon-orange);
-}
-.result-skip {
-  background-color: var(--icon-blue);
-}
-
-.result-buttons > button {
-  padding: 0.75rem;
-  color: var(--textPrimary);
-  margin: 0.25rem 0;
-  display: flex;
-  justify-content: start;
-  align-items: center;
-  gap: 0.5rem;
-  background: transparent;
-  border: solid 1px transparent;
-  width: 100%;
-  transition: all ease-in-out 200ms;
-  cursor: pointer;
-  border-radius: 0.25rem;
-}
-
-.result-buttons > button:hover {
-  border: solid 1px var(--icon-blue);
 }
 </style>

@@ -42,7 +42,6 @@
         <template #sidebar>
           <storage-card v-if="!disableUsedPercentage" />
           <file-actions variant="stack" />
-          <details-card />
           <HelpBox v-if="domain" />
         </template>
       </two-columns>
@@ -89,7 +88,6 @@ import FileListing from "@/views/files/FileListing.vue";
 import TwoColumns from "@/components/layout/TwoColumns.vue";
 import FileActions from "@/components/files/FileActions.vue";
 import StorageCard from "@/components/files/StorageCard.vue";
-import DetailsCard from "@/components/files/DetailsCard.vue";
 import Banner from "@/components/ui/Banner.vue";
 import Card from "@/components/ui/Card.vue";
 import HelpBox from "@/components/ui/HelpBox.vue";

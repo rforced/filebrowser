@@ -1,38 +1,42 @@
 <template>
-  <div v-if="variant === 'stack'" class="hidden md:flex flex-col gap-3">
-    <template v-for="(action, index) in actions" :key="action.id">
-      <hr
-        v-if="dividerBefore(index)"
-        class="border-gray-200 dark:border-gray-700"
-      />
+  <div v-if="variant === 'stack'" class="hidden md:flex flex-col gap-2">
+    <template v-for="(group, groupIndex) in stackGroups" :key="groupIndex">
+      <hr v-if="groupIndex > 0" class="border-gray-200 dark:border-gray-700" />
 
-      <button
-        :id="`${action.id}-button`"
-        type="button"
-        class="btn btn-menu btn-soft"
-        :class="action.variant ?? 'btn-white'"
-        :disabled="!action.enabled"
-        @click="action.run"
-      >
-        <i
-          class="fa-solid fa-fw"
-          :class="buttonIcon(action.id, action.icon)"
-        ></i>
-        <span class="truncate">{{ action.label }}</span>
-      </button>
-    </template>
+      <div class="grid grid-cols-2 gap-2">
+        <template v-for="entry in group" :key="entry.id">
+          <a
+            v-if="entry.id === 'create-job'"
+            :href="jobUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-menu btn-white btn-soft min-w-0"
+            :class="entry.span === 2 ? 'col-span-2' : ''"
+          >
+            <i class="fa-kit fa-converge-mark fa-fw"></i>
+            <span class="truncate">{{ t("sidebar.createJob") }}</span>
+          </a>
 
-    <template v-if="jobUrl">
-      <hr class="border-gray-200 dark:border-gray-700" />
-      <a
-        :href="jobUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="btn btn-menu btn-white btn-soft"
-      >
-        <i class="fa-kit fa-converge-mark fa-fw"></i>
-        <span class="truncate">{{ t("sidebar.createJob") }}</span>
-      </a>
+          <button
+            v-else-if="entry.action"
+            :id="`${entry.action.id}-button`"
+            type="button"
+            class="btn btn-menu btn-soft min-w-0"
+            :class="[
+              entry.action.variant ?? 'btn-white',
+              entry.span === 2 ? 'col-span-2' : '',
+            ]"
+            :disabled="!entry.action.enabled"
+            @click="entry.action.run"
+          >
+            <i
+              class="fa-solid fa-fw"
+              :class="buttonIcon(entry.action.id, entry.action.icon)"
+            ></i>
+            <span class="truncate">{{ entry.action.label }}</span>
+          </button>
+        </template>
+      </div>
     </template>
   </div>
 
@@ -74,7 +78,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute } from "vue-router";
 
-import { useFileActions } from "@/composables/useFileActions";
+import { useFileActions, type FileAction } from "@/composables/useFileActions";
 import { buttonIcon } from "@/utils/buttons";
 import { domain, teamId, filesystemId } from "@/utils/constants";
 
@@ -86,15 +90,59 @@ const { t } = useI18n();
 const route = useRoute();
 const { actions } = useFileActions();
 
-const GROUP_STARTS = new Set(["download", "delete"]);
+const STACK_LAYOUT: string[][][] = [
+  [["new-folder", "new-file"], ["upload"]],
+  [["create-job"], ["converge-clean"]],
+  [
+    ["download"],
+    ["info", "rename"],
+    ["copy", "move"],
+    ["share"],
+    ["extract"],
+    ["delete"],
+  ],
+];
 
-const dividerBefore = (index: number) =>
-  index > 0 && GROUP_STARTS.has(actions.value[index].id);
+interface StackEntry {
+  id: string;
+  action?: FileAction;
+  span: 1 | 2;
+}
 
 const jobUrl = computed(() => {
   if (!domain || !teamId || !filesystemId) return "";
 
   const folderPath = route.path.replace(/^\/files/, "") || "/";
   return `${domain}/${teamId}/jobs/create?sid=${filesystemId}&stype=filesystem&path=${encodeURIComponent(folderPath)}`;
+});
+
+const stackGroups = computed<StackEntry[][]>(() => {
+  const byId = new Map(actions.value.map((action) => [action.id, action]));
+
+  return STACK_LAYOUT.map((rows) => {
+    const group: StackEntry[] = [];
+
+    for (const row of rows) {
+      const entries: StackEntry[] = [];
+
+      for (const id of row) {
+        if (id === "create-job") {
+          if (jobUrl.value) entries.push({ id, span: 2 });
+        } else {
+          const action = byId.get(id);
+          if (action) entries.push({ id, action, span: 2 });
+        }
+      }
+
+      if (entries.length === 2) {
+        entries[0].span = 1;
+        entries[1].span = 1;
+      }
+
+      group.push(...entries);
+    }
+
+    return group;
+  }).filter((group) => group.length > 0);
 });
 </script>
