@@ -139,3 +139,44 @@ func TestUploadRefusesToOverwriteWithoutOverride(t *testing.T) {
 		t.Errorf("override=true did not write: %q", got)
 	}
 }
+
+func TestResourcePostExistingDirectory(t *testing.T) {
+	root := t.TempDir()
+	userScope := filepath.Join(root, "user")
+	if err := os.MkdirAll(filepath.Join(userScope, "taken"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	key := []byte("test-signing-key")
+	st := scopedUserStorage(t, userScope, users.Permissions{Create: true, Modify: true}, key)
+	if err := st.Settings.Save(&settings.Settings{Key: key}); err != nil {
+		t.Fatal(err)
+	}
+	token := issueToken(t, st)
+
+	post := func(query string) *httptest.ResponseRecorder {
+		req, _ := http.NewRequest(http.MethodPost, "/taken/"+query, http.NoBody)
+		req.Header.Set("X-Auth", token)
+		rec := httptest.NewRecorder()
+		handle(resourcePostHandler(diskcache.NewNoOp()), "", st, &settings.Server{}).ServeHTTP(rec, req)
+		return rec
+	}
+
+	if rec := post(""); rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for an existing directory, got %d body=%q", rec.Code, rec.Body.String())
+	}
+	if rec := post("?override=true"); rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 with override=true, got %d body=%q", rec.Code, rec.Body.String())
+	}
+
+	if err := os.WriteFile(filepath.Join(userScope, "file.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	req, _ := http.NewRequest(http.MethodPost, "/file.txt/", http.NoBody)
+	req.Header.Set("X-Auth", token)
+	rec := httptest.NewRecorder()
+	handle(resourcePostHandler(diskcache.NewNoOp()), "", st, &settings.Server{}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for a name held by a file, got %d body=%q", rec.Code, rec.Body.String())
+	}
+}

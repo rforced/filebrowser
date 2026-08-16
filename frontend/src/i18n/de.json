@@ -78,7 +78,8 @@
     "internal": "Da ist etwas schiefgelaufen.",
     "notFound": "Dieser Ort ist nicht erreichbar.",
     "connection": "Der Server ist nicht erreichbar.",
-    "passwordTooCommon": "Dieses Passwort ist zu gebräuchlich. Bitte wähle ein weniger vorhersehbares."
+    "passwordTooCommon": "Dieses Passwort ist zu gebräuchlich. Bitte wähle ein weniger vorhersehbares.",
+    "alreadyExists": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits."
   },
   "files": {
     "body": "Inhalt",
@@ -126,7 +127,7 @@
   "login": {
     "password": "Passwort",
     "submit": "Anmelden",
-    "username": "Benutzername",
+    "username": "E-Mail-Adresse",
     "wrongCredentials": "Falsche Anmeldedaten",
     "captchaFailed": "Sicherheitsüberprüfung fehlgeschlagen. Bitte versuche es erneut oder wende dich an den Support, falls das Problem weiterhin besteht.",
     "rateLimited": "Zu viele Anmeldeversuche. Bitte versuche es in einer Minute erneut.",

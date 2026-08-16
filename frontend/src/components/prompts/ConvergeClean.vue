@@ -7,22 +7,64 @@
     <div class="px-6 py-4 flex flex-col gap-3">
       <p>{{ t("prompts.convergeCleanMessage") }}</p>
 
+      <p
+        v-if="caseRunning"
+        class="flex gap-2 items-start text-sm text-amber-700 dark:text-amber-400"
+      >
+        <i class="fa-solid fa-triangle-exclamation mt-0.5"></i>
+        <span>{{ t("prompts.convergeCleanRunning") }}</span>
+      </p>
+
       <table class="converge-kinds">
         <tbody>
-          <tr
-            v-for="kind in convergeKinds"
-            :key="kind.key"
-            :class="{ 'converge-kind--empty': counts[kind.key] === 0 }"
-          >
-            <td>{{ t(`prompts.convergeKinds.${kind.key}`) }}</td>
-            <td>
-              <code>{{ kind.glob }}</code>
-            </td>
-            <td class="converge-count">
-              <span v-if="scanning">&hellip;</span>
-              <span v-else>{{ counts[kind.key] }}</span>
-            </td>
-          </tr>
+          <template v-for="kind in convergeKinds" :key="kind.key">
+            <tr :class="{ 'converge-kind--empty': counts[kind.key] === 0 }">
+              <td class="converge-check">
+                <input
+                  :id="`converge-kind-${kind.key}`"
+                  v-model="checked[kind.key]"
+                  type="checkbox"
+                  class="form-checkbox cursor-pointer"
+                  :disabled="scanning || cleaning || counts[kind.key] === 0"
+                />
+              </td>
+              <td>
+                <label
+                  :for="`converge-kind-${kind.key}`"
+                  class="cursor-pointer"
+                >
+                  {{ t(`prompts.convergeKinds.${kind.key}`) }}
+                </label>
+              </td>
+              <td>
+                <code>{{ kind.glob }}</code>
+              </td>
+              <td class="converge-count">
+                <span v-if="scanning">&hellip;</span>
+                <span v-else>{{ counts[kind.key] }}</span>
+              </td>
+            </tr>
+            <tr
+              v-if="
+                kind.key === 'restart' && checked.restart && counts.restart > 0
+              "
+            >
+              <td></td>
+              <td colspan="3" class="converge-keep">
+                <label class="flex gap-2 items-center flex-wrap">
+                  <span>{{ t("prompts.convergeKeepRestarts") }}</span>
+                  <input
+                    v-model.number="keepRestarts"
+                    type="number"
+                    class="form-control !w-20 !py-1 text-sm"
+                    min="0"
+                    :max="counts.restart"
+                    :disabled="scanning || cleaning"
+                  />
+                </label>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
 
@@ -35,8 +77,16 @@
       <p class="converge-summary" v-else-if="total === 0">
         {{ t("prompts.convergeCleanEmpty") }}
       </p>
+      <p class="converge-summary" v-else-if="deletedCount === 0">
+        {{ t("prompts.convergeCleanNothingSelected") }}
+      </p>
       <p class="converge-summary" v-else>
-        {{ t("prompts.convergeCleanTotal", { count: total, size: humanSize }) }}
+        {{
+          t("prompts.convergeCleanTotal", {
+            count: deletedCount,
+            size: humanSize,
+          })
+        }}
       </p>
     </div>
 
@@ -57,7 +107,7 @@
         id="focus-prompt"
         @click="submit"
         class="btn btn-red btn-soft"
-        :disabled="scanning || cleaning || total === 0"
+        :disabled="scanning || cleaning || deletedCount === 0"
         :aria-label="t('buttons.delete')"
         :title="t('buttons.delete')"
         tabindex="1"
@@ -73,9 +123,10 @@ import { computed, inject, onActivated, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { files as api } from "@/api";
-import type { ConvergeKind } from "@/api/files";
+import type { ConvergeKind, ConvergeRestartInfo } from "@/api/files";
 import buttons from "@/utils/buttons";
 import { filesize } from "@/utils";
+import { cachedConvergeSummary } from "@/utils/convergeSummaryCache";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 
@@ -98,8 +149,8 @@ const allConvergeKinds: ConvergeKind[] = [
 // description beside them is translated.
 //
 // "nfs" is missing on purpose: the .nfs* stubs are an NFS implementation detail,
-// and naming them here raises more questions than it answers. They are still
-// swept, and still counted in the total below.
+// and naming them here raises more questions than it answers. They ride along
+// with any sweep, and are counted in the total below.
 const convergeKinds: { key: ConvergeKind; glob: string }[] = [
   { key: "echo", glob: "*.echo" },
   { key: "restart", glob: "restart*.rst" },
@@ -123,17 +174,69 @@ const scanning = ref(false);
 const cleaning = ref(false);
 const total = ref(0);
 const size = ref(0);
+const caseRunning = ref(false);
+const restarts = ref<ConvergeRestartInfo[]>([]);
+const keepRestarts = ref(0);
+
 const emptyCounts = (): Record<ConvergeKind, number> =>
   Object.fromEntries(allConvergeKinds.map((k) => [k, 0])) as Record<
     ConvergeKind,
     number
   >;
+const emptySizes = emptyCounts;
+const allChecked = (): Record<ConvergeKind, boolean> =>
+  Object.fromEntries(allConvergeKinds.map((k) => [k, true])) as Record<
+    ConvergeKind,
+    boolean
+  >;
 
 const counts = ref<Record<ConvergeKind, number>>(emptyCounts());
+const sizes = ref<Record<ConvergeKind, number>>(emptySizes());
+const checked = ref<Record<ConvergeKind, boolean>>(allChecked());
 
 let scanController = new AbortController();
 
-const humanSize = computed(() => filesize(size.value));
+// keepRestarts clamped to what actually exists, so the arithmetic below and
+// the request stay honest whatever gets typed.
+const keptRestarts = computed(() => {
+  if (!checked.value.restart) return 0;
+  const wanted = Number.isFinite(keepRestarts.value)
+    ? Math.max(0, Math.floor(keepRestarts.value))
+    : 0;
+  return Math.min(wanted, restarts.value.length);
+});
+
+const keptRestartSize = computed(() =>
+  restarts.value
+    .slice(0, keptRestarts.value)
+    .reduce((sum, restart) => sum + restart.size, 0)
+);
+
+const selectedKinds = computed(() =>
+  convergeKinds
+    .filter((kind) => checked.value[kind.key] && counts.value[kind.key] > 0)
+    .map((kind) => kind.key)
+);
+
+const deletedCount = computed(() => {
+  if (selectedKinds.value.length === 0) return 0;
+  const picked = selectedKinds.value.reduce(
+    (sum, kind) => sum + counts.value[kind],
+    0
+  );
+  return picked + counts.value.nfs - keptRestarts.value;
+});
+
+const deletedSize = computed(() => {
+  if (selectedKinds.value.length === 0) return 0;
+  const picked = selectedKinds.value.reduce(
+    (sum, kind) => sum + sizes.value[kind],
+    0
+  );
+  return picked + sizes.value.nfs - keptRestartSize.value;
+});
+
+const humanSize = computed(() => filesize(deletedSize.value));
 
 // The prompt lives in a <keep-alive>, so onActivated is what runs both on the
 // first open and on every one after it. Rescanning each time keeps the tally
@@ -159,6 +262,11 @@ const scan = async () => {
   total.value = 0;
   size.value = 0;
   counts.value = emptyCounts();
+  sizes.value = emptySizes();
+  checked.value = allChecked();
+  restarts.value = [];
+  keepRestarts.value = 0;
+  caseRunning.value = false;
 
   scanController.abort();
   scanController = new AbortController();
@@ -167,9 +275,11 @@ const scan = async () => {
     const result = await api.convergeScan(route.path, scanController.signal);
     for (const group of result.groups) {
       counts.value[group.kind] = group.count;
+      sizes.value[group.kind] = group.size;
     }
     total.value = result.count;
     size.value = result.size;
+    restarts.value = result.restarts;
   } catch (e) {
     const error = e as Error & { is_canceled?: boolean };
     if (error.is_canceled) return;
@@ -179,16 +289,33 @@ const scan = async () => {
   } finally {
     scanning.value = false;
   }
+
+  // Advisory only: a case that still looks live gets a warning, not a block —
+  // the mtime heuristic can lag a queue pause.
+  try {
+    const summary = await cachedConvergeSummary(
+      route.path,
+      scanController.signal
+    );
+    caseRunning.value = summary.status === "running";
+  } catch {
+    // No summary, no warning.
+  }
 };
 
 const submit = async () => {
-  if (scanning.value || cleaning.value || total.value === 0) return;
+  if (scanning.value || cleaning.value || deletedCount.value === 0) return;
 
   cleaning.value = true;
   buttons.loading("converge-clean");
 
   try {
-    const result = await api.convergeClean(route.path);
+    // The unlisted nfs stubs ride along with any sweep.
+    const kinds: ConvergeKind[] = [...selectedKinds.value, "nfs"];
+    const result = await api.convergeClean(route.path, {
+      kinds,
+      keepRestarts: keptRestarts.value,
+    });
 
     if (result.failed > 0) {
       // A partial sweep is reported as one: the files that stayed behind are
@@ -238,6 +365,10 @@ const submit = async () => {
   white-space: nowrap;
 }
 
+.converge-check {
+  width: 1.75em;
+}
+
 .converge-count {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -245,6 +376,11 @@ const submit = async () => {
 
 .converge-kind--empty {
   opacity: 0.45;
+}
+
+.converge-keep {
+  padding-bottom: 0.5em;
+  color: var(--textSecondary);
 }
 
 .converge-summary {

@@ -2,13 +2,18 @@ package fbhttp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path"
 	"slices"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/afero"
 
@@ -21,6 +26,19 @@ const convergeCaseFile = "inputs.in"
 const convergeOutputDirPrefix = "outputs_"
 
 const convergeOutputDirKind = "outputs"
+
+const (
+	convergeStartMarker = "converge.start"
+	convergeDoneMarker  = "converge.done"
+	convergeLogName     = "converge.log"
+	convergeJobSpec     = "horizon.json"
+
+	convergeActiveWindow = 10 * time.Minute
+
+	convergeLogTailBytes = 64 * 1024
+
+	convergeSmallFileLimit = 512 * 1024
+)
 
 type convergePattern struct {
 	kind     string
@@ -86,10 +104,11 @@ func convergeOutputKind(name string) (string, bool) {
 }
 
 type convergeMatch struct {
-	path  string
-	kind  string
-	size  int64
-	isDir bool
+	path    string
+	kind    string
+	size    int64
+	isDir   bool
+	modTime time.Time
 }
 
 func convergeCanDelete(ctx context.Context, d *data, dir string) bool {
@@ -170,10 +189,11 @@ func scanConvergeOutputs(ctx context.Context, d *data, dir string) ([]convergeMa
 			}
 
 			matches = append(matches, convergeMatch{
-				path:  fPath,
-				kind:  convergeOutputDirKind,
-				size:  convergeDirSize(ctx, d.user.Fs, fPath),
-				isDir: true,
+				path:    fPath,
+				kind:    convergeOutputDirKind,
+				size:    convergeDirSize(ctx, d.user.Fs, fPath),
+				isDir:   true,
+				modTime: entry.ModTime(),
 			})
 			continue
 		}
@@ -183,7 +203,12 @@ func scanConvergeOutputs(ctx context.Context, d *data, dir string) ([]convergeMa
 			continue
 		}
 
-		matches = append(matches, convergeMatch{path: fPath, kind: kind, size: entry.Size()})
+		matches = append(matches, convergeMatch{
+			path:    fPath,
+			kind:    kind,
+			size:    entry.Size(),
+			modTime: entry.ModTime(),
+		})
 	}
 
 	return matches, nil
@@ -222,11 +247,44 @@ type convergeGroup struct {
 	Size  int64  `json:"size"`
 }
 
+type convergeRestart struct {
+	Name     string    `json:"name"`
+	Path     string    `json:"path"`
+	Size     int64     `json:"size"`
+	Modified time.Time `json:"modified"`
+}
+
+func convergeRestartsFromMatches(matches []convergeMatch) []convergeRestart {
+	restarts := []convergeRestart{}
+	for i := range matches {
+		if matches[i].kind != "restart" {
+			continue
+		}
+		restarts = append(restarts, convergeRestart{
+			Name:     path.Base(matches[i].path),
+			Path:     matches[i].path,
+			Size:     matches[i].size,
+			Modified: matches[i].modTime,
+		})
+	}
+
+	sort.Slice(restarts, func(i, j int) bool {
+		if !restarts[i].Modified.Equal(restarts[j].Modified) {
+			return restarts[i].Modified.After(restarts[j].Modified)
+		}
+
+		return restarts[i].Name > restarts[j].Name
+	})
+
+	return restarts
+}
+
 type convergeScanResponse struct {
-	IsCase bool            `json:"isCase"`
-	Groups []convergeGroup `json:"groups"`
-	Count  int             `json:"count"`
-	Size   int64           `json:"size"`
+	IsCase   bool              `json:"isCase"`
+	Groups   []convergeGroup   `json:"groups"`
+	Count    int               `json:"count"`
+	Size     int64             `json:"size"`
+	Restarts []convergeRestart `json:"restarts"`
 }
 
 func groupConvergeMatches(matches []convergeMatch) []convergeGroup {
@@ -254,9 +312,413 @@ func groupConvergeMatches(matches []convergeMatch) []convergeGroup {
 	return groups
 }
 
+type horizonJobSpec struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	AppKey       string `json:"app_key"`
+	AppVersion   string `json:"app_version"`
+	CoresPerNode int    `json:"cores_per_node"`
+	NodesCount   int    `json:"nodes_count"`
+}
+
+type convergeJobInfo struct {
+	ID           string `json:"id,omitempty"`
+	Name         string `json:"name,omitempty"`
+	AppKey       string `json:"appKey,omitempty"`
+	AppVersion   string `json:"appVersion,omitempty"`
+	CoresPerNode int    `json:"coresPerNode,omitempty"`
+	NodesCount   int    `json:"nodesCount,omitempty"`
+}
+
+type convergeProgress struct {
+	Current float64  `json:"current"`
+	Unit    string   `json:"unit"`
+	Start   *float64 `json:"start,omitempty"`
+	End     *float64 `json:"end,omitempty"`
+}
+
+type convergeSummaryResponse struct {
+	IsCase       bool              `json:"isCase"`
+	Status       string            `json:"status,omitempty"`
+	Groups       []convergeGroup   `json:"groups"`
+	Count        int               `json:"count"`
+	Size         int64             `json:"size"`
+	Restarts     []convergeRestart `json:"restarts"`
+	Job          *convergeJobInfo  `json:"job,omitempty"`
+	LogPath      string            `json:"logPath,omitempty"`
+	LastActivity *time.Time        `json:"lastActivity,omitempty"`
+	Progress     *convergeProgress `json:"progress,omitempty"`
+}
+
+type convergeSummaryScan struct {
+	tallies  map[string]*convergeGroup
+	count    int
+	size     int64
+	restarts []convergeMatch
+
+	logPath string
+	logMod  time.Time
+
+	startMod map[string]time.Time
+	doneIn   map[string]bool
+	activity map[string]time.Time
+}
+
+func newConvergeSummaryScan() *convergeSummaryScan {
+	return &convergeSummaryScan{
+		tallies:  map[string]*convergeGroup{},
+		startMod: map[string]time.Time{},
+		doneIn:   map[string]bool{},
+		activity: map[string]time.Time{},
+	}
+}
+
+func (s *convergeSummaryScan) tally(kind string, size int64) {
+	tally, ok := s.tallies[kind]
+	if !ok {
+		tally = &convergeGroup{Kind: kind}
+		s.tallies[kind] = tally
+	}
+	tally.Count++
+	tally.Size += size
+	s.count++
+	s.size += size
+}
+
+func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, countOther bool) {
+	name := strings.ToLower(path.Base(fPath))
+
+	switch name {
+	case convergeStartMarker:
+		if info.ModTime().After(s.startMod[runDir]) {
+			s.startMod[runDir] = info.ModTime()
+		}
+		return
+	case convergeDoneMarker:
+		s.doneIn[runDir] = true
+		return
+	}
+
+	kind, ok := convergeOutputKind(path.Base(fPath))
+	if !ok {
+		if countOther {
+			s.tally("other", info.Size())
+		}
+		return
+	}
+
+	s.tally(kind, info.Size())
+
+	switch kind {
+	case "restart":
+		s.restarts = append(s.restarts, convergeMatch{
+			path:    fPath,
+			kind:    kind,
+			size:    info.Size(),
+			modTime: info.ModTime(),
+		})
+	case "out", "log":
+		if info.ModTime().After(s.activity[runDir]) {
+			s.activity[runDir] = info.ModTime()
+		}
+		if name == convergeLogName && info.ModTime().After(s.logMod) {
+			s.logPath = fPath
+			s.logMod = info.ModTime()
+		}
+	}
+}
+
+func (s *convergeSummaryScan) groups() []convergeGroup {
+	groups := make([]convergeGroup, 0, len(s.tallies))
+	for _, p := range convergePatterns {
+		if tally, ok := s.tallies[p.kind]; ok {
+			groups = append(groups, *tally)
+		}
+	}
+	if tally, ok := s.tallies["other"]; ok {
+		groups = append(groups, *tally)
+	}
+	return groups
+}
+
+func (s *convergeSummaryScan) status(now time.Time) (string, *time.Time) {
+	runDir := ""
+	var newest time.Time
+	for dir, mod := range s.startMod {
+		if runDir == "" || mod.After(newest) {
+			runDir, newest = dir, mod
+		}
+	}
+
+	if runDir == "" {
+		return "idle", nil
+	}
+
+	activity := s.activity[runDir]
+	if activity.Before(newest) {
+		activity = newest
+	}
+
+	if s.doneIn[runDir] {
+		return "completed", &activity
+	}
+	if now.Sub(activity) <= convergeActiveWindow {
+		return "running", &activity
+	}
+	return "interrupted", &activity
+}
+
+func convergeWalkRunDir(ctx context.Context, d *data, runDir, dir string, scan *convergeSummaryScan) {
+	_ = afero.Walk(d.user.Fs, dir, func(fPath string, info os.FileInfo, err error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if err != nil || info == nil {
+			return nil //nolint:nilerr // an unreadable entry just does not count
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if !d.CheckRules(fPath) {
+			return nil
+		}
+		scan.file(runDir, fPath, info, true)
+		return nil
+	})
+}
+
+func summarizeConvergeCase(ctx context.Context, d *data, dir string) (*convergeSummaryScan, error) {
+	entries, err := afero.ReadDir(d.user.Fs, dir)
+	if err != nil {
+		return nil, err
+	}
+
+	scan := newConvergeSummaryScan()
+
+	for _, entry := range entries {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+
+		name := entry.Name()
+		fPath := path.Join(dir, name)
+
+		if !d.CheckRules(fPath) {
+			continue
+		}
+		if files.IsSymlink(entry.Mode()) {
+			continue
+		}
+
+		if entry.IsDir() {
+			lower := strings.ToLower(name)
+			switch {
+			case strings.HasPrefix(lower, convergeOutputDirPrefix):
+				convergeWalkRunDir(ctx, d, fPath, fPath, scan)
+			case lower == "output" || lower == "stream0":
+				convergeWalkRunDir(ctx, d, dir, fPath, scan)
+			}
+			continue
+		}
+
+		scan.file(dir, fPath, entry, false)
+	}
+
+	return scan, nil
+}
+
+func convergeReadSmall(afs afero.Fs, fPath string) ([]byte, error) {
+	f, err := afs.Open(fPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > convergeSmallFileLimit {
+		return nil, errors.New("file too large")
+	}
+
+	return io.ReadAll(io.LimitReader(f, convergeSmallFileLimit))
+}
+
+func convergeJobFromSpec(d *data, dir string) *convergeJobInfo {
+	fPath := path.Join(dir, convergeJobSpec)
+	if !d.CheckRules(fPath) {
+		return nil
+	}
+
+	raw, err := convergeReadSmall(d.user.Fs, fPath)
+	if err != nil {
+		return nil
+	}
+
+	var spec horizonJobSpec
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		return nil
+	}
+
+	return &convergeJobInfo{
+		ID:           spec.ID,
+		Name:         spec.Name,
+		AppKey:       spec.AppKey,
+		AppVersion:   spec.AppVersion,
+		CoresPerNode: spec.CoresPerNode,
+		NodesCount:   spec.NodesCount,
+	}
+}
+
+func convergeDeckTimes(d *data, dir string) (start, end *float64, unit string) {
+	unit = "s"
+
+	raw, err := convergeReadSmall(d.user.Fs, path.Join(dir, convergeCaseFile))
+	if err != nil {
+		return nil, nil, unit
+	}
+
+	parse := func(fields []string) *float64 {
+		if len(fields) < 2 {
+			return nil
+		}
+		v, err := strconv.ParseFloat(fields[1], 64)
+		if err != nil {
+			return nil
+		}
+		return &v
+	}
+
+	for line := range strings.Lines(string(raw)) {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		switch fields[0] {
+		case "start_time:":
+			start = parse(fields)
+		case "end_time:":
+			end = parse(fields)
+		case "crank_flag:":
+			if len(fields) > 1 && (fields[1] == "1" || fields[1] == "2") {
+				unit = "deg"
+			}
+		}
+	}
+
+	return start, end, unit
+}
+
+func convergeLogProgress(d *data, logPath, unit string) *float64 {
+	if logPath == "" || !d.CheckRules(logPath) {
+		return nil
+	}
+
+	f, err := d.user.Fs.Open(logPath)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil
+	}
+	if info.Size() > convergeLogTailBytes {
+		if _, err := f.Seek(info.Size()-convergeLogTailBytes, io.SeekStart); err != nil {
+			return nil
+		}
+	}
+
+	tail, err := io.ReadAll(io.LimitReader(f, convergeLogTailBytes))
+	if err != nil {
+		return nil
+	}
+
+	key := "time="
+	if unit == "deg" {
+		key = "crank="
+	}
+
+	lines := strings.Split(string(tail), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if !strings.Contains(line, "dt=") {
+			continue
+		}
+		idx := strings.Index(line, key)
+		if idx < 0 {
+			continue
+		}
+		rest := strings.TrimSpace(line[idx+len(key):])
+		if cut := strings.IndexAny(rest, ", \t"); cut >= 0 {
+			rest = rest[:cut]
+		}
+		v, err := strconv.ParseFloat(rest, 64)
+		if err != nil {
+			return nil
+		}
+		return &v
+	}
+
+	return nil
+}
+
+var convergeSummaryHandler = func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+	dir := r.URL.Path
+	if !d.Check(dir) {
+		return http.StatusForbidden, nil
+	}
+
+	isCase, err := isConvergeCase(d, dir)
+	if err != nil {
+		return errToStatus(err), err
+	}
+	if !isCase {
+		return renderJSON(w, r, &convergeSummaryResponse{
+			Groups:   []convergeGroup{},
+			Restarts: []convergeRestart{},
+		})
+	}
+
+	scan, err := summarizeConvergeCase(r.Context(), d, dir)
+	if err != nil {
+		return errToStatus(err), err
+	}
+
+	status, lastActivity := scan.status(time.Now())
+
+	resp := &convergeSummaryResponse{
+		IsCase:       true,
+		Status:       status,
+		Groups:       scan.groups(),
+		Count:        scan.count,
+		Size:         scan.size,
+		Restarts:     convergeRestartsFromMatches(scan.restarts),
+		Job:          convergeJobFromSpec(d, dir),
+		LogPath:      scan.logPath,
+		LastActivity: lastActivity,
+	}
+
+	start, end, unit := convergeDeckTimes(d, dir)
+	if current := convergeLogProgress(d, scan.logPath, unit); current != nil {
+		resp.Progress = &convergeProgress{
+			Current: *current,
+			Unit:    unit,
+			Start:   start,
+			End:     end,
+		}
+	}
+
+	return renderJSON(w, r, resp)
+}
+
 var convergeScanHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
-	// Cleaning is a delete, so previewing one is only offered to users who
-	// could go through with it.
+	if r.URL.Query().Get("summary") == "true" {
+		return convergeSummaryHandler(w, r, d)
+	}
+
 	if !d.user.Perm.Delete {
 		return http.StatusForbidden, nil
 	}
@@ -271,7 +733,10 @@ var convergeScanHandler = withUser(func(w http.ResponseWriter, r *http.Request, 
 		return errToStatus(err), err
 	}
 	if !isCase {
-		return renderJSON(w, r, &convergeScanResponse{Groups: []convergeGroup{}})
+		return renderJSON(w, r, &convergeScanResponse{
+			Groups:   []convergeGroup{},
+			Restarts: []convergeRestart{},
+		})
 	}
 
 	matches, err := scanConvergeOutputs(r.Context(), d, dir)
@@ -280,9 +745,10 @@ var convergeScanHandler = withUser(func(w http.ResponseWriter, r *http.Request, 
 	}
 
 	resp := &convergeScanResponse{
-		IsCase: true,
-		Groups: groupConvergeMatches(matches),
-		Count:  len(matches),
+		IsCase:   true,
+		Groups:   groupConvergeMatches(matches),
+		Count:    len(matches),
+		Restarts: convergeRestartsFromMatches(matches),
 	}
 	for i := range matches {
 		resp.Size += matches[i].size
@@ -297,6 +763,76 @@ type convergeCleanResponse struct {
 	Failed  int   `json:"failed"`
 }
 
+type convergeCleanRequest struct {
+	Kinds        []string `json:"kinds"`
+	KeepRestarts int      `json:"keepRestarts"`
+}
+
+func parseConvergeCleanRequest(r *http.Request) (*convergeCleanRequest, error) {
+	req := &convergeCleanRequest{}
+
+	raw, err := io.ReadAll(io.LimitReader(r.Body, convergeSmallFileLimit))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(raw) == 0 {
+		return req, nil
+	}
+
+	if err := json.Unmarshal(raw, req); err != nil {
+		return nil, err
+	}
+	if req.KeepRestarts < 0 {
+		return nil, errors.New("keepRestarts must not be negative")
+	}
+
+	known := make(map[string]bool, len(convergePatterns)+1)
+	for _, p := range convergePatterns {
+		known[p.kind] = true
+	}
+	known[convergeOutputDirKind] = true
+
+	for _, kind := range req.Kinds {
+		if !known[kind] {
+			return nil, errors.New("unknown CONVERGE output kind: " + kind)
+		}
+	}
+
+	return req, nil
+}
+
+func filterConvergeMatches(matches []convergeMatch, req *convergeCleanRequest) []convergeMatch {
+	if len(req.Kinds) > 0 {
+		kept := matches[:0:0]
+		for i := range matches {
+			if slices.Contains(req.Kinds, matches[i].kind) {
+				kept = append(kept, matches[i])
+			}
+		}
+		matches = kept
+	}
+
+	if req.KeepRestarts > 0 {
+		restarts := convergeRestartsFromMatches(matches)
+		spared := map[string]bool{}
+		for _, restart := range restarts[:min(req.KeepRestarts, len(restarts))] {
+			spared[restart.Path] = true
+		}
+
+		kept := matches[:0:0]
+		for i := range matches {
+			if matches[i].kind == "restart" && spared[matches[i].path] {
+				continue
+			}
+			kept = append(kept, matches[i])
+		}
+		matches = kept
+	}
+
+	return matches
+}
+
 var convergeCleanHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 	if !d.user.Perm.Delete {
 		return http.StatusForbidden, nil
@@ -305,6 +841,11 @@ var convergeCleanHandler = withUser(func(w http.ResponseWriter, r *http.Request,
 	dir := r.URL.Path
 	if !d.Check(dir) {
 		return http.StatusForbidden, nil
+	}
+
+	cleanReq, err := parseConvergeCleanRequest(r)
+	if err != nil {
+		return http.StatusBadRequest, err
 	}
 
 	isCase, err := isConvergeCase(d, dir)
@@ -319,22 +860,16 @@ var convergeCleanHandler = withUser(func(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		return errToStatus(err), err
 	}
+	matches = filterConvergeMatches(matches, cleanReq)
 
 	resp := &convergeCleanResponse{}
 	for i := range matches {
-		// Deleting a large case is a long loop of filesystem work. Stop as soon
-		// as nobody is waiting for the answer rather than running it to the end
-		// for a client that has gone.
 		if ctxErr := r.Context().Err(); ctxErr != nil {
 			return 0, ctxErr
 		}
 
 		match := matches[i]
 
-		// Files go one at a time, so a directory that took a scanned file's
-		// place in the meantime cannot be swept away with it. The outputs_*
-		// directories exist only to hold output, so those go whole — Remove
-		// would refuse a non-empty one.
 		remove := d.user.Fs.Remove
 		if match.isDir {
 			remove = d.user.Fs.RemoveAll

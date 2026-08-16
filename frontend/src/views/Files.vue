@@ -80,6 +80,7 @@ import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { StatusError } from "@/api/utils";
 import { name, disableUsedPercentage, domain } from "@/utils/constants";
+import { isOutFileName } from "@/utils/convergeOut";
 import { useFileActions } from "@/composables/useFileActions";
 
 import Breadcrumbs from "@/components/Breadcrumbs.vue";
@@ -95,6 +96,9 @@ import IconAction from "@/components/ui/IconAction.vue";
 
 const Editor = defineAsyncComponent(() => import("@/views/files/Editor.vue"));
 const Preview = defineAsyncComponent(() => import("@/views/files/Preview.vue"));
+const OutViewer = defineAsyncComponent(
+  () => import("@/views/files/OutViewer.vue")
+);
 
 const layoutStore = useLayoutStore();
 const fileStore = useFileStore();
@@ -117,6 +121,8 @@ const currentView = computed(() => {
 
   if (fileStore.req.isDir) {
     return FileListing;
+  } else if (isOutFileName(fileStore.req.name) && route.query.view !== "text") {
+    return OutViewer;
   } else if (
     fileStore.req.type === "text" ||
     fileStore.req.type === "textImmutable"
@@ -128,7 +134,10 @@ const currentView = computed(() => {
 });
 
 const isFullBleed = computed(
-  () => currentView.value === Editor || currentView.value === Preview
+  () =>
+    currentView.value === Editor ||
+    currentView.value === Preview ||
+    currentView.value === OutViewer
 );
 
 const showSidebar = computed(

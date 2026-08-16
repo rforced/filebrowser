@@ -118,8 +118,17 @@ func resourcePostHandler(fileCache FileCache) handleFunc {
 			return http.StatusForbidden, nil
 		}
 
-		// Directories creation on POST.
 		if strings.HasSuffix(r.URL.Path, "/") {
+			if r.URL.Query().Get("override") != "true" {
+				exists, err := afero.Exists(d.user.Fs, r.URL.Path)
+				if err != nil {
+					return http.StatusInternalServerError, err
+				}
+				if exists {
+					return http.StatusConflict, nil
+				}
+			}
+
 			err := d.user.Fs.MkdirAll(r.URL.Path, d.settings.DirMode)
 			return errToStatus(err), err
 		}

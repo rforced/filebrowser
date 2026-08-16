@@ -114,7 +114,7 @@ export const useUploadStore = defineStore("upload", () => {
       let succeeded = true;
 
       if (upload.type === "dir") {
-        await api.post(upload.path).catch((err) => {
+        await api.post(upload.path, "", true).catch((err) => {
           succeeded = false;
           $showError(err);
         });

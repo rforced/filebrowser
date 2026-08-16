@@ -78,7 +78,8 @@
     "internal": "服务器内部错误。",
     "notFound": "该位置无法访问。",
     "connection": "无法连接服务器。",
-    "passwordTooCommon": "该密码过于常见，请选择一个更难猜到的密码。"
+    "passwordTooCommon": "该密码过于常见，请选择一个更难猜到的密码。",
+    "alreadyExists": "已存在同名的文件或文件夹。"
   },
   "files": {
     "body": "内容",
@@ -126,7 +127,7 @@
   "login": {
     "password": "密码",
     "submit": "登录",
-    "username": "用户名",
+    "username": "邮箱地址",
     "wrongCredentials": "用户名或密码错误",
     "captchaFailed": "安全验证失败。请重试；如果问题持续存在，请联系技术支持。",
     "rateLimited": "登录尝试次数过多，请在一分钟后重试。",

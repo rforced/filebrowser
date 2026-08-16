@@ -80,6 +80,10 @@ const submit = async (event: Event) => {
     router.push({ path: uri });
   } catch (e) {
     if (e instanceof Error) {
+      if (e.message === "409") {
+        $showError(t("errors.alreadyExists"));
+        return;
+      }
       $showError(e);
     }
   }

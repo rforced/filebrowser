@@ -33,9 +33,12 @@
     "next": "Next",
     "no": "No",
     "ok": "OK",
+    "openAsText": "Open as text",
     "openDirect": "View raw",
     "openFile": "Open file",
     "openFolder": "Open folder",
+    "pause": "Pause",
+    "play": "Play",
     "overrideAll": "Replace all files in destination folder",
     "paste": "Paste",
     "permalink": "Get Permanent Link",
@@ -78,7 +81,8 @@
     "internal": "Something really went wrong.",
     "notFound": "This location can't be reached.",
     "connection": "The server can't be reached.",
-    "passwordTooCommon": "This password is too common. Please choose a less predictable one."
+    "passwordTooCommon": "This password is too common. Please choose a less predictable one.",
+    "alreadyExists": "A file or folder with this name already exists."
   },
   "files": {
     "body": "Body",
@@ -126,7 +130,7 @@
   "login": {
     "password": "Password",
     "submit": "Login",
-    "username": "Username",
+    "username": "Email address",
     "wrongCredentials": "Wrong credentials",
     "captchaFailed": "Security verification failed. Please try again or contact support if this issue persists.",
     "rateLimited": "Too many login attempts. Please try again after one minute.",
@@ -137,6 +141,41 @@
     }
   },
   "permanent": "Permanent",
+  "outPlot": {
+    "xAxis": "X axis",
+    "series": "Series",
+    "logScale": "Log scale",
+    "rows": "{count} rows",
+    "decimated": "downsampled for display",
+    "skippedRows": "{count} malformed rows skipped",
+    "maxSeries": "up to {count} series at once",
+    "logHidden": "Values ≤ 0 are hidden on a log scale.",
+    "empty": "No plottable data was found in this file.",
+    "tooLarge": "This file is too large to plot in the browser.",
+    "loadError": "The file could not be loaded."
+  },
+  "converge": {
+    "caseTitle": "CONVERGE case",
+    "status": {
+      "running": "Running",
+      "completed": "Completed",
+      "interrupted": "Interrupted",
+      "idle": "No runs yet"
+    },
+    "lastActivity": "Last activity {time}",
+    "job": "Job",
+    "nodes": "{nodes} node(s) × {cores} cores",
+    "simTime": "Simulation time",
+    "outputFootprint": "Output on disk",
+    "newestRestart": "Newest restart",
+    "viewLog": "View log",
+    "cleanOutput": "Clean output",
+    "files": "{count} files"
+  },
+  "sequence": {
+    "frame": "Frame {current} / {total}",
+    "speed": "{fps} fps"
+  },
   "prompts": {
     "calculateSize": "Calculate",
     "calculating": "Calculating...",
@@ -156,8 +195,12 @@
       "post": "Cell-by-cell post",
       "log": "Log",
       "run": "Run files",
-      "outputs": "Output folders (contents included)"
+      "outputs": "Output folders (contents included)",
+      "other": "Other run files"
     },
+    "convergeKeepRestarts": "Keep the newest restart files:",
+    "convergeCleanNothingSelected": "Select at least one kind of output to delete.",
+    "convergeCleanRunning": "This case appears to be running. Cleaning now can delete files the solver is still writing.",
     "copy": "Copy",
     "copyMessage": "Choose the location to copy your files to:",
     "currentPassword": "Your password",

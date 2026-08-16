@@ -322,7 +322,8 @@ export type ConvergeKind =
   | "log"
   | "run"
   | "nfs"
-  | "outputs";
+  | "outputs"
+  | "other";
 
 export interface ConvergeGroup {
   kind: ConvergeKind;
@@ -330,11 +331,19 @@ export interface ConvergeGroup {
   size: number;
 }
 
+export interface ConvergeRestartInfo {
+  name: string;
+  path: string;
+  size: number;
+  modified: string;
+}
+
 export interface ConvergeScan {
   isCase: boolean;
   groups: ConvergeGroup[];
   count: number;
   size: number;
+  restarts: ConvergeRestartInfo[];
 }
 
 export async function convergeScan(
@@ -346,15 +355,69 @@ export async function convergeScan(
   return (await res.json()) as ConvergeScan;
 }
 
+export type ConvergeStatus = "idle" | "running" | "completed" | "interrupted";
+
+export interface ConvergeJobInfo {
+  id?: string;
+  name?: string;
+  appKey?: string;
+  appVersion?: string;
+  coresPerNode?: number;
+  nodesCount?: number;
+}
+
+export interface ConvergeProgress {
+  current: number;
+  unit: string;
+  start?: number;
+  end?: number;
+}
+
+export interface ConvergeSummary {
+  isCase: boolean;
+  status?: ConvergeStatus;
+  groups: ConvergeGroup[];
+  count: number;
+  size: number;
+  restarts: ConvergeRestartInfo[];
+  job?: ConvergeJobInfo;
+  logPath?: string;
+  lastActivity?: string;
+  progress?: ConvergeProgress;
+}
+
+export async function convergeSummary(
+  url: string,
+  signal?: AbortSignal
+): Promise<ConvergeSummary> {
+  url = removePrefix(url);
+  const res = await fetchURL(`/api/converge${url}?summary=true`, { signal });
+  return (await res.json()) as ConvergeSummary;
+}
+
+export interface ConvergeCleanOptions {
+  kinds?: ConvergeKind[];
+  keepRestarts?: number;
+}
+
 export interface ConvergeCleanResult {
   deleted: number;
   size: number;
   failed: number;
 }
 
-export async function convergeClean(url: string): Promise<ConvergeCleanResult> {
+export async function convergeClean(
+  url: string,
+  options?: ConvergeCleanOptions
+): Promise<ConvergeCleanResult> {
   url = removePrefix(url);
-  const res = await fetchURL(`/api/converge${url}`, { method: "POST" });
+  const res = await fetchURL(`/api/converge${url}`, {
+    method: "POST",
+    ...(options && {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(options),
+    }),
+  });
   return (await res.json()) as ConvergeCleanResult;
 }
 

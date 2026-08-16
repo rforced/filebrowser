@@ -131,6 +131,12 @@
           :extension="fileStore.req.extension"
           :size="fileStore.req.size"
         />
+        <img
+          v-else-if="fileStore.req?.type == 'image' && playerOverlay"
+          :src="frameSrc"
+          :alt="frameItem?.name ?? ''"
+          class="max-w-full max-h-full object-contain m-auto"
+        />
         <ExtendedImage
           v-else-if="fileStore.req?.type == 'image'"
           :src="previewUrl"
@@ -214,6 +220,68 @@
       <i class="fa-solid fa-chevron-right text-lg"></i>
     </button>
 
+    <Transition
+      enter-active-class="transition ease-out duration-200"
+      enter-from-class="opacity-0"
+      leave-active-class="transition ease-in duration-200"
+      leave-to-class="opacity-0"
+    >
+      <footer
+        v-if="showSequencePlayer && (showNav || playing)"
+        class="absolute bottom-0 left-0 right-0 z-20 flex gap-3 items-center p-3 md:px-6 bg-linear-to-t from-black/70 to-transparent"
+      >
+        <button
+          v-tooltip="playing ? $t('buttons.pause') : $t('buttons.play')"
+          type="button"
+          class="w-9 h-9 shrink-0 flex items-center justify-center rounded-md text-white hover:bg-white/20 transition"
+          :aria-label="playing ? $t('buttons.pause') : $t('buttons.play')"
+          @click="togglePlay"
+        >
+          <i class="fa-solid" :class="playing ? 'fa-pause' : 'fa-play'"></i>
+        </button>
+
+        <input
+          type="range"
+          class="flex-1 min-w-0 accent-white cursor-pointer"
+          min="0"
+          :max="images.length - 1"
+          :value="displayIndex"
+          :aria-label="
+            $t('sequence.frame', {
+              current: displayIndex + 1,
+              total: images.length,
+            })
+          "
+          @input="onScrub"
+          @change="onScrubEnd"
+        />
+
+        <span
+          class="shrink-0 text-xs text-white/90 font-medium tabular-nums drop-shadow-md"
+        >
+          {{
+            $t("sequence.frame", {
+              current: displayIndex + 1,
+              total: images.length,
+            })
+          }}
+          <template v-if="frameStamp.time !== undefined">
+            · t = {{ formatSequenceTime(frameStamp.time) }}
+          </template>
+        </span>
+
+        <select
+          v-model.number="fps"
+          class="shrink-0 rounded-md bg-black/40 text-white text-xs px-1.5 py-1 border border-white/20"
+          :aria-label="$t('sequence.speed', { fps })"
+        >
+          <option v-for="rate in [2, 5, 10, 20]" :key="rate" :value="rate">
+            {{ $t("sequence.speed", { fps: rate }) }}
+          </option>
+        </select>
+      </footer>
+    </Transition>
+
     <link rel="prefetch" :href="previousRaw" />
     <link rel="prefetch" :href="nextRaw" />
   </div>
@@ -229,6 +297,7 @@ import { resizePreview } from "@/utils/constants";
 import url from "@/utils/url";
 import { throttle } from "@/utils/throttle";
 import { buttonIcon } from "@/utils/buttons";
+import { formatSequenceTime, parseSequenceStamp } from "@/utils/imageSequence";
 import ExtendedImage from "@/components/files/ExtendedImage.vue";
 import VideoPlayer from "@/components/files/VideoPlayer.vue";
 import {
@@ -280,6 +349,115 @@ const hasPrevious = computed(() => previousLink.value !== "");
 
 const hasNext = computed(() => nextLink.value !== "");
 
+const playing = ref(false);
+const scrubbing = ref(false);
+const frameIndex = ref(0);
+const fps = ref(10);
+const playTimer = ref<number | null>(null);
+const preloaded = new Map<string, HTMLImageElement>();
+const PRELOAD_AHEAD = 6;
+
+const images = computed(() =>
+  (listing.value ?? [])
+    .filter((item) => item.type === "image")
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+);
+
+const showSequencePlayer = computed(
+  () => fileStore.req?.type === "image" && images.value.length >= 2
+);
+
+const playerOverlay = computed(() => playing.value || scrubbing.value);
+
+const frameItem = computed(() => images.value[frameIndex.value] ?? null);
+
+const frameSrc = computed(() =>
+  frameItem.value ? prefetchUrl(frameItem.value) : ""
+);
+
+const currentImageIndex = computed(() =>
+  images.value.findIndex((item) => item.name === name.value)
+);
+
+const displayIndex = computed(() =>
+  playerOverlay.value ? frameIndex.value : Math.max(currentImageIndex.value, 0)
+);
+
+const frameStamp = computed(() => {
+  const frameName = playerOverlay.value
+    ? frameItem.value?.name
+    : fileStore.req?.name;
+  return frameName ? parseSequenceStamp(frameName) : {};
+});
+
+const preloadFrames = (from: number) => {
+  for (let ahead = 1; ahead <= PRELOAD_AHEAD; ahead++) {
+    const item = images.value[(from + ahead) % images.value.length];
+    if (!item) return;
+    const src = prefetchUrl(item);
+    if (!preloaded.has(src)) {
+      const img = new Image();
+      img.src = src;
+      preloaded.set(src, img);
+    }
+  }
+};
+
+const playTick = () => {
+  if (!playing.value || images.value.length === 0) return;
+
+  const nextIndex = (frameIndex.value + 1) % images.value.length;
+  const next = preloaded.get(prefetchUrl(images.value[nextIndex]));
+  if (next && !next.complete) {
+    playTimer.value = window.setTimeout(playTick, 50);
+    return;
+  }
+
+  frameIndex.value = nextIndex;
+  preloadFrames(nextIndex);
+  playTimer.value = window.setTimeout(playTick, 1000 / fps.value);
+};
+
+const play = () => {
+  if (images.value.length < 2) return;
+  frameIndex.value = Math.max(currentImageIndex.value, 0);
+  playing.value = true;
+  preloadFrames(frameIndex.value);
+  playTimer.value = window.setTimeout(playTick, 1000 / fps.value);
+};
+
+const stopPlayback = () => {
+  playing.value = false;
+  if (playTimer.value !== null) {
+    clearTimeout(playTimer.value);
+    playTimer.value = null;
+  }
+};
+
+const syncFrameRoute = () => {
+  const item = frameItem.value;
+  if (item && item.name !== name.value) {
+    router.replace({ path: item.url });
+  }
+};
+
+const pause = () => {
+  stopPlayback();
+  syncFrameRoute();
+};
+
+const togglePlay = () => (playing.value ? pause() : play());
+
+const onScrub = (event: Event) => {
+  scrubbing.value = true;
+  frameIndex.value = Number((event.target as HTMLInputElement).value);
+};
+
+const onScrubEnd = () => {
+  scrubbing.value = false;
+  if (!playing.value) syncFrameRoute();
+};
+
 const downloadUrl = computed(() =>
   fileStore.req ? api.getDownloadURL(fileStore.req, false) : ""
 );
@@ -321,10 +499,14 @@ onMounted(async () => {
   updatePreview();
 });
 
-onBeforeUnmount(() => window.removeEventListener("keydown", key));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", key);
+  stopPlayback();
+  preloaded.clear();
+});
 
-// Specify methods
 const deleteFile = () => {
+  pause();
   layoutStore.showHover({
     prompt: "delete",
     confirm: () => {
@@ -350,11 +532,13 @@ const deleteFile = () => {
 };
 
 const prev = () => {
+  stopPlayback();
   hoverNav.value = false;
   router.replace({ path: previousLink.value });
 };
 
 const next = () => {
+  stopPlayback();
   hoverNav.value = false;
   router.replace({ path: nextLink.value });
 };
@@ -367,10 +551,11 @@ const key = (event: KeyboardEvent) => {
     // right arrow
     if (hasNext.value) next();
   } else if (event.which === 37) {
-    // left arrow
     if (hasPrevious.value) prev();
+  } else if (event.which === 32 && showSequencePlayer.value) {
+    event.preventDefault();
+    togglePlay();
   } else if (event.which === 27) {
-    // esc
     close();
   }
 };

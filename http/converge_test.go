@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/storage"
@@ -522,4 +524,363 @@ func convergeSurvivors(t *testing.T, dir string) []string {
 	}
 	slices.Sort(names)
 	return names
+}
+
+func writeCaseFile(t *testing.T, dir string, content string, parts ...string) string {
+	t.Helper()
+
+	p := filepath.Join(append([]string{dir}, parts...)...)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func getConvergeSummary(t *testing.T, scan http.Handler, token, target string) convergeSummaryResponse {
+	t.Helper()
+
+	req, _ := http.NewRequest(http.MethodGet, target+"?summary=true", http.NoBody)
+	req.Header.Set("X-Auth", token)
+	rec := httptest.NewRecorder()
+	scan.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("summary status = %d body = %q", rec.Code, rec.Body.String())
+	}
+
+	var got convergeSummaryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("failed to decode summary: %v", err)
+	}
+	return got
+}
+
+// The summary only reports; it must be reachable without the delete
+// permission that gates the clean preview.
+func TestConvergeSummaryNeedsOnlyReadAccess(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeCase(t, caseDir)
+
+	scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Download: true})
+
+	got := getConvergeSummary(t, scan, token, "/api/converge/case")
+	if !got.IsCase {
+		t.Error("summary did not recognize the case directory")
+	}
+
+	// Without ?summary the same GET is still the clean preview, still gated.
+	req, _ := http.NewRequest(http.MethodGet, "/api/converge/case", http.NoBody)
+	req.Header.Set("X-Auth", token)
+	rec := httptest.NewRecorder()
+	scan.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("clean preview without delete permission = %d, want 403", rec.Code)
+	}
+}
+
+func TestConvergeSummaryClassifiesRunTrees(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+
+	writeCaseFile(t, caseDir, "deck", "inputs.in")
+	writeCaseFile(t, caseDir, "x", "run.echo")
+
+	// A CONVERGE 6 run tree: streams and 3D output live below outputs_*.
+	writeCaseFile(t, caseDir, "", "outputs_original", "converge.start")
+	writeCaseFile(t, caseDir, "", "outputs_original", "converge.done")
+	writeCaseFile(t, caseDir, "log line", "outputs_original", "converge.log")
+	writeCaseFile(t, caseDir, "12345", "outputs_original", "restart0001.rst")
+	writeCaseFile(t, caseDir, "h5", "outputs_original", "output", "post000001_-4.81000e+02.h5")
+	writeCaseFile(t, caseDir, "cols", "outputs_original", "stream0", "dynamic.out")
+	writeCaseFile(t, caseDir, "png", "outputs_original", "paraview_catalyst", "images", "slice1_000_000009.png")
+
+	scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+	got := getConvergeSummary(t, scan, token, "/api/converge/case")
+
+	if !got.IsCase || got.Status != "completed" {
+		t.Errorf("isCase = %v status = %q, want a completed case", got.IsCase, got.Status)
+	}
+
+	wantGroups := map[string]int{"echo": 1, "restart": 1, "post": 1, "out": 1, "log": 1, "other": 1}
+	gotGroups := map[string]int{}
+	for _, g := range got.Groups {
+		gotGroups[g.Kind] = g.Count
+	}
+	for kind, want := range wantGroups {
+		if gotGroups[kind] != want {
+			t.Errorf("group %q count = %d, want %d (groups %+v)", kind, gotGroups[kind], want, got.Groups)
+		}
+	}
+
+	// The markers are bookkeeping, not output to report.
+	if gotGroups["run"] != 0 {
+		t.Errorf("markers were tallied as output: %+v", got.Groups)
+	}
+
+	if len(got.Restarts) != 1 || got.Restarts[0].Name != "restart0001.rst" || got.Restarts[0].Size != 5 {
+		t.Errorf("restarts = %+v, want the one restart file", got.Restarts)
+	}
+	if got.LogPath != "/case/outputs_original/converge.log" {
+		t.Errorf("logPath = %q", got.LogPath)
+	}
+}
+
+func TestConvergeSummaryStatuses(t *testing.T) {
+	old := time.Now().Add(-2 * time.Hour)
+
+	tests := []struct {
+		name  string
+		build func(t *testing.T, caseDir string)
+		want  string
+	}{
+		{
+			name:  "idle without markers",
+			build: func(t *testing.T, caseDir string) {},
+			want:  "idle",
+		},
+		{
+			name: "running while streams are fresh",
+			build: func(t *testing.T, caseDir string) {
+				writeCaseFile(t, caseDir, "", "outputs_1", "converge.start")
+				writeCaseFile(t, caseDir, "data", "outputs_1", "stream0", "thermo.out")
+			},
+			want: "running",
+		},
+		{
+			name: "interrupted once the streams go quiet",
+			build: func(t *testing.T, caseDir string) {
+				start := writeCaseFile(t, caseDir, "", "outputs_1", "converge.start")
+				out := writeCaseFile(t, caseDir, "data", "outputs_1", "stream0", "thermo.out")
+				for _, p := range []string{start, out} {
+					if err := os.Chtimes(p, old, old); err != nil {
+						t.Fatal(err)
+					}
+				}
+			},
+			want: "interrupted",
+		},
+		{
+			name: "completed regardless of age",
+			build: func(t *testing.T, caseDir string) {
+				start := writeCaseFile(t, caseDir, "", "outputs_1", "converge.start")
+				done := writeCaseFile(t, caseDir, "", "outputs_1", "converge.done")
+				for _, p := range []string{start, done} {
+					if err := os.Chtimes(p, old, old); err != nil {
+						t.Fatal(err)
+					}
+				}
+			},
+			want: "completed",
+		},
+		{
+			name: "newest run speaks for the case",
+			build: func(t *testing.T, caseDir string) {
+				start := writeCaseFile(t, caseDir, "", "outputs_1", "converge.start")
+				done := writeCaseFile(t, caseDir, "", "outputs_1", "converge.done")
+				for _, p := range []string{start, done} {
+					if err := os.Chtimes(p, old, old); err != nil {
+						t.Fatal(err)
+					}
+				}
+				writeCaseFile(t, caseDir, "", "outputs_2", "converge.start")
+				writeCaseFile(t, caseDir, "data", "outputs_2", "stream0", "thermo.out")
+			},
+			want: "running",
+		},
+		{
+			name: "root run layout",
+			build: func(t *testing.T, caseDir string) {
+				writeCaseFile(t, caseDir, "", "converge.start")
+				writeCaseFile(t, caseDir, "data", "stream0", "thermo.out")
+			},
+			want: "running",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userScope := t.TempDir()
+			caseDir := filepath.Join(userScope, "case")
+			writeCaseFile(t, caseDir, "deck", "inputs.in")
+			tt.build(t, caseDir)
+
+			scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+			got := getConvergeSummary(t, scan, token, "/api/converge/case")
+			if got.Status != tt.want {
+				t.Errorf("status = %q, want %q", got.Status, tt.want)
+			}
+		})
+	}
+}
+
+func TestConvergeSummaryJobAndProgress(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+
+	writeCaseFile(t, caseDir, `version: 6
+simulation_control:
+   crank_flag:            1                # engine run in crank angle degrees
+   start_time:            -481             # Start time
+   end_time:              860              # End time
+`, "inputs.in")
+
+	writeCaseFile(t, caseDir, `{
+  "id": "h35iv4se2qfi",
+  "name": "Test",
+  "app_key": "converge",
+  "app_version": "6.0.1",
+  "cores_per_node": 32,
+  "nodes_count": 2
+}`, "horizon.json")
+
+	writeCaseFile(t, caseDir, `header
+   time=   -2.672172222e-02, crank=   -4.809910000e+02, dt=    5.000000000e-07
+Ustar iterations= 1 residual= 5.5901e-01
+   time=   -2.601000000e-02, crank=   -1.431106000e+02, dt=    5.000000000e-07
+trailing chatter
+`, "outputs_original", "converge.log")
+	writeCaseFile(t, caseDir, "", "outputs_original", "converge.start")
+
+	scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+	got := getConvergeSummary(t, scan, token, "/api/converge/case")
+
+	if got.Job == nil {
+		t.Fatal("job info missing")
+	}
+	if got.Job.Name != "Test" || got.Job.AppVersion != "6.0.1" || got.Job.NodesCount != 2 || got.Job.CoresPerNode != 32 {
+		t.Errorf("job = %+v", got.Job)
+	}
+
+	if got.Progress == nil {
+		t.Fatal("progress missing")
+	}
+	if got.Progress.Unit != "deg" {
+		t.Errorf("unit = %q, want deg", got.Progress.Unit)
+	}
+	if got.Progress.Current != -143.1106 {
+		t.Errorf("current = %v, want -143.1106", got.Progress.Current)
+	}
+	if got.Progress.Start == nil || *got.Progress.Start != -481 {
+		t.Errorf("start = %v, want -481", got.Progress.Start)
+	}
+	if got.Progress.End == nil || *got.Progress.End != 860 {
+		t.Errorf("end = %v, want 860", got.Progress.End)
+	}
+}
+
+func TestConvergeCleanSelectiveKinds(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeCase(t, caseDir)
+
+	_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+
+	body := strings.NewReader(`{"kinds":["echo","log"]}`)
+	req, _ := http.NewRequest(http.MethodPost, "/api/converge/case", body)
+	req.Header.Set("X-Auth", token)
+	rec := httptest.NewRecorder()
+	clean.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
+	}
+
+	var got convergeCleanResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Deleted != 2 || got.Failed != 0 {
+		t.Errorf("deleted = %d failed = %d, want 2 and 0", got.Deleted, got.Failed)
+	}
+
+	for _, rel := range []string{"run.echo", "converge.log"} {
+		if _, err := os.Stat(filepath.Join(caseDir, rel)); !os.IsNotExist(err) {
+			t.Errorf("expected %s to be deleted", rel)
+		}
+	}
+	// Everything outside the two selected families stays, outputs_* included.
+	for _, rel := range []string{
+		"restart0100.rst", "map_00001.h5", "thermo.out", "post00100.h5",
+		"horizon.json", "hosts", "outputs_original", "outputs_restart0100",
+	} {
+		if _, err := os.Stat(filepath.Join(caseDir, rel)); err != nil {
+			t.Errorf("expected %s to survive a selective clean: %v", rel, err)
+		}
+	}
+}
+
+func TestConvergeCleanKeepsNewestRestarts(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	writeCaseFile(t, caseDir, "deck", "inputs.in")
+
+	now := time.Now()
+	for i, name := range []string{"restart0001.rst", "restart0002.rst", "restart0003.rst"} {
+		p := writeCaseFile(t, caseDir, "data", name)
+		mod := now.Add(time.Duration(i-3) * time.Hour)
+		if err := os.Chtimes(p, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+
+	body := strings.NewReader(`{"kinds":["restart"],"keepRestarts":2}`)
+	req, _ := http.NewRequest(http.MethodPost, "/api/converge/case", body)
+	req.Header.Set("X-Auth", token)
+	rec := httptest.NewRecorder()
+	clean.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
+	}
+
+	var got convergeCleanResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Deleted != 1 {
+		t.Errorf("deleted = %d, want 1", got.Deleted)
+	}
+
+	if _, err := os.Stat(filepath.Join(caseDir, "restart0001.rst")); !os.IsNotExist(err) {
+		t.Error("expected the oldest restart to be deleted")
+	}
+	for _, rel := range []string{"restart0002.rst", "restart0003.rst"} {
+		if _, err := os.Stat(filepath.Join(caseDir, rel)); err != nil {
+			t.Errorf("expected %s to be kept: %v", rel, err)
+		}
+	}
+}
+
+func TestConvergeCleanRejectsBadRequests(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeCase(t, caseDir)
+
+	_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+
+	for name, body := range map[string]string{
+		"unknown kind":          `{"kinds":["deck"]}`,
+		"negative keepRestarts": `{"keepRestarts":-1}`,
+		"malformed json":        `{"kinds":`,
+	} {
+		req, _ := http.NewRequest(http.MethodPost, "/api/converge/case", strings.NewReader(body))
+		req.Header.Set("X-Auth", token)
+		rec := httptest.NewRecorder()
+		clean.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: status = %d, want 400", name, rec.Code)
+		}
+	}
+
+	// Nothing may have been swept on the way to a rejection.
+	if _, err := os.Stat(filepath.Join(caseDir, "run.echo")); err != nil {
+		t.Errorf("a rejected request deleted output anyway: %v", err)
+	}
 }

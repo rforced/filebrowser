@@ -11,6 +11,8 @@
     </Card>
 
     <template v-else>
+      <converge-case-card />
+
       <!-- Empty -->
       <Card v-if="isEmpty" class="p-10">
         <div
@@ -240,6 +242,7 @@ import { useFileActions } from "@/composables/useFileActions";
 
 import Item from "@/components/files/ListingItem.vue";
 import ContextMenu from "@/components/ContextMenu.vue";
+import ConvergeCaseCard from "@/components/files/ConvergeCaseCard.vue";
 import Card from "@/components/ui/Card.vue";
 
 const showLimit = ref<number>(50);
