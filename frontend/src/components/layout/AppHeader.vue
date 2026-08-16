@@ -26,18 +26,18 @@
         <button
           v-tooltip="t('sidebar.settings')"
           type="button"
-          class="btn btn-flex btn-gray"
+          class="btn btn-flex btn-gray h-10"
           :aria-label="t('sidebar.settings')"
           @click="toSettings"
         >
           <i class="fa-solid fa-user"></i>
-          <span class="hidden md:inline font-medium">{{ user?.username }}</span>
+          <span class="hidden md:inline font-medium">{{ displayName }}</span>
         </button>
 
         <button
           v-tooltip="t('sidebar.logout')"
           type="button"
-          class="btn btn-flex btn-gray"
+          class="btn btn-flex btn-gray h-10"
           :aria-label="t('sidebar.logout')"
           @click="logout()"
         >
@@ -49,7 +49,7 @@
         v-else-if="!hideLoginButton"
         v-tooltip="t('sidebar.login')"
         to="/login"
-        class="btn btn-flex btn-gray"
+        class="btn btn-flex btn-gray h-10"
         :aria-label="t('sidebar.login')"
       >
         <i class="fa-solid fa-right-to-bracket"></i>
@@ -62,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -77,6 +78,7 @@ const { t } = useI18n();
 const router = useRouter();
 const authStore = useAuthStore();
 const { user, isLoggedIn } = storeToRefs(authStore);
+const displayName = computed(() => user.value?.username?.split("@")[0] ?? "");
 const toSettings = () => router.push({ path: "/settings/profile" });
 const logout = auth.logout;
 </script>
