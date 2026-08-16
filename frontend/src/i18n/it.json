@@ -33,9 +33,14 @@
     "next": "Successivo",
     "no": "No",
     "ok": "OK",
+    "openAsText": "Apri come testo",
     "openDirect": "Visualizza originale",
     "openFile": "Apri file",
     "openFolder": "Apri cartella",
+    "follow": "Segui",
+    "pause": "Pausa",
+    "play": "Riproduci",
+    "viewAsGraph": "Visualizza come grafico",
     "overrideAll": "Sostituisci tutti i file nella cartella di destinazione",
     "paste": "Incolla",
     "permalink": "Ottieni link permanente",
@@ -137,13 +142,53 @@
     }
   },
   "permanent": "Permanente",
+  "outPlot": {
+    "xAxis": "Asse X",
+    "series": "Serie",
+    "logScale": "Scala logaritmica",
+    "rows": "{count} righe",
+    "decimated": "sottocampionato per la visualizzazione",
+    "skippedRows": "{count} righe non valide ignorate",
+    "maxSeries": "fino a {count} serie alla volta",
+    "logHidden": "I valori ≤ 0 sono nascosti su una scala logaritmica.",
+    "empty": "In questo file non sono stati trovati dati da rappresentare.",
+    "tooLarge": "Questo file è troppo grande per essere rappresentato nel browser.",
+    "loadError": "Non è stato possibile caricare il file."
+  },
+  "converge": {
+    "caseTitle": "Caso CONVERGE",
+    "status": {
+      "running": "In esecuzione",
+      "completed": "Completato",
+      "interrupted": "Interrotto",
+      "idle": "Nessuna esecuzione"
+    },
+    "lastActivity": "Ultima attività {time}",
+    "job": "Job",
+    "nodes": "{nodes} nodi × {cores} core",
+    "simTime": "Tempo di simulazione",
+    "outputFootprint": "Output su disco",
+    "newestRestart": "Restart più recente",
+    "viewLog": "Visualizza il log",
+    "files": "{count} file"
+  },
+  "sequence": {
+    "frame": "Fotogramma {current} / {total}",
+    "speed": "{fps} fps"
+  },
+  "logView": {
+    "live": "In tempo reale",
+    "paused": "In pausa",
+    "showingLast": "mostra gli ultimi {size}",
+    "fileGone": "Questo file non è più disponibile."
+  },
   "prompts": {
     "calculateSize": "Calcola",
     "calculating": "Calcolo in corso…",
     "convergeClean": "Pulisci l'output",
     "convergeCleanDone": "Eliminati {count} elementi, liberati {size}.",
     "convergeCleanEmpty": "Nessun file di output di CONVERGE trovato qui.",
-    "convergeCleanMessage": "Questa operazione elimina definitivamente i file di output di CONVERGE in questa cartella del caso e ogni cartella outputs_* con tutto il suo contenuto.",
+    "convergeCleanMessage": "Questa operazione elimina definitivamente l'output di CONVERGE selezionato da questa cartella del caso, compresi i file corrispondenti contenuti nelle sue cartelle outputs_*. Selezionando la riga delle cartelle di output, tali cartelle vengono eliminate per intero.",
     "convergeCleanPartial": "Non è stato possibile eliminare {count} elementi.",
     "convergeCleanScanning": "Ricerca dei file di output in corso…",
     "convergeCleanTotal": "Verranno eliminati {count} elementi, liberando {size}.",
@@ -156,8 +201,14 @@
       "post": "Post cella per cella",
       "log": "Log",
       "run": "File di esecuzione",
-      "outputs": "Cartelle di output (contenuto incluso)"
+      "outputs": "Cartelle di output (contenuto incluso)",
+      "other": "Altri file di esecuzione"
     },
+    "convergeKeepRestarts": "Conserva i file di restart più recenti:",
+    "convergeKeepRestartsSubsumed": "I file di restart contenuti nelle cartelle di output vengono eliminati insieme alle cartelle.",
+    "andMoreItems": "e altri {count}",
+    "convergeCleanNothingSelected": "Seleziona almeno un tipo di output da eliminare.",
+    "convergeCleanRunning": "Questo caso sembra in esecuzione. Pulire ora può eliminare file che il solver sta ancora scrivendo.",
     "copy": "Copia",
     "copyMessage": "Seleziona la cartella in cui copiare i file:",
     "currentPassword": "La tua password",

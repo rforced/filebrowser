@@ -33,9 +33,14 @@
     "next": "次へ",
     "no": "いいえ",
     "ok": "OK",
+    "openAsText": "テキストとして開く",
     "openDirect": "元のファイルを表示",
     "openFile": "ファイルを開く",
     "openFolder": "フォルダーを開く",
+    "follow": "追従",
+    "pause": "一時停止",
+    "play": "再生",
+    "viewAsGraph": "グラフで表示",
     "overrideAll": "展開先フォルダーのファイルをすべて置き換える",
     "paste": "貼り付け",
     "permalink": "パーマリンクを取得",
@@ -137,13 +142,53 @@
     }
   },
   "permanent": "無期限",
+  "outPlot": {
+    "xAxis": "X 軸",
+    "series": "系列",
+    "logScale": "対数スケール",
+    "rows": "{count} 行",
+    "decimated": "表示用に間引き済み",
+    "skippedRows": "不正な {count} 行をスキップしました",
+    "maxSeries": "同時に最大 {count} 系列",
+    "logHidden": "対数スケールでは 0 以下の値は表示されません。",
+    "empty": "このファイルにはプロットできるデータがありません。",
+    "tooLarge": "このファイルはブラウザーでプロットするには大きすぎます。",
+    "loadError": "ファイルを読み込めませんでした。"
+  },
+  "converge": {
+    "caseTitle": "CONVERGE ケース",
+    "status": {
+      "running": "実行中",
+      "completed": "完了",
+      "interrupted": "中断",
+      "idle": "実行履歴なし"
+    },
+    "lastActivity": "最終アクティビティ {time}",
+    "job": "ジョブ",
+    "nodes": "{nodes} ノード × {cores} コア",
+    "simTime": "シミュレーション時間",
+    "outputFootprint": "ディスク上の出力",
+    "newestRestart": "最新のリスタート",
+    "viewLog": "ログを表示",
+    "files": "{count} ファイル"
+  },
+  "sequence": {
+    "frame": "フレーム {current} / {total}",
+    "speed": "{fps} fps"
+  },
+  "logView": {
+    "live": "ライブ",
+    "paused": "一時停止中",
+    "showingLast": "末尾 {size} を表示中",
+    "fileGone": "このファイルはもう存在しません。"
+  },
   "prompts": {
     "calculateSize": "計算",
     "calculating": "計算中…",
     "convergeClean": "出力を削除",
     "convergeCleanDone": "{count} 件の項目を削除し、{size} を解放しました。",
     "convergeCleanEmpty": "CONVERGE の出力ファイルは見つかりませんでした。",
-    "convergeCleanMessage": "このケースフォルダーにある CONVERGE の出力ファイルと、outputs_* フォルダーをその中身ごと完全に削除します。",
+    "convergeCleanMessage": "このケースフォルダーから、選択した CONVERGE の出力を outputs_* フォルダー内の該当ファイルも含めて完全に削除します。出力フォルダーの行を選択した場合は、それらのフォルダーをまるごと削除します。",
     "convergeCleanPartial": "{count} 件の項目を削除できませんでした。",
     "convergeCleanScanning": "出力ファイルを検索しています…",
     "convergeCleanTotal": "{count} 件の項目を削除し、{size} を解放します。",
@@ -156,8 +201,14 @@
       "post": "セルごとのポスト出力",
       "log": "ログ",
       "run": "実行時ファイル",
-      "outputs": "出力フォルダー（中身を含む）"
+      "outputs": "出力フォルダー（中身を含む）",
+      "other": "その他の実行時ファイル"
     },
+    "convergeKeepRestarts": "残す最新のリスタートファイル数:",
+    "convergeKeepRestartsSubsumed": "出力フォルダー内のリスタートファイルはフォルダーごと削除されます。",
+    "andMoreItems": "ほか {count} 件",
+    "convergeCleanNothingSelected": "削除する出力の種類を 1 つ以上選択してください。",
+    "convergeCleanRunning": "このケースは実行中のようです。今クリーンアップすると、ソルバーが書き込み中のファイルを削除するおそれがあります。",
     "copy": "コピー",
     "copyMessage": "ファイルをコピーする場所を選択してください：",
     "currentPassword": "現在のパスワード",

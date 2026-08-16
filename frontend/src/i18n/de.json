@@ -33,9 +33,14 @@
     "next": "Nächste",
     "no": "Nein",
     "ok": "OK",
+    "openAsText": "Als Text öffnen",
     "openDirect": "Original anzeigen",
     "openFile": "Datei öffnen",
     "openFolder": "Ordner öffnen",
+    "follow": "Folgen",
+    "pause": "Pause",
+    "play": "Abspielen",
+    "viewAsGraph": "Als Diagramm anzeigen",
     "overrideAll": "Alle Dateien im Zielordner ersetzen",
     "paste": "Einfügen",
     "permalink": "Permanentlink abrufen",
@@ -137,13 +142,53 @@
     }
   },
   "permanent": "Unbefristet",
+  "outPlot": {
+    "xAxis": "X-Achse",
+    "series": "Datenreihen",
+    "logScale": "Logarithmische Skala",
+    "rows": "{count} Zeilen",
+    "decimated": "für die Darstellung reduziert",
+    "skippedRows": "{count} fehlerhafte Zeilen übersprungen",
+    "maxSeries": "höchstens {count} Datenreihen gleichzeitig",
+    "logHidden": "Werte ≤ 0 werden bei logarithmischer Skala ausgeblendet.",
+    "empty": "In dieser Datei wurden keine darstellbaren Daten gefunden.",
+    "tooLarge": "Diese Datei ist zu groß, um sie im Browser darzustellen.",
+    "loadError": "Die Datei konnte nicht geladen werden."
+  },
+  "converge": {
+    "caseTitle": "CONVERGE-Case",
+    "status": {
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "interrupted": "Unterbrochen",
+      "idle": "Noch keine Läufe"
+    },
+    "lastActivity": "Letzte Aktivität {time}",
+    "job": "Job",
+    "nodes": "{nodes} Knoten × {cores} Kerne",
+    "simTime": "Simulationszeit",
+    "outputFootprint": "Ausgabe auf dem Datenträger",
+    "newestRestart": "Neuester Restart",
+    "viewLog": "Protokoll anzeigen",
+    "files": "{count} Dateien"
+  },
+  "sequence": {
+    "frame": "Bild {current} / {total}",
+    "speed": "{fps} fps"
+  },
+  "logView": {
+    "live": "Live",
+    "paused": "Pausiert",
+    "showingLast": "zeigt die letzten {size}",
+    "fileGone": "Diese Datei ist nicht mehr vorhanden."
+  },
   "prompts": {
     "calculateSize": "Berechnen",
     "calculating": "Wird berechnet …",
     "convergeClean": "Ausgabe bereinigen",
     "convergeCleanDone": "{count} Eintrag/Einträge gelöscht, {size} freigegeben.",
     "convergeCleanEmpty": "Hier wurden keine CONVERGE-Ausgabedateien gefunden.",
-    "convergeCleanMessage": "Dies löscht die CONVERGE-Ausgabedateien in diesem Case-Ordner endgültig, sowie jeden outputs_*-Ordner samt seinem gesamten Inhalt.",
+    "convergeCleanMessage": "Dies löscht die ausgewählte CONVERGE-Ausgabe in diesem Case-Ordner endgültig, einschließlich passender Dateien in dessen outputs_*-Ordnern. Wird die Zeile mit den Ausgabeordnern ausgewählt, werden diese Ordner vollständig gelöscht.",
     "convergeCleanPartial": "{count} Eintrag/Einträge konnten nicht gelöscht werden.",
     "convergeCleanScanning": "Ausgabedateien werden gesucht …",
     "convergeCleanTotal": "{count} Eintrag/Einträge werden gelöscht und geben {size} frei.",
@@ -156,8 +201,14 @@
       "post": "Zellweise Post-Ausgabe",
       "log": "Protokoll",
       "run": "Laufdateien",
-      "outputs": "Ausgabeordner (samt Inhalt)"
+      "outputs": "Ausgabeordner (samt Inhalt)",
+      "other": "Sonstige Laufdateien"
     },
+    "convergeKeepRestarts": "Neueste Restart-Dateien behalten:",
+    "convergeKeepRestartsSubsumed": "Restart-Dateien in Ausgabeordnern werden zusammen mit den Ordnern gelöscht.",
+    "andMoreItems": "und {count} weitere",
+    "convergeCleanNothingSelected": "Wähle mindestens eine Art von Ausgabe zum Löschen aus.",
+    "convergeCleanRunning": "Dieser Case scheint zu laufen. Ein Bereinigen kann jetzt Dateien löschen, die der Solver noch schreibt.",
     "copy": "Kopieren",
     "copyMessage": "Wähle den Zielort für deine Dateien:",
     "currentPassword": "Dein Passwort",
