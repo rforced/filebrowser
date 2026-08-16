@@ -160,9 +160,11 @@
     "status": {
       "running": "実行中",
       "completed": "完了",
+      "needsRestart": "リスタートが必要",
       "interrupted": "中断",
       "idle": "実行履歴なし"
     },
+    "runChain": "実行 ({count})",
     "lastActivity": "最終アクティビティ {time}",
     "job": "ジョブ",
     "nodes": "{nodes} ノード × {cores} コア",
@@ -206,6 +208,9 @@
     },
     "convergeKeepRestarts": "残す最新のリスタートファイル数:",
     "convergeKeepRestartsSubsumed": "出力フォルダー内のリスタートファイルはフォルダーごと削除されます。",
+    "convergeKeepRuns": "そのまま残す最新の実行フォルダー数:",
+    "convergeRunKept": "保持",
+    "convergeRunDenied": "保持 (ルールにより一部が対象外)",
     "andMoreItems": "ほか {count} 件",
     "convergeCleanNothingSelected": "削除する出力の種類を 1 つ以上選択してください。",
     "convergeCleanRunning": "このケースは実行中のようです。今クリーンアップすると、ソルバーが書き込み中のファイルを削除するおそれがあります。",

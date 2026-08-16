@@ -58,13 +58,53 @@
                     type="number"
                     class="form-control !w-20 !py-1 text-sm"
                     min="0"
-                    :max="restarts.length"
-                    :disabled="scanning || cleaning || outputsSelected"
+                    :max="sparableRestarts.length"
+                    :disabled="
+                      scanning || cleaning || sparableRestarts.length === 0
+                    "
                   />
-                  <span v-if="outputsSelected" class="converge-keep-note">
+                  <span
+                    v-if="sparableRestarts.length < restarts.length"
+                    class="converge-keep-note"
+                  >
                     {{ t("prompts.convergeKeepRestartsSubsumed") }}
                   </span>
                 </label>
+              </td>
+            </tr>
+
+            <tr v-if="kind.key === 'outputs' && outputDirs.length > 1">
+              <td></td>
+              <td colspan="3" class="converge-keep">
+                <label class="flex gap-2 items-center flex-wrap">
+                  <span>{{ t("prompts.convergeKeepRuns") }}</span>
+                  <input
+                    v-model.number="keepRuns"
+                    type="number"
+                    class="form-control !w-20 !py-1 text-sm"
+                    min="0"
+                    :max="outputDirs.length"
+                    :disabled="scanning || cleaning"
+                  />
+                </label>
+
+                <ul class="converge-runs">
+                  <li v-for="(run, index) in outputDirs" :key="run.path">
+                    <code>{{ run.name }}</code>
+                    <span class="converge-run-size">
+                      {{ filesize(run.size) }}
+                    </span>
+                    <span v-if="index < keptRuns" class="converge-run-kept">
+                      {{ t("prompts.convergeRunKept") }}
+                    </span>
+                    <span
+                      v-else-if="!run.deletable && checked.outputs"
+                      class="converge-run-kept"
+                    >
+                      {{ t("prompts.convergeRunDenied") }}
+                    </span>
+                  </li>
+                </ul>
               </td>
             </tr>
           </template>
@@ -126,7 +166,11 @@ import { computed, inject, onActivated, onUnmounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { files as api } from "@/api";
-import type { ConvergeKind, ConvergeRestartInfo } from "@/api/files";
+import type {
+  ConvergeKind,
+  ConvergeOutputDir,
+  ConvergeRestartInfo,
+} from "@/api/files";
 import buttons from "@/utils/buttons";
 import { filesize } from "@/utils";
 import { cachedConvergeSummary } from "@/utils/convergeSummaryCache";
@@ -180,6 +224,8 @@ const size = ref(0);
 const caseRunning = ref(false);
 const restarts = ref<ConvergeRestartInfo[]>([]);
 const keepRestarts = ref(0);
+const outputDirs = ref<ConvergeOutputDir[]>([]);
+const keepRuns = ref(0);
 
 const emptyCounts = (): Record<ConvergeKind, number> =>
   Object.fromEntries(allConvergeKinds.map((k) => [k, 0])) as Record<
@@ -208,18 +254,64 @@ const outputsSelected = computed(
   () => checked.value.outputs && counts.value.outputs > 0
 );
 
+// The newest run folders, held back from the whole sweep — not just from the
+// folder deletion. Sparing a leg of a restart chain means leaving it intact,
+// so its files are not picked at by the other kinds either. Server order is
+// newest first, which is the order keepRuns counts in.
+const keptRuns = computed(() => {
+  const wanted = Number.isFinite(keepRuns.value)
+    ? Math.max(0, Math.floor(keepRuns.value))
+    : 0;
+  return Math.min(wanted, outputDirs.value.length);
+});
+
+const protectedRuns = computed(() => outputDirs.value.slice(0, keptRuns.value));
+
+// What sparing those runs takes back out of the sweep, per kind, so the tally
+// below can subtract it without a second scan.
+const protectedShare = computed(() => {
+  const runCounts = emptyCounts();
+  const runSizes = emptySizes();
+
+  for (const run of protectedRuns.value) {
+    for (const group of run.groups) {
+      runCounts[group.kind] = (runCounts[group.kind] ?? 0) + group.count;
+      runSizes[group.kind] = (runSizes[group.kind] ?? 0) + group.size;
+    }
+    if (run.deletable) {
+      runCounts.outputs += 1;
+      runSizes.outputs += run.size;
+    }
+  }
+
+  return { counts: runCounts, sizes: runSizes };
+});
+
+// The restarts keep-newest can actually reach. One inside a spared run is
+// already safe, and one inside a folder going whole cannot be picked out of it.
+const sparableRestarts = computed(() =>
+  restarts.value.filter((restart) => {
+    const run = outputDirs.value.find((dir) =>
+      restart.path.startsWith(`${dir.path}/`)
+    );
+    if (run === undefined) return true;
+    if (protectedRuns.value.includes(run)) return false;
+    return !outputsSelected.value;
+  })
+);
+
 // keepRestarts clamped to what actually exists, so the arithmetic below and
 // the request stay honest whatever gets typed.
 const keptRestarts = computed(() => {
-  if (!checked.value.restart || outputsSelected.value) return 0;
+  if (!checked.value.restart) return 0;
   const wanted = Number.isFinite(keepRestarts.value)
     ? Math.max(0, Math.floor(keepRestarts.value))
     : 0;
-  return Math.min(wanted, restarts.value.length);
+  return Math.min(wanted, sparableRestarts.value.length);
 });
 
 const keptRestartSize = computed(() =>
-  restarts.value
+  sparableRestarts.value
     .slice(0, keptRestarts.value)
     .reduce((sum, restart) => sum + restart.size, 0)
 );
@@ -232,7 +324,8 @@ const selectedKinds = computed(() =>
 
 const tallyDeleted = (
   full: Record<ConvergeKind, number>,
-  root: Record<ConvergeKind, number>
+  root: Record<ConvergeKind, number>,
+  spared: Record<ConvergeKind, number>
 ) => {
   if (selectedKinds.value.length === 0) return 0;
 
@@ -242,18 +335,24 @@ const tallyDeleted = (
     if (kind !== "nfs" && !(checked.value[kind] && counts.value[kind] > 0)) {
       continue;
     }
-    sum += outputsSelected.value ? root[kind] : full[kind];
+    // With the folders going whole the other kinds only reach the case root,
+    // which no spared run covers; otherwise the spared runs come back out.
+    sum += outputsSelected.value ? root[kind] : full[kind] - spared[kind];
   }
-  if (outputsSelected.value) sum += full.outputs;
+  if (outputsSelected.value) sum += full.outputs - spared.outputs;
   return sum;
 };
 
 const deletedCount = computed(
-  () => tallyDeleted(counts.value, rootCounts.value) - keptRestarts.value
+  () =>
+    tallyDeleted(counts.value, rootCounts.value, protectedShare.value.counts) -
+    keptRestarts.value
 );
 
 const deletedSize = computed(
-  () => tallyDeleted(sizes.value, rootSizes.value) - keptRestartSize.value
+  () =>
+    tallyDeleted(sizes.value, rootSizes.value, protectedShare.value.sizes) -
+    keptRestartSize.value
 );
 
 const humanSize = computed(() => filesize(deletedSize.value));
@@ -288,6 +387,8 @@ const scan = async () => {
   checked.value = allChecked();
   restarts.value = [];
   keepRestarts.value = 0;
+  outputDirs.value = [];
+  keepRuns.value = 0;
   caseRunning.value = false;
 
   scanController.abort();
@@ -304,6 +405,10 @@ const scan = async () => {
     total.value = result.count;
     size.value = result.size;
     restarts.value = result.restarts;
+    outputDirs.value = result.outputDirs ?? [];
+    // A chain has a leg a resubmit continues from. Holding it back by default
+    // keeps the obvious sweep from taking the restart file the case needs.
+    keepRuns.value = outputDirs.value.length > 1 ? 1 : 0;
   } catch (e) {
     const error = e as Error & { is_canceled?: boolean };
     if (error.is_canceled) return;
@@ -339,6 +444,7 @@ const submit = async () => {
     const result = await api.convergeClean(route.path, {
       kinds,
       keepRestarts: keptRestarts.value,
+      keepRuns: keptRuns.value,
     });
 
     if (result.failed > 0) {
@@ -410,6 +516,32 @@ const submit = async () => {
 .converge-keep-note {
   font-size: 0.85em;
   opacity: 0.8;
+}
+
+.converge-runs {
+  margin: 0.4em 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9em;
+}
+
+.converge-runs li {
+  display: flex;
+  gap: 0.6em;
+  align-items: baseline;
+  padding: 0.1em 0;
+}
+
+.converge-run-size {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.converge-run-kept {
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
 }
 
 .converge-summary {

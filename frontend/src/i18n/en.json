@@ -160,9 +160,11 @@
     "status": {
       "running": "Running",
       "completed": "Completed",
+      "needsRestart": "Needs restart",
       "interrupted": "Interrupted",
       "idle": "No runs yet"
     },
+    "runChain": "Runs ({count})",
     "lastActivity": "Last activity {time}",
     "job": "Job",
     "nodes": "{nodes} node(s) × {cores} cores",
@@ -206,6 +208,9 @@
     },
     "convergeKeepRestarts": "Keep the newest restart files:",
     "convergeKeepRestartsSubsumed": "Restart files inside output folders are deleted with the folders.",
+    "convergeKeepRuns": "Keep the newest run folders untouched:",
+    "convergeRunKept": "Kept",
+    "convergeRunDenied": "Kept, a rule denies part of it",
     "andMoreItems": "and {count} more",
     "convergeCleanNothingSelected": "Select at least one kind of output to delete.",
     "convergeCleanRunning": "This case appears to be running. Cleaning now can delete files the solver is still writing.",

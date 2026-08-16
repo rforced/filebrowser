@@ -160,9 +160,11 @@
     "status": {
       "running": "In esecuzione",
       "completed": "Completato",
+      "needsRestart": "Da riavviare",
       "interrupted": "Interrotto",
       "idle": "Nessuna esecuzione"
     },
+    "runChain": "Esecuzioni ({count})",
     "lastActivity": "Ultima attività {time}",
     "job": "Job",
     "nodes": "{nodes} nodi × {cores} core",
@@ -206,6 +208,9 @@
     },
     "convergeKeepRestarts": "Conserva i file di restart più recenti:",
     "convergeKeepRestartsSubsumed": "I file di restart contenuti nelle cartelle di output vengono eliminati insieme alle cartelle.",
+    "convergeKeepRuns": "Conserva intatte le cartelle di esecuzione più recenti:",
+    "convergeRunKept": "Conservata",
+    "convergeRunDenied": "Conservata, una regola ne blocca una parte",
     "andMoreItems": "e altri {count}",
     "convergeCleanNothingSelected": "Seleziona almeno un tipo di output da eliminare.",
     "convergeCleanRunning": "Questo caso sembra in esecuzione. Pulire ora può eliminare file che il solver sta ancora scrivendo.",

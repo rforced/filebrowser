@@ -58,13 +58,47 @@
       >
         <div
           class="h-full rounded-full transition-all"
-          :class="
-            summary.status === 'running'
-              ? 'bg-blue-500'
-              : 'bg-gray-400 dark:bg-gray-500'
-          "
+          :class="progressClass"
           :style="{ width: `${progressBounds.percent}%` }"
         ></div>
+      </div>
+    </div>
+
+    <div v-if="chain.length > 0" class="flex flex-col gap-1.5">
+      <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+        {{ t("converge.runChain", { count: chain.length }) }}
+      </span>
+      <div class="flex flex-wrap gap-1.5 items-center">
+        <template v-for="(leg, index) in chain" :key="leg.run.path">
+          <i
+            v-if="index > 0"
+            class="fa-solid fa-angle-right text-[0.6rem] text-gray-400 dark:text-gray-500"
+          ></i>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs border border-gray-200 dark:border-gray-700 enabled:hover:bg-gray-100 dark:enabled:hover:bg-gray-700 transition disabled:cursor-default"
+            :disabled="!leg.run.logPath"
+            :title="leg.run.name"
+            @click="openLog(leg.run.logPath)"
+          >
+            <i
+              class="fa-solid text-[0.6rem]"
+              :class="[iconFor(leg.run.status), inkFor(leg.run.status)]"
+            ></i>
+            <span class="font-medium text-gray-900 dark:text-gray-100">
+              {{ runLabel(leg.run) }}
+            </span>
+            <span
+              v-if="legRange(leg)"
+              class="text-gray-500 dark:text-gray-400 tabular-nums"
+            >
+              {{ legRange(leg) }}
+            </span>
+            <span class="text-gray-400 dark:text-gray-500 tabular-nums">
+              {{ filesize(leg.run.size) }}
+            </span>
+          </button>
+        </template>
       </div>
     </div>
 
@@ -99,7 +133,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
-import type { ConvergeSummary } from "@/api/files";
+import type { ConvergeRun, ConvergeStatus, ConvergeSummary } from "@/api/files";
 import Card from "@/components/ui/Card.vue";
 import { useFileStore } from "@/stores/file";
 import { filesize } from "@/utils";
@@ -141,31 +175,42 @@ watch(
   }
 );
 
-const statusClass = computed(() => {
-  switch (summary.value?.status) {
-    case "running":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200";
-    case "completed":
-      return "bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-200";
-    case "interrupted":
-      return "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200";
-    default:
-      return "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200";
-  }
-});
+const statusClasses: Record<ConvergeStatus, string> = {
+  running: "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200",
+  completed:
+    "bg-green-100 text-green-800 dark:bg-green-900/60 dark:text-green-200",
+  needsRestart:
+    "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200",
+  interrupted:
+    "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200",
+  idle: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
+};
 
-const statusIcon = computed(() => {
-  switch (summary.value?.status) {
-    case "running":
-      return "fa-circle-notch fa-spin";
-    case "completed":
-      return "fa-circle-check";
-    case "interrupted":
-      return "fa-triangle-exclamation";
-    default:
-      return "fa-circle";
-  }
-});
+const statusIcons: Record<ConvergeStatus, string> = {
+  running: "fa-circle-notch fa-spin",
+  completed: "fa-circle-check",
+  needsRestart: "fa-rotate-right",
+  interrupted: "fa-triangle-exclamation",
+  idle: "fa-circle",
+};
+
+const statusInk: Record<ConvergeStatus, string> = {
+  running: "text-blue-600 dark:text-blue-400",
+  completed: "text-green-600 dark:text-green-400",
+  needsRestart: "text-indigo-600 dark:text-indigo-400",
+  interrupted: "text-amber-600 dark:text-amber-400",
+  idle: "text-gray-400 dark:text-gray-500",
+};
+
+const classFor = (status?: ConvergeStatus) =>
+  statusClasses[status ?? "idle"] ?? statusClasses.idle;
+const iconFor = (status?: ConvergeStatus) =>
+  statusIcons[status ?? "idle"] ?? statusIcons.idle;
+const inkFor = (status?: ConvergeStatus) =>
+  statusInk[status ?? "idle"] ?? statusInk.idle;
+
+const statusClass = computed(() => classFor(summary.value?.status));
+const statusIcon = computed(() => iconFor(summary.value?.status));
 
 const jobLine = computed(() => {
   const job = summary.value?.job;
@@ -206,13 +251,60 @@ const progressBounds = computed(() => {
   return { current: progress.current, end: progress.end, percent };
 });
 
+const progressClass = computed(() => {
+  switch (summary.value?.status) {
+    case "running":
+      return "bg-blue-500";
+    case "needsRestart":
+      return "bg-indigo-500";
+    default:
+      return "bg-gray-400 dark:bg-gray-500";
+  }
+});
+
 const newestRestart = computed(() => summary.value?.restarts[0] ?? null);
+
+// The chain reads oldest to newest, the direction the solve ran, while the API
+// reports runs newest-first. Each leg only records where it stopped, so the one
+// before it supplies where it started; the deck's start_time opens the chain.
+// A leg whose log could not be read leaves the next one's start unknown rather
+// than inventing a join.
+const chain = computed(() => {
+  const runs = summary.value?.runs ?? [];
+  if (runs.length < 2) return [];
+
+  let start = summary.value?.progress?.start;
+
+  return runs
+    .slice()
+    .reverse()
+    .map((run) => {
+      const leg = { run, start, end: run.end };
+      start = run.end;
+      return leg;
+    });
+});
+
+type ChainLeg = (typeof chain.value)[number];
+
+const runLabel = (run: ConvergeRun) =>
+  run.name.replace(/^outputs_/i, "") || run.name;
+
+const legRange = (leg: ChainLeg) => {
+  if (leg.end === undefined) return "";
+
+  const unit = summary.value?.progress?.unit ?? "";
+  const end = `${formatOutValue(leg.end)}${unit && ` ${unit}`}`;
+  return leg.start === undefined ? end : `${formatOutValue(leg.start)}–${end}`;
+};
 
 const fromNow = (iso: string) => dayjs(iso).fromNow();
 
-const viewLog = () => {
-  if (summary.value?.logPath) {
-    router.push({ path: `/files${summary.value.logPath}` });
+const openLog = (logPath?: string) => {
+  if (logPath) {
+    router.push({ path: `/files${logPath}` });
   }
 };
+
+const viewLog = () => openLog(summary.value?.logPath);
 </script>

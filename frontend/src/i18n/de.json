@@ -160,9 +160,11 @@
     "status": {
       "running": "Läuft",
       "completed": "Abgeschlossen",
+      "needsRestart": "Neustart erforderlich",
       "interrupted": "Unterbrochen",
       "idle": "Noch keine Läufe"
     },
+    "runChain": "Läufe ({count})",
     "lastActivity": "Letzte Aktivität {time}",
     "job": "Job",
     "nodes": "{nodes} Knoten × {cores} Kerne",
@@ -206,6 +208,9 @@
     },
     "convergeKeepRestarts": "Neueste Restart-Dateien behalten:",
     "convergeKeepRestartsSubsumed": "Restart-Dateien in Ausgabeordnern werden zusammen mit den Ordnern gelöscht.",
+    "convergeKeepRuns": "Neueste Lauf-Ordner unangetastet lassen:",
+    "convergeRunKept": "Behalten",
+    "convergeRunDenied": "Behalten, eine Regel sperrt einen Teil davon",
     "andMoreItems": "und {count} weitere",
     "convergeCleanNothingSelected": "Wähle mindestens eine Art von Ausgabe zum Löschen aus.",
     "convergeCleanRunning": "Dieser Case scheint zu laufen. Ein Bereinigen kann jetzt Dateien löschen, die der Solver noch schreibt.",

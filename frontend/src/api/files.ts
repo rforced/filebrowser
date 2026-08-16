@@ -340,12 +340,23 @@ export interface ConvergeRestartInfo {
   modified: string;
 }
 
+export interface ConvergeOutputDir {
+  name: string;
+  path: string;
+  size: number;
+  count: number;
+  modified: string;
+  deletable: boolean;
+  groups: ConvergeGroup[];
+}
+
 export interface ConvergeScan {
   isCase: boolean;
   groups: ConvergeGroup[];
   count: number;
   size: number;
   restarts: ConvergeRestartInfo[];
+  outputDirs: ConvergeOutputDir[];
 }
 
 export async function convergeScan(
@@ -357,7 +368,19 @@ export async function convergeScan(
   return (await res.json()) as ConvergeScan;
 }
 
-export type ConvergeStatus = "idle" | "running" | "completed" | "interrupted";
+export type ConvergeStatus =
+  "idle" | "running" | "completed" | "needsRestart" | "interrupted";
+
+export interface ConvergeRun {
+  name: string;
+  path: string;
+  status: ConvergeStatus;
+  size: number;
+  count: number;
+  modified: string;
+  logPath?: string;
+  end?: number;
+}
 
 export interface ConvergeJobInfo {
   id?: string;
@@ -382,6 +405,7 @@ export interface ConvergeSummary {
   count: number;
   size: number;
   restarts: ConvergeRestartInfo[];
+  runs: ConvergeRun[];
   job?: ConvergeJobInfo;
   logPath?: string;
   lastActivity?: string;
@@ -400,6 +424,7 @@ export async function convergeSummary(
 export interface ConvergeCleanOptions {
   kinds?: ConvergeKind[];
   keepRestarts?: number;
+  keepRuns?: number;
 }
 
 export interface ConvergeCleanResult {

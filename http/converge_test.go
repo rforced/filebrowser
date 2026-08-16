@@ -2,6 +2,7 @@ package fbhttp
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1142,5 +1143,278 @@ func TestConvergeCleanRejectsBadRequests(t *testing.T) {
 	// Nothing may have been swept on the way to a rejection.
 	if _, err := os.Stat(filepath.Join(caseDir, "run.echo")); err != nil {
 		t.Errorf("a rejected request deleted output anyway: %v", err)
+	}
+}
+
+// convergeChain builds a three-leg restart chain the way CONVERGE 6 leaves one
+// behind: a directory per launch, each holding only the slice of the solve it
+// ran, and a deck whose end_time is still out ahead of the newest leg.
+func convergeChain(t *testing.T, caseDir, endTime string) {
+	t.Helper()
+
+	writeCaseFile(t, caseDir, `
+   crank_flag:            1
+   start_time:            360.015
+   end_time:              `+endTime+`
+`, "inputs.in")
+
+	legs := []struct {
+		dir string
+		end string
+		age time.Duration
+	}{
+		{"outputs_original", "1.800108700e+03", 48 * time.Hour},
+		{"outputs_restart1", "3.600015244e+03", 24 * time.Hour},
+		{"outputs_restart2", "4.016760984e+03", 2 * time.Hour},
+	}
+
+	for _, leg := range legs {
+		logLine := "   time=    2.307831667e-01, crank=    " + leg.end +
+			", dt=    1.405163090e-05, time-step limit = dt_cfl \nnormal termination\n"
+
+		written := []string{
+			writeCaseFile(t, caseDir, "", leg.dir, "converge.start"),
+			writeCaseFile(t, caseDir, "", leg.dir, "converge.done"),
+			writeCaseFile(t, caseDir, logLine, leg.dir, "converge.log"),
+			writeCaseFile(t, caseDir, "rst", leg.dir, "restart0001.rst"),
+			writeCaseFile(t, caseDir, "cols", leg.dir, "stream0", "thermo.out"),
+		}
+
+		// The directory goes last: writing into it moves its mtime, and that
+		// mtime is what orders a leg whose files have all been swept.
+		stamp := time.Now().Add(-leg.age)
+		for _, p := range append(written, filepath.Join(caseDir, leg.dir)) {
+			if err := os.Chtimes(p, stamp, stamp); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+func TestConvergeNeedsRestart(t *testing.T) {
+	at := func(v float64) *float64 { return &v }
+
+	tests := []struct {
+		name                string
+		status              string
+		current, start, end *float64
+		want                bool
+	}{
+		{"cut off short of end_time", "completed", at(4016.76), at(360.015), at(7200), true},
+		{"reached end_time", "completed", at(7200.01), at(360.015), at(7200), false},
+		// CONVERGE writes the last row at or just past end_time; a rounding
+		// tick under it is still a finished solve.
+		{"a hair under end_time", "completed", at(7199.9999), at(360.015), at(7200), false},
+		{"no start in the deck", "completed", at(500), nil, at(7200), true},
+		{"still running", "running", at(4016.76), at(360.015), at(7200), false},
+		{"interrupted stays interrupted", "interrupted", at(4016.76), at(360.015), at(7200), false},
+		{"no end in the deck", "completed", at(4016.76), at(360.015), nil, false},
+		{"no progress read", "completed", nil, at(360.015), at(7200), false},
+		{"degenerate span", "completed", at(10), at(7200), at(7200), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := convergeNeedsRestart(tt.status, tt.current, tt.start, tt.end)
+			if got != tt.want {
+				t.Errorf("convergeNeedsRestart = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A leg that hit its wall-clock limit writes converge.done and "normal
+// termination" just like a finished solve. The deck is what tells them apart.
+func TestConvergeSummaryStatusAcrossChain(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		endTime string
+		want    string
+	}{
+		{"deck still asks for more", "7200", "needsRestart"},
+		{"newest leg reached end_time", "4016.76", "completed"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			userScope := t.TempDir()
+			caseDir := filepath.Join(userScope, "case")
+			convergeChain(t, caseDir, tt.endTime)
+
+			scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+			got := getConvergeSummary(t, scan, token, "/api/converge/case")
+
+			if got.Status != tt.want {
+				t.Errorf("status = %q, want %q", got.Status, tt.want)
+			}
+			if got.LogPath != "/case/outputs_restart2/converge.log" {
+				t.Errorf("LogPath = %q, want the newest leg's log", got.LogPath)
+			}
+			if got.Progress == nil || got.Progress.Current != 4016.760984 {
+				t.Errorf("Progress = %+v, want the newest leg's crank", got.Progress)
+			}
+		})
+	}
+}
+
+func TestConvergeSummaryRunChain(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeChain(t, caseDir, "7200")
+
+	scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Download: true})
+	got := getConvergeSummary(t, scan, token, "/api/converge/case")
+
+	// Newest first, the same order Restarts uses and the order keepRuns counts
+	// in. Each leg reports where it stopped; the one before it says where it
+	// started.
+	wantNames := []string{"outputs_restart2", "outputs_restart1", "outputs_original"}
+	wantEnds := []float64{4016.760984, 3600.015244, 1800.1087}
+
+	if len(got.Runs) != len(wantNames) {
+		t.Fatalf("Runs = %+v, want %d legs", got.Runs, len(wantNames))
+	}
+
+	for i, run := range got.Runs {
+		if run.Name != wantNames[i] {
+			t.Errorf("Runs[%d].Name = %q, want %q", i, run.Name, wantNames[i])
+		}
+		if run.Path != "/case/"+wantNames[i] {
+			t.Errorf("Runs[%d].Path = %q", i, run.Path)
+		}
+		if run.End == nil || *run.End != wantEnds[i] {
+			t.Errorf("Runs[%d].End = %v, want %v", i, run.End, wantEnds[i])
+		}
+		// Each leg carries its own done marker, and the needsRestart refinement
+		// belongs to the case, not to a leg whose end_time has moved on.
+		if run.Status != "completed" {
+			t.Errorf("Runs[%d].Status = %q, want completed", i, run.Status)
+		}
+		if run.Count != 5 || run.Size == 0 {
+			t.Errorf("Runs[%d] count/size = %d/%d, want 5 files and a footprint",
+				i, run.Count, run.Size)
+		}
+	}
+}
+
+// keepRuns holds the newest legs back from the whole sweep, not just from the
+// folder deletion: sparing a leg means leaving it intact.
+func TestConvergeCleanKeepRuns(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		wantDeleted int
+		wantGone    []string
+		wantKept    []string
+	}{
+		{
+			name:        "folders whole, newest leg spared",
+			body:        `{"kinds":["outputs"],"keepRuns":1}`,
+			wantDeleted: 2,
+			wantGone:    []string{"outputs_original", "outputs_restart1"},
+			wantKept: []string{
+				"outputs_restart2/restart0001.rst",
+				"outputs_restart2/stream0/thermo.out",
+			},
+		},
+		{
+			name:        "a kind reaching inside stops at the spared leg",
+			body:        `{"kinds":["restart"],"keepRuns":1}`,
+			wantDeleted: 3,
+			wantGone: []string{
+				"restart0163.rst",
+				"outputs_original/restart0001.rst",
+				"outputs_restart1/restart0001.rst",
+			},
+			wantKept: []string{"outputs_restart2/restart0001.rst"},
+		},
+		{
+			name:        "keep-newest and keep-runs compose",
+			body:        `{"kinds":["restart"],"keepRuns":1,"keepRestarts":1}`,
+			wantDeleted: 2,
+			wantGone: []string{
+				"outputs_original/restart0001.rst",
+				"outputs_restart1/restart0001.rst",
+			},
+			wantKept: []string{
+				"restart0163.rst",
+				"outputs_restart2/restart0001.rst",
+			},
+		},
+		{
+			name:        "keeping every leg leaves the chain alone",
+			body:        `{"kinds":["outputs"],"keepRuns":9}`,
+			wantDeleted: 0,
+			wantKept: []string{
+				"outputs_original", "outputs_restart1", "outputs_restart2",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userScope := t.TempDir()
+			caseDir := filepath.Join(userScope, "case")
+			convergeChain(t, caseDir, "7200")
+			// The copy CONVERGE leaves at the case root when a leg hands off.
+			writeCaseFile(t, caseDir, "rst", "restart0163.rst")
+
+			_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+			got := convergeCleanRequestJSON(t, clean, token, tt.body)
+
+			if got.Deleted != tt.wantDeleted || got.Failed != 0 {
+				t.Errorf("deleted = %d failed = %d, want %d and 0",
+					got.Deleted, got.Failed, tt.wantDeleted)
+			}
+			for _, rel := range tt.wantGone {
+				if _, err := os.Stat(filepath.Join(caseDir, rel)); !os.IsNotExist(err) {
+					t.Errorf("%s survived the sweep", rel)
+				}
+			}
+			for _, rel := range tt.wantKept {
+				if _, err := os.Stat(filepath.Join(caseDir, rel)); err != nil {
+					t.Errorf("%s should have been spared: %v", rel, err)
+				}
+			}
+		})
+	}
+}
+
+func TestConvergeScanReportsOutputDirs(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeChain(t, caseDir, "7200")
+
+	scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+
+	req, _ := http.NewRequest(http.MethodGet, "/api/converge/case", http.NoBody)
+	req.Header.Set("X-Auth", token)
+	rec := httptest.NewRecorder()
+	scan.ServeHTTP(rec, req)
+
+	var got convergeScanResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+
+	wantNames := []string{"outputs_restart2", "outputs_restart1", "outputs_original"}
+	if len(got.OutputDirs) != len(wantNames) {
+		t.Fatalf("OutputDirs = %+v, want %d", got.OutputDirs, len(wantNames))
+	}
+
+	for i, dir := range got.OutputDirs {
+		if dir.Name != wantNames[i] {
+			t.Errorf("OutputDirs[%d].Name = %q, want %q", i, dir.Name, wantNames[i])
+		}
+		if !dir.Deletable {
+			t.Errorf("OutputDirs[%d] should be deletable", i)
+		}
+		// Groups price what sparing this leg subtracts: its own restart, out
+		// and log files. converge.start and converge.done match no kind.
+		kinds := map[string]int{}
+		for _, group := range dir.Groups {
+			kinds[group.Kind] = group.Count
+		}
+		if want := (map[string]int{"restart": 1, "out": 1, "log": 1}); !maps.Equal(kinds, want) {
+			t.Errorf("OutputDirs[%d].Groups = %v, want %v", i, kinds, want)
+		}
 	}
 }

@@ -160,9 +160,11 @@
     "status": {
       "running": "运行中",
       "completed": "已完成",
+      "needsRestart": "需要重启",
       "interrupted": "已中断",
       "idle": "尚无运行记录"
     },
+    "runChain": "运行 ({count})",
     "lastActivity": "最后活动 {time}",
     "job": "作业",
     "nodes": "{nodes} 个节点 × {cores} 核",
@@ -206,6 +208,9 @@
     },
     "convergeKeepRestarts": "保留最新的重启文件数：",
     "convergeKeepRestartsSubsumed": "输出文件夹内的重启文件将随文件夹一并删除。",
+    "convergeKeepRuns": "保留最新的运行文件夹数（不做改动）：",
+    "convergeRunKept": "保留",
+    "convergeRunDenied": "保留，规则禁止其中一部分",
     "andMoreItems": "以及其他 {count} 项",
     "convergeCleanNothingSelected": "请至少选择一种要删除的输出。",
     "convergeCleanRunning": "该算例似乎正在运行。此时清理可能会删除求解器仍在写入的文件。",

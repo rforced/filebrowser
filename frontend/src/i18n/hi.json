@@ -160,9 +160,11 @@
     "status": {
       "running": "चल रहा है",
       "completed": "पूर्ण",
+      "needsRestart": "रीस्टार्ट आवश्यक",
       "interrupted": "बाधित",
       "idle": "अभी तक कोई रन नहीं"
     },
+    "runChain": "रन ({count})",
     "lastActivity": "अंतिम गतिविधि {time}",
     "job": "जॉब",
     "nodes": "{nodes} नोड × {cores} कोर",
@@ -206,6 +208,9 @@
     },
     "convergeKeepRestarts": "नवीनतम रीस्टार्ट फ़ाइलें रखें:",
     "convergeKeepRestartsSubsumed": "आउटपुट फ़ोल्डरों के भीतर की रीस्टार्ट फ़ाइलें फ़ोल्डरों के साथ हटा दी जाती हैं।",
+    "convergeKeepRuns": "नवीनतम रन फ़ोल्डर अछूते रखें:",
+    "convergeRunKept": "रखा गया",
+    "convergeRunDenied": "रखा गया, एक नियम इसके हिस्से को रोकता है",
     "andMoreItems": "और {count} अन्य",
     "convergeCleanNothingSelected": "हटाने के लिए कम से कम एक प्रकार का आउटपुट चुनें।",
     "convergeCleanRunning": "यह केस चलता हुआ प्रतीत होता है। अभी सफ़ाई करने से वे फ़ाइलें हट सकती हैं जिन्हें सॉल्वर अभी भी लिख रहा है।",
