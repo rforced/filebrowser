@@ -135,41 +135,43 @@
       </div>
 
       <div
-        class="flex flex-wrap gap-1.5 items-center px-3 md:px-6 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0"
+        class="flex gap-1.5 items-start px-3 md:px-6 py-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0"
       >
         <span
-          class="text-sm font-medium text-gray-700 dark:text-gray-200 mr-1.5"
+          class="text-sm font-medium text-gray-700 dark:text-gray-200 mr-1.5 shrink-0 py-0.5"
         >
           {{ t("outPlot.series") }}
         </span>
 
-        <button
-          v-for="column in yCandidates"
-          :key="column.index"
-          type="button"
-          class="px-2 py-0.5 rounded-full text-xs font-medium border transition"
-          :class="
-            selected.includes(column.index)
-              ? 'border-transparent text-white'
-              : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40'
-          "
-          :style="
-            selected.includes(column.index)
-              ? { backgroundColor: seriesColor(column.index) }
-              : {}
-          "
-          :disabled="
-            !selected.includes(column.index) && selected.length >= maxSeries
-          "
-          :aria-pressed="selected.includes(column.index)"
-          @click="toggleSeries(column.index)"
-        >
-          {{ columnLabel(column) }}
-        </button>
+        <div class="flex flex-wrap gap-1.5 items-center min-w-0 max-h-24 overflow-y-auto">
+          <button
+            v-for="column in yCandidates"
+            :key="column.index"
+            type="button"
+            class="px-2 py-0.5 rounded-full text-xs font-medium border transition"
+            :class="
+              selected.includes(column.index)
+                ? 'border-transparent text-white'
+                : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40'
+            "
+            :style="
+              selected.includes(column.index)
+                ? { backgroundColor: seriesColor(column.index) }
+                : {}
+            "
+            :disabled="
+              !selected.includes(column.index) && selected.length >= maxSeries
+            "
+            :aria-pressed="selected.includes(column.index)"
+            @click="toggleSeries(column.index)"
+          >
+            {{ columnLabel(column) }}
+          </button>
+        </div>
 
         <span
           v-if="selected.length >= maxSeries"
-          class="text-xs text-gray-500 dark:text-gray-400"
+          class="text-xs text-gray-500 dark:text-gray-400 shrink-0 py-1"
         >
           {{ t("outPlot.maxSeries", { count: maxSeries }) }}
         </span>

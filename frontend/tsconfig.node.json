@@ -4,7 +4,8 @@
     "vite.config.*",
     "vitest.config.*",
     "cypress.config.*",
-    "nightwatch.conf.*"
+    "nightwatch.conf.*",
+    "src/utils/aceAssets.ts"
   ],
   "compilerOptions": {
     "composite": true,
@@ -12,6 +13,7 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   }
 }
