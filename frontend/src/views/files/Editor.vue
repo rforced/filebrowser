@@ -73,6 +73,17 @@
         </button>
 
         <button
+          v-if="isLogFile"
+          type="button"
+          class="btn btn-flex btn-white btn-soft"
+          :aria-label="t('buttons.follow')"
+          @click="followLog"
+        >
+          <i class="fa-solid fa-play"></i>
+          <span class="hidden md:inline">{{ t("buttons.follow") }}</span>
+        </button>
+
+        <button
           v-if="authStore.user?.perm.modify"
           id="save-button"
           type="button"
@@ -173,6 +184,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { isOutFileName } from "@/utils/convergeOut";
+import { isLogFileName } from "@/utils/logTail";
 import { getEditorTheme } from "@/utils/theme";
 import { marked } from "marked";
 import { inject, onBeforeUnmount, onMounted, ref, watchEffect } from "vue";
@@ -200,10 +212,15 @@ const isMarkdownFile =
   fileStore.req?.name.endsWith(".md") ||
   fileStore.req?.name.endsWith(".markdown");
 const isOutFile = isOutFileName(fileStore.req?.name ?? "");
+const isLogFile = isLogFileName(fileStore.req?.name ?? "");
 const isSelectionEmpty = ref(true);
 
 const viewAsGraph = () => {
   router.replace({ query: { ...route.query, view: "plot" } });
+};
+
+const followLog = () => {
+  router.replace({ query: { ...route.query, view: "follow" } });
 };
 
 const executeEditorCommand = (name: string) => {
@@ -299,7 +316,7 @@ const initEditor = (fileContent: string) => {
     value: fileContent,
     showPrintMargin: false,
     readOnly: fileStore.req?.type === "textImmutable",
-    theme: getEditorTheme(authStore.user?.aceEditorTheme ?? ""),
+    theme: getEditorTheme(),
     mode: clampMode(modelist.getModeForPath(fileStore.req!.name).mode),
     useWorker: false,
     wrap: true,

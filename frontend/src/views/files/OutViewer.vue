@@ -105,6 +105,26 @@
           <span>{{ t("outPlot.logScale") }}</span>
         </label>
 
+        <button
+          type="button"
+          class="btn btn-sm btn-flex btn-white btn-soft"
+          :aria-label="following ? t('buttons.pause') : t('buttons.follow')"
+          @click="toggleLive"
+        >
+          <i class="fa-solid" :class="following ? 'fa-pause' : 'fa-play'"></i>
+          <span>{{
+            following ? t("buttons.pause") : t("buttons.follow")
+          }}</span>
+        </button>
+
+        <span
+          v-if="following"
+          class="inline-flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400"
+        >
+          <i class="fa-solid fa-circle text-[0.5rem] animate-pulse"></i>
+          {{ t("logView.live") }}
+        </span>
+
         <span class="text-xs text-gray-500 dark:text-gray-400">
           {{ t("outPlot.rows", { count: table.rowCount }) }}
           <template v-if="decimated"> · {{ t("outPlot.decimated") }}</template>
@@ -198,12 +218,14 @@ import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import url from "@/utils/url";
 import {
+  appendOutRows,
   columnLabel,
   formatOutValue,
   isMonotonic,
   parseOutFile,
   type OutTable,
 } from "@/utils/convergeOut";
+import { parseContentRange, parseUnsatisfiedRange } from "@/utils/logTail";
 
 Chart.register(
   LineController,
@@ -372,6 +394,161 @@ const toggleSeries = (columnIndex: number) => {
   }
 };
 
+// --- Live refresh --------------------------------------------------------
+// The solver appends rows while a run is hot; polling asks the server for
+// bytes past what has been parsed (raw.go serves ranges) and feeds only the
+// new lines into the table. Byte offsets come from the raw buffers — string
+// lengths cannot track them.
+
+const LIVE_POLL_MS = 3000;
+const LIVE_FRESH_WINDOW = 10 * 60 * 1000;
+
+const following = ref(false);
+
+let liveOffset = 0;
+let livePartial = "";
+let liveTimer: number | null = null;
+let liveDecoder = new TextDecoder("utf-8");
+
+const rawUrl = computed(() =>
+  fileStore.req ? api.getDownloadURL(fileStore.req, true) : ""
+);
+
+const isFresh = () => {
+  const modified = fileStore.req?.modified;
+  return modified
+    ? Date.now() - Date.parse(modified) < LIVE_FRESH_WINDOW
+    : false;
+};
+
+// fetchFullForLive reads the whole file once, establishing the offset the
+// polls continue from, and replaces the table.
+const fetchFullForLive = async (): Promise<boolean> => {
+  try {
+    const res = await fetch(rawUrl.value, { cache: "no-store" });
+    if (!res.ok) return false;
+
+    const buf = await res.arrayBuffer();
+    liveDecoder = new TextDecoder("utf-8");
+    const parsed = parseOutFile(liveDecoder.decode(buf, { stream: true }));
+    if (parsed.rowCount === 0 || parsed.columns.length < 2) return false;
+
+    liveOffset = buf.byteLength;
+    livePartial = "";
+
+    const sameShape = parsed.columns.length === table.value.columns.length;
+    table.value = parsed;
+    if (!sameShape) {
+      restoreSelection();
+    } else {
+      selected.value = selected.value.filter((c) => c < parsed.columns.length);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const refreshChartData = () => {
+  if (!chart.value) {
+    buildChart();
+    return;
+  }
+  chart.value.data.datasets = buildDatasets();
+  const dec = chart.value.options.plugins?.decimation;
+  if (dec) dec.enabled = decimated.value;
+  chart.value.update("none");
+};
+
+const livePoll = async () => {
+  try {
+    const res = await fetch(rawUrl.value, {
+      headers: { Range: `bytes=${liveOffset}-` },
+      cache: "no-store",
+    });
+
+    if (res.status === 404) {
+      stopLive();
+      return;
+    }
+
+    if (res.status === 416) {
+      const size = parseUnsatisfiedRange(res.headers.get("Content-Range"));
+      // Smaller than what was parsed: the file was rewritten by a new run.
+      if (size !== null && size < liveOffset) {
+        if (await fetchFullForLive()) refreshChartData();
+      }
+      return;
+    }
+
+    if (res.status === 206) {
+      const range = parseContentRange(res.headers.get("Content-Range"));
+      if (range && range.start !== liveOffset) {
+        if (await fetchFullForLive()) refreshChartData();
+        return;
+      }
+
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength === 0) return;
+
+      const combined = livePartial + liveDecoder.decode(buf, { stream: true });
+      const lines = combined.split("\n");
+      livePartial = lines.pop() ?? "";
+      liveOffset += buf.byteLength;
+
+      if (appendOutRows(table.value, lines) > 0) refreshChartData();
+      return;
+    }
+
+    if (res.ok) {
+      // The server answered with the whole file; resynchronize.
+      if (await fetchFullForLive()) refreshChartData();
+    }
+  } catch {
+    // A dropped poll is retried on the next tick.
+  }
+};
+
+const startPolling = () => {
+  if (liveTimer === null) {
+    liveTimer = window.setInterval(livePoll, LIVE_POLL_MS);
+  }
+};
+
+const stopLive = () => {
+  following.value = false;
+  if (liveTimer !== null) {
+    clearInterval(liveTimer);
+    liveTimer = null;
+  }
+};
+
+const toggleLive = async () => {
+  if (following.value) {
+    stopLive();
+    return;
+  }
+  following.value = true;
+  if (await fetchFullForLive()) {
+    refreshChartData();
+    startPolling();
+  } else {
+    following.value = false;
+  }
+};
+
+const onVisibility = () => {
+  if (document.hidden) {
+    if (liveTimer !== null) {
+      clearInterval(liveTimer);
+      liveTimer = null;
+    }
+  } else if (following.value) {
+    livePoll();
+    startPolling();
+  }
+};
+
 const load = async () => {
   const req = fileStore.req;
   if (!req) return;
@@ -380,13 +557,24 @@ const load = async () => {
   failure.value = null;
 
   try {
-    let text = req.content;
-    if (text === undefined) {
-      if (req.size > MAX_PLOT_BYTES) {
-        failure.value = "outPlot.tooLarge";
+    if (req.size > MAX_PLOT_BYTES) {
+      failure.value = "outPlot.tooLarge";
+      return;
+    }
+
+    // A file written to in the last few minutes is a run in flight: load it
+    // through the live path so the plot keeps growing with the solver.
+    if (isFresh()) {
+      if (await fetchFullForLive()) {
+        following.value = true;
+        startPolling();
         return;
       }
-      const res = await fetch(api.getDownloadURL(req, true));
+    }
+
+    let text = req.content;
+    if (text === undefined) {
+      const res = await fetch(rawUrl.value);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       text = await res.text();
     }
@@ -540,6 +728,7 @@ const keyEvent = (event: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener("keydown", keyEvent);
+  document.addEventListener("visibilitychange", onVisibility);
   themeObserver.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["class"],
@@ -549,6 +738,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", keyEvent);
+  document.removeEventListener("visibilitychange", onVisibility);
+  stopLive();
   themeObserver.disconnect();
   chart.value?.destroy();
 });

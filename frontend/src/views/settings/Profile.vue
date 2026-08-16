@@ -29,13 +29,6 @@
           </p>
           <h3>{{ t("settings.language") }}</h3>
           <languages class="form-control" v-model:locale="locale"></languages>
-
-          <h3>{{ t("settings.aceEditorTheme") }}</h3>
-          <AceEditorTheme
-            class="form-control"
-            v-model:aceEditorTheme="aceEditorTheme"
-            id="aceTheme"
-          ></AceEditorTheme>
         </div>
 
         <div
@@ -57,7 +50,6 @@
 import { useAuthStore } from "@/stores/auth";
 import { useLayoutStore } from "@/stores/layout";
 import { users as api } from "@/api";
-import AceEditorTheme from "@/components/settings/AceEditorTheme.vue";
 import Languages from "@/components/settings/Languages.vue";
 import { inject, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
@@ -74,7 +66,6 @@ const singleClick = ref<boolean>(false);
 const redirectAfterCopyMove = ref<boolean>(false);
 const dateFormat = ref<boolean>(false);
 const locale = ref<string>("");
-const aceEditorTheme = ref<string>("");
 
 onMounted(async () => {
   layoutStore.loading = true;
@@ -84,7 +75,6 @@ onMounted(async () => {
   singleClick.value = authStore.user.singleClick;
   redirectAfterCopyMove.value = authStore.user.redirectAfterCopyMove;
   dateFormat.value = authStore.user.dateFormat;
-  aceEditorTheme.value = authStore.user.aceEditorTheme;
   layoutStore.loading = false;
 
   return true;
@@ -104,7 +94,6 @@ const updateSettings = async (event: Event) => {
       singleClick: singleClick.value,
       redirectAfterCopyMove: redirectAfterCopyMove.value,
       dateFormat: dateFormat.value,
-      aceEditorTheme: aceEditorTheme.value,
     };
 
     await api.update(data, [
@@ -113,7 +102,6 @@ const updateSettings = async (event: Event) => {
       "singleClick",
       "redirectAfterCopyMove",
       "dateFormat",
-      "aceEditorTheme",
     ]);
     authStore.updateUser(data);
     $showSuccess(t("settings.settingsUpdated"));

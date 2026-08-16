@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  appendOutRows,
   columnLabel,
   isMonotonic,
   isOutFileName,
@@ -108,6 +109,30 @@ describe("parseOutFile", () => {
 
     expect(table.columns.map((c) => c.name)).toEqual(["Column 1", "Column 2"]);
     expect(table.values[1]).toEqual([2, 4]);
+  });
+});
+
+describe("appendOutRows", () => {
+  it("appends matching rows and skips re-headers and malformed lines", () => {
+    const table = parseOutFile(DYNAMIC);
+    const added = appendOutRows(table, [
+      "   -4.8070000e+02    1.0000000e+00    2.0000000e+00",
+      "# CONVERGE re-printed header",
+      "",
+      "   -4.8060000e+02    3.0000000e+00",
+      "   -4.8050000e+02    4.0000000e+00    5.0000000e+00",
+    ]);
+
+    expect(added).toBe(2);
+    expect(table.rowCount).toBe(4);
+    expect(table.skippedRows).toBe(1);
+    expect(table.values[0].at(-1)).toBeCloseTo(-480.5);
+    expect(table.values[2].at(-1)).toBe(5);
+  });
+
+  it("adds nothing to an empty table", () => {
+    const table = parseOutFile("");
+    expect(appendOutRows(table, ["1 2 3"])).toBe(0);
   });
 });
 

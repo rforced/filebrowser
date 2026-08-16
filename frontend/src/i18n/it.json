@@ -231,7 +231,6 @@
     "video": "Video"
   },
   "settings": {
-    "aceEditorTheme": "Tema dell'editor Ace",
     "admin": "Admin",
     "administrator": "Amministratore",
     "allowEdit": "Modifica, rinomina ed elimina file o cartelle",

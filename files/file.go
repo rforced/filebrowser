@@ -25,6 +25,11 @@ import (
 	"github.com/rforced/filebrowser/v2/rules"
 )
 
+// textSizeLimit is the largest file typed "text": anything bigger is a blob,
+// since the text type inlines the whole content into the resource response
+// for the editor.
+const textSizeLimit = 25 * 1024 * 1024
+
 // FileInfo describes a file.
 type FileInfo struct {
 	*Listing
@@ -333,7 +338,7 @@ func (i *FileInfo) detectType(modify, saveContent, readHeader bool) error {
 		// detected as text, opening the editor instead of the 3D previewer.
 		i.Type = "model"
 		return nil
-	case (strings.HasPrefix(mimetype, "text") || !isBinary(buffer)) && i.Size <= 10*1024*1024: // 10 MB
+	case (strings.HasPrefix(mimetype, "text") || !isBinary(buffer)) && i.Size <= textSizeLimit:
 		i.Type = "text"
 
 		if !modify {

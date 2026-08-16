@@ -20,7 +20,6 @@ interface SettingsDefaults {
   perm: Permissions;
   hideDotfiles: boolean;
   dateFormat: boolean;
-  aceEditorTheme: string;
 }
 
 interface SettingsBranding {

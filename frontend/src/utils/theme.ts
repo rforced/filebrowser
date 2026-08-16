@@ -1,6 +1,4 @@
 import { theme as brandingTheme } from "./constants";
-import "ace-builds";
-import { themesByName } from "ace-builds/src-noconflict/ext-themelist";
 
 export const PREFERENCE_KEY = "color-theme-preference";
 
@@ -52,16 +50,5 @@ export const watchSystemTheme = (): (() => void) => {
   return () => mq.removeEventListener("change", onChange);
 };
 
-export const getEditorTheme = (themeName: string) => {
-  if (!themeName.startsWith("ace/theme/")) {
-    themeName = `ace/theme/${themeName}`;
-  }
-  const themeKey = themeName.replace("ace/theme/", "");
-  if (themesByName[themeKey] !== undefined) {
-    return themeName;
-  } else if (getTheme() === "dark") {
-    return "ace/theme/twilight";
-  } else {
-    return "ace/theme/chrome";
-  }
-};
+export const getEditorTheme = () =>
+  getTheme() === "dark" ? "ace/theme/twilight" : "ace/theme/chrome";

@@ -81,6 +81,7 @@ import { useLayoutStore } from "@/stores/layout";
 import { StatusError } from "@/api/utils";
 import { name, disableUsedPercentage, domain } from "@/utils/constants";
 import { isOutFileName } from "@/utils/convergeOut";
+import { isLogFileName } from "@/utils/logTail";
 import { useFileActions } from "@/composables/useFileActions";
 
 import Breadcrumbs from "@/components/Breadcrumbs.vue";
@@ -98,6 +99,9 @@ const Editor = defineAsyncComponent(() => import("@/views/files/Editor.vue"));
 const Preview = defineAsyncComponent(() => import("@/views/files/Preview.vue"));
 const OutViewer = defineAsyncComponent(
   () => import("@/views/files/OutViewer.vue")
+);
+const LogViewer = defineAsyncComponent(
+  () => import("@/views/files/LogViewer.vue")
 );
 
 const layoutStore = useLayoutStore();
@@ -129,6 +133,13 @@ const currentView = computed(() => {
     // Oversized .out files have no text view, so the graph is their default.
     return OutViewer;
   } else if (
+    isLogFileName(fileStore.req.name) &&
+    (route.query.view === "follow" || fileStore.req.type === "blob")
+  ) {
+    // Logs likewise: text first, ?view=follow tails the file. Logs past the
+    // text ceiling only ever load as a tail, so follow is their default.
+    return LogViewer;
+  } else if (
     fileStore.req.type === "text" ||
     fileStore.req.type === "textImmutable"
   ) {
@@ -142,7 +153,8 @@ const isFullBleed = computed(
   () =>
     currentView.value === Editor ||
     currentView.value === Preview ||
-    currentView.value === OutViewer
+    currentView.value === OutViewer ||
+    currentView.value === LogViewer
 );
 
 const showSidebar = computed(

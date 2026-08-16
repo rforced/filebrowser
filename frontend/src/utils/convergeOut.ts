@@ -111,6 +111,35 @@ export function isOutFileName(name: string): boolean {
   return name.toLowerCase().endsWith(".out");
 }
 
+// appendOutRows feeds complete lines that arrived after the initial parse
+// into an existing table. Comment lines (a restart re-printing its header)
+// are skipped and rows that do not match the established width are counted,
+// mirroring parseOutFile. Returns how many rows were added.
+export function appendOutRows(table: OutTable, lines: string[]): number {
+  const width = table.columns.length;
+  if (width === 0) return 0;
+
+  let added = 0;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line === "" || line.startsWith("#")) continue;
+
+    const row = line.split(/\s+/).map(Number);
+    if (row.length !== width || row.some((v) => !Number.isFinite(v))) {
+      table.skippedRows++;
+      continue;
+    }
+
+    for (let c = 0; c < width; c++) {
+      table.values[c].push(row[c]);
+    }
+    table.rowCount++;
+    added++;
+  }
+
+  return added;
+}
+
 export function columnLabel(column: OutColumn): string {
   return column.unit === "" ? column.name : `${column.name} (${column.unit})`;
 }

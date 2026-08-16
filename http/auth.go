@@ -100,7 +100,6 @@ type userInfo struct {
 	HideDotfiles          bool              `json:"hideDotfiles"`
 	DateFormat            bool              `json:"dateFormat"`
 	Username              string            `json:"username"`
-	AceEditorTheme        string            `json:"aceEditorTheme"`
 }
 
 func userInfoFrom(user *users.User) userInfo {
@@ -115,7 +114,6 @@ func userInfoFrom(user *users.User) userInfo {
 		HideDotfiles:          user.HideDotfiles,
 		DateFormat:            user.DateFormat,
 		Username:              user.Username,
-		AceEditorTheme:        user.AceEditorTheme,
 	}
 }
 

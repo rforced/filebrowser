@@ -123,7 +123,6 @@ function makeUser(overrides: Partial<Permissions> = {}): IUser {
     redirectAfterCopyMove: false,
     dateFormat: false,
     viewMode: "list",
-    aceEditorTheme: "",
   };
 }
 

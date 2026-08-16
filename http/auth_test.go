@@ -433,7 +433,6 @@ func TestUserInfoFrom(t *testing.T) {
 		LockPassword:          false,
 		HideDotfiles:          true,
 		DateFormat:            true,
-		AceEditorTheme:        "monokai",
 	}
 
 	info := userInfoFrom(user)

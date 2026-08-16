@@ -37,6 +37,7 @@
     "openDirect": "View raw",
     "openFile": "Open file",
     "openFolder": "Open folder",
+    "follow": "Follow",
     "pause": "Pause",
     "play": "Play",
     "viewAsGraph": "View as graph",
@@ -176,6 +177,12 @@
     "frame": "Frame {current} / {total}",
     "speed": "{fps} fps"
   },
+  "logView": {
+    "live": "Live",
+    "paused": "Paused",
+    "showingLast": "showing the last {size}",
+    "fileGone": "This file is no longer there."
+  },
   "prompts": {
     "calculateSize": "Calculate",
     "calculating": "Calculating...",
@@ -275,7 +282,6 @@
     "video": "Video"
   },
   "settings": {
-    "aceEditorTheme": "Ace editor theme",
     "admin": "Admin",
     "administrator": "Administrator",
     "allowEdit": "Edit, rename and delete files or directories",
