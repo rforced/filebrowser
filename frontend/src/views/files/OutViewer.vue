@@ -554,7 +554,7 @@ onBeforeUnmount(() => {
 });
 
 const openAsText = () => {
-  router.replace({ query: { ...route.query, view: "text" } });
+  router.replace({ query: { ...route.query, view: undefined } });
 };
 
 const close = () => {

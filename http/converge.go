@@ -132,30 +132,62 @@ func convergeCanDelete(ctx context.Context, d *data, dir string) bool {
 	return err == nil
 }
 
-func convergeDirSize(ctx context.Context, afs afero.Fs, dir string) int64 {
-	var total int64
+// convergeScanResult splits what a clean can touch into its deletion units:
+// files at the case root, kind-matching files inside outputs_* trees, and the
+// outputs_* directories themselves as whole units carrying their full size.
+type convergeScanResult struct {
+	root    []convergeMatch
+	deep    []convergeMatch
+	outputs []convergeMatch
+}
 
-	_ = afero.Walk(afs, dir, func(_ string, info os.FileInfo, err error) error {
+// convergeScanOutputsTree walks one outputs_* tree, returning its
+// kind-matching files and the tree's total footprint. The total counts every
+// file — symlinks and rule-denied entries included — because it prices
+// removing the directory whole, while the file list holds only what may be
+// deleted individually.
+func convergeScanOutputsTree(ctx context.Context, d *data, dirPath string) (kindFiles []convergeMatch, total int64) {
+	_ = afero.Walk(d.user.Fs, dirPath, func(fPath string, info os.FileInfo, err error) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
 		if err != nil || info == nil || info.IsDir() {
 			return nil //nolint:nilerr // an unreadable entry just does not count
 		}
+
 		total += info.Size()
+
+		if files.IsSymlink(info.Mode()) {
+			return nil
+		}
+		if !d.CheckRules(fPath) {
+			return nil
+		}
+
+		kind, ok := convergeOutputKind(path.Base(fPath))
+		if !ok {
+			return nil
+		}
+
+		kindFiles = append(kindFiles, convergeMatch{
+			path:    fPath,
+			kind:    kind,
+			size:    info.Size(),
+			modTime: info.ModTime(),
+		})
 		return nil
 	})
 
-	return total
+	return kindFiles, total
 }
 
-func scanConvergeOutputs(ctx context.Context, d *data, dir string) ([]convergeMatch, error) {
+func scanConvergeOutputs(ctx context.Context, d *data, dir string) (*convergeScanResult, error) {
 	entries, err := afero.ReadDir(d.user.Fs, dir)
 	if err != nil {
 		return nil, err
 	}
 
-	var matches []convergeMatch
+	res := &convergeScanResult{}
 	for _, entry := range entries {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, ctxErr
@@ -183,15 +215,21 @@ func scanConvergeOutputs(ctx context.Context, d *data, dir string) ([]convergeMa
 			if !strings.HasPrefix(strings.ToLower(name), convergeOutputDirPrefix) {
 				continue
 			}
+
+			// Files inside stay individually deletable even when a rule keeps
+			// the directory from going whole.
+			kindFiles, total := convergeScanOutputsTree(ctx, d, fPath)
+			res.deep = append(res.deep, kindFiles...)
+
 			if !convergeCanDelete(ctx, d, fPath) {
 				log.Printf("INFO: leaving CONVERGE output directory %s: a rule denies part of it", fPath)
 				continue
 			}
 
-			matches = append(matches, convergeMatch{
+			res.outputs = append(res.outputs, convergeMatch{
 				path:    fPath,
 				kind:    convergeOutputDirKind,
-				size:    convergeDirSize(ctx, d.user.Fs, fPath),
+				size:    total,
 				isDir:   true,
 				modTime: entry.ModTime(),
 			})
@@ -203,7 +241,7 @@ func scanConvergeOutputs(ctx context.Context, d *data, dir string) ([]convergeMa
 			continue
 		}
 
-		matches = append(matches, convergeMatch{
+		res.root = append(res.root, convergeMatch{
 			path:    fPath,
 			kind:    kind,
 			size:    entry.Size(),
@@ -211,7 +249,7 @@ func scanConvergeOutputs(ctx context.Context, d *data, dir string) ([]convergeMa
 		})
 	}
 
-	return matches, nil
+	return res, nil
 }
 
 func isConvergeCase(d *data, dir string) (bool, error) {
@@ -245,6 +283,11 @@ type convergeGroup struct {
 	Kind  string `json:"kind"`
 	Count int    `json:"count"`
 	Size  int64  `json:"size"`
+	// The case-root share of Count/Size. The clean prompt needs the split
+	// because selecting "outputs" folders subsumes the files inside them,
+	// leaving only the root share for the other kinds.
+	RootCount int   `json:"rootCount,omitempty"`
+	RootSize  int64 `json:"rootSize,omitempty"`
 }
 
 type convergeRestart struct {
@@ -287,26 +330,43 @@ type convergeScanResponse struct {
 	Restarts []convergeRestart `json:"restarts"`
 }
 
-func groupConvergeMatches(matches []convergeMatch) []convergeGroup {
+func groupConvergeScan(res *convergeScanResult) []convergeGroup {
 	tallies := make(map[string]*convergeGroup, len(convergePatterns))
-	for i := range matches {
-		tally, ok := tallies[matches[i].kind]
+	add := func(m *convergeMatch, root bool) {
+		tally, ok := tallies[m.kind]
 		if !ok {
-			tally = &convergeGroup{Kind: matches[i].kind}
-			tallies[matches[i].kind] = tally
+			tally = &convergeGroup{Kind: m.kind}
+			tallies[m.kind] = tally
 		}
 		tally.Count++
-		tally.Size += matches[i].size
+		tally.Size += m.size
+		if root {
+			tally.RootCount++
+			tally.RootSize += m.size
+		}
 	}
 
-	groups := make([]convergeGroup, 0, len(tallies))
+	for i := range res.root {
+		add(&res.root[i], true)
+	}
+	for i := range res.deep {
+		add(&res.deep[i], false)
+	}
+
+	groups := make([]convergeGroup, 0, len(tallies)+1)
 	for _, p := range convergePatterns {
 		if tally, ok := tallies[p.kind]; ok {
 			groups = append(groups, *tally)
 		}
 	}
-	if tally, ok := tallies[convergeOutputDirKind]; ok {
-		groups = append(groups, *tally)
+
+	if len(res.outputs) > 0 {
+		dirs := convergeGroup{Kind: convergeOutputDirKind}
+		for i := range res.outputs {
+			dirs.Count++
+			dirs.Size += res.outputs[i].size
+		}
+		groups = append(groups, dirs)
 	}
 
 	return groups
@@ -480,19 +540,38 @@ func (s *convergeSummaryScan) groups() []convergeGroup {
 }
 
 // chooseRun picks the run directory with the newest evidence of any kind, so
-// a marker-less run from an old CONVERGE still outweighs an older finished one.
-func (s *convergeSummaryScan) chooseRun() *convergeRunEvidence {
+// a marker-less run from an old CONVERGE still outweighs an older finished
+// one. CONVERGE 6 writes one outputs_* directory per run (outputs_original,
+// outputs_restart1, …); the case root is only itself a run in the old flat
+// layout. When outputs_* runs exist, the root must show run-shaped evidence —
+// a marker or a converge.log — to compete: Horizon's job files at the root
+// (horizon.log, mech_check.out) are touched after the solver's last write and
+// would otherwise pose as a newer run that never produced a verdict.
+func (s *convergeSummaryScan) chooseRun(caseDir string) *convergeRunEvidence {
 	var chosen *convergeRunEvidence
 	chosenDir := ""
-	for dir, e := range s.runs {
-		if e.stamp().IsZero() {
-			continue
+	consider := func(dir string, e *convergeRunEvidence) {
+		if e == nil || e.stamp().IsZero() {
+			return
 		}
 		if chosen == nil || e.stamp().After(chosen.stamp()) ||
 			(e.stamp().Equal(chosen.stamp()) && dir > chosenDir) {
 			chosen, chosenDir = e, dir
 		}
 	}
+
+	for dir, e := range s.runs {
+		if dir != caseDir {
+			consider(dir, e)
+		}
+	}
+
+	root := s.runs[caseDir]
+	if root != nil &&
+		(chosen == nil || root.hasStart || root.hasDone || root.logPath != "") {
+		consider(caseDir, root)
+	}
+
 	return chosen
 }
 
@@ -753,7 +832,7 @@ var convergeSummaryHandler = func(w http.ResponseWriter, r *http.Request, d *dat
 		return errToStatus(err), err
 	}
 
-	run := scan.chooseRun()
+	run := scan.chooseRun(dir)
 	var logTail []byte
 	if run != nil {
 		logTail = convergeReadLogTail(d, run.logPath)
@@ -815,19 +894,24 @@ var convergeScanHandler = withUser(func(w http.ResponseWriter, r *http.Request, 
 		})
 	}
 
-	matches, err := scanConvergeOutputs(r.Context(), d, dir)
+	res, err := scanConvergeOutputs(r.Context(), d, dir)
 	if err != nil {
 		return errToStatus(err), err
 	}
 
+	// Count and Size price the full sweep: root files plus each outputs_*
+	// tree taken whole, so the deep files are already inside the dir totals.
 	resp := &convergeScanResponse{
 		IsCase:   true,
-		Groups:   groupConvergeMatches(matches),
-		Count:    len(matches),
-		Restarts: convergeRestartsFromMatches(matches),
+		Groups:   groupConvergeScan(res),
+		Count:    len(res.root) + len(res.outputs),
+		Restarts: convergeRestartsFromMatches(slices.Concat(res.root, res.deep)),
 	}
-	for i := range matches {
-		resp.Size += matches[i].size
+	for i := range res.root {
+		resp.Size += res.root[i].size
+	}
+	for i := range res.outputs {
+		resp.Size += res.outputs[i].size
 	}
 
 	return renderJSON(w, r, resp)
@@ -878,35 +962,59 @@ func parseConvergeCleanRequest(r *http.Request) (*convergeCleanRequest, error) {
 	return req, nil
 }
 
-func filterConvergeMatches(matches []convergeMatch, req *convergeCleanRequest) []convergeMatch {
-	if len(req.Kinds) > 0 {
-		kept := matches[:0:0]
-		for i := range matches {
-			if slices.Contains(req.Kinds, matches[i].kind) {
-				kept = append(kept, matches[i])
+// assembleConvergeClean turns a scan into the deletion units the request asks
+// for. Selecting "outputs" takes each outputs_* tree whole — contents
+// included — so the deep files inside them only become individual units when
+// the folders themselves are spared. An empty kind list keeps the original
+// contract: everything, folders whole.
+func assembleConvergeClean(res *convergeScanResult, req *convergeCleanRequest) []convergeMatch {
+	selected := func(kind string) bool {
+		return len(req.Kinds) == 0 || slices.Contains(req.Kinds, kind)
+	}
+	wholeDirs := selected(convergeOutputDirKind)
+
+	var units []convergeMatch
+	if wholeDirs {
+		units = append(units, res.outputs...)
+	}
+	for i := range res.root {
+		if selected(res.root[i].kind) {
+			units = append(units, res.root[i])
+		}
+	}
+	if !wholeDirs {
+		for i := range res.deep {
+			if selected(res.deep[i].kind) {
+				units = append(units, res.deep[i])
 			}
 		}
-		matches = kept
 	}
 
-	if req.KeepRestarts > 0 {
-		restarts := convergeRestartsFromMatches(matches)
-		spared := map[string]bool{}
-		for _, restart := range restarts[:min(req.KeepRestarts, len(restarts))] {
-			spared[restart.Path] = true
-		}
+	return applyKeepRestarts(units, req.KeepRestarts)
+}
 
-		kept := matches[:0:0]
-		for i := range matches {
-			if matches[i].kind == "restart" && spared[matches[i].path] {
-				continue
-			}
-			kept = append(kept, matches[i])
-		}
-		matches = kept
+// applyKeepRestarts spares the newest keep restart files among the assembled
+// units. Restarts inside outputs_* trees taken whole are not units and cannot
+// be spared — the folder subsumes them.
+func applyKeepRestarts(units []convergeMatch, keep int) []convergeMatch {
+	if keep <= 0 {
+		return units
 	}
 
-	return matches
+	restarts := convergeRestartsFromMatches(units)
+	spared := map[string]bool{}
+	for _, restart := range restarts[:min(keep, len(restarts))] {
+		spared[restart.Path] = true
+	}
+
+	kept := units[:0:0]
+	for i := range units {
+		if units[i].kind == "restart" && spared[units[i].path] {
+			continue
+		}
+		kept = append(kept, units[i])
+	}
+	return kept
 }
 
 var convergeCleanHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
@@ -932,11 +1040,11 @@ var convergeCleanHandler = withUser(func(w http.ResponseWriter, r *http.Request,
 		return http.StatusBadRequest, errors.New("not a CONVERGE case directory")
 	}
 
-	matches, err := scanConvergeOutputs(r.Context(), d, dir)
+	res, err := scanConvergeOutputs(r.Context(), d, dir)
 	if err != nil {
 		return errToStatus(err), err
 	}
-	matches = filterConvergeMatches(matches, cleanReq)
+	matches := assembleConvergeClean(res, cleanReq)
 
 	resp := &convergeCleanResponse{}
 	for i := range matches {

@@ -9,6 +9,8 @@
           t("prompts.deleteMessageMultiple", { count: fileStore.selectedCount })
         }}
       </p>
+
+      <prompt-targets :items="targets" />
     </div>
     <div
       class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
@@ -37,13 +39,14 @@
 </template>
 
 <script setup lang="ts">
-import { inject } from "vue";
+import { computed, inject } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { files as api } from "@/api";
 import buttons from "@/utils/buttons";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
+import PromptTargets from "@/components/prompts/PromptTargets.vue";
 
 const $showError = inject<IToastError>("$showError")!;
 
@@ -51,6 +54,18 @@ const fileStore = useFileStore();
 const layoutStore = useLayoutStore();
 const route = useRoute();
 const { t } = useI18n();
+
+const targets = computed(() => {
+  if (!fileStore.isListing) {
+    return fileStore.req
+      ? [{ name: fileStore.req.name, isDir: fileStore.req.isDir }]
+      : [];
+  }
+  return fileStore.selected.map((index) => ({
+    name: fileStore.req!.items[index].name,
+    isDir: fileStore.req!.items[index].isDir,
+  }));
+});
 
 const submit = async () => {
   buttons.loading("delete");

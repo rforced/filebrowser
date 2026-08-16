@@ -58,9 +58,12 @@
                     type="number"
                     class="form-control !w-20 !py-1 text-sm"
                     min="0"
-                    :max="counts.restart"
-                    :disabled="scanning || cleaning"
+                    :max="restarts.length"
+                    :disabled="scanning || cleaning || outputsSelected"
                   />
+                  <span v-if="outputsSelected" class="converge-keep-note">
+                    {{ t("prompts.convergeKeepRestartsSubsumed") }}
+                  </span>
                 </label>
               </td>
             </tr>
@@ -192,14 +195,23 @@ const allChecked = (): Record<ConvergeKind, boolean> =>
 
 const counts = ref<Record<ConvergeKind, number>>(emptyCounts());
 const sizes = ref<Record<ConvergeKind, number>>(emptySizes());
+const rootCounts = ref<Record<ConvergeKind, number>>(emptyCounts());
+const rootSizes = ref<Record<ConvergeKind, number>>(emptySizes());
 const checked = ref<Record<ConvergeKind, boolean>>(allChecked());
 
 let scanController = new AbortController();
 
+// Taking the outputs folders whole subsumes the files inside them: the other
+// kinds then only contribute their case-root share, and keep-newest cannot
+// spare a restart that goes down with its folder.
+const outputsSelected = computed(
+  () => checked.value.outputs && counts.value.outputs > 0
+);
+
 // keepRestarts clamped to what actually exists, so the arithmetic below and
 // the request stay honest whatever gets typed.
 const keptRestarts = computed(() => {
-  if (!checked.value.restart) return 0;
+  if (!checked.value.restart || outputsSelected.value) return 0;
   const wanted = Number.isFinite(keepRestarts.value)
     ? Math.max(0, Math.floor(keepRestarts.value))
     : 0;
@@ -218,23 +230,31 @@ const selectedKinds = computed(() =>
     .map((kind) => kind.key)
 );
 
-const deletedCount = computed(() => {
+const tallyDeleted = (
+  full: Record<ConvergeKind, number>,
+  root: Record<ConvergeKind, number>
+) => {
   if (selectedKinds.value.length === 0) return 0;
-  const picked = selectedKinds.value.reduce(
-    (sum, kind) => sum + counts.value[kind],
-    0
-  );
-  return picked + counts.value.nfs - keptRestarts.value;
-});
 
-const deletedSize = computed(() => {
-  if (selectedKinds.value.length === 0) return 0;
-  const picked = selectedKinds.value.reduce(
-    (sum, kind) => sum + sizes.value[kind],
-    0
-  );
-  return picked + sizes.value.nfs - keptRestartSize.value;
-});
+  let sum = 0;
+  for (const kind of allConvergeKinds) {
+    if (kind === "outputs") continue;
+    if (kind !== "nfs" && !(checked.value[kind] && counts.value[kind] > 0)) {
+      continue;
+    }
+    sum += outputsSelected.value ? root[kind] : full[kind];
+  }
+  if (outputsSelected.value) sum += full.outputs;
+  return sum;
+};
+
+const deletedCount = computed(
+  () => tallyDeleted(counts.value, rootCounts.value) - keptRestarts.value
+);
+
+const deletedSize = computed(
+  () => tallyDeleted(sizes.value, rootSizes.value) - keptRestartSize.value
+);
 
 const humanSize = computed(() => filesize(deletedSize.value));
 
@@ -263,6 +283,8 @@ const scan = async () => {
   size.value = 0;
   counts.value = emptyCounts();
   sizes.value = emptySizes();
+  rootCounts.value = emptyCounts();
+  rootSizes.value = emptySizes();
   checked.value = allChecked();
   restarts.value = [];
   keepRestarts.value = 0;
@@ -276,6 +298,8 @@ const scan = async () => {
     for (const group of result.groups) {
       counts.value[group.kind] = group.count;
       sizes.value[group.kind] = group.size;
+      rootCounts.value[group.kind] = group.rootCount ?? 0;
+      rootSizes.value[group.kind] = group.rootSize ?? 0;
     }
     total.value = result.count;
     size.value = result.size;
@@ -381,6 +405,11 @@ const submit = async () => {
 .converge-keep {
   padding-bottom: 0.5em;
   color: var(--textSecondary);
+}
+
+.converge-keep-note {
+  font-size: 0.85em;
+  opacity: 0.8;
 }
 
 .converge-summary {

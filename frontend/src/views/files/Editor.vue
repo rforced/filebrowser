@@ -62,6 +62,17 @@
         </button>
 
         <button
+          v-if="isOutFile"
+          type="button"
+          class="btn btn-flex btn-white btn-soft"
+          :aria-label="t('buttons.viewAsGraph')"
+          @click="viewAsGraph"
+        >
+          <i class="fa-solid fa-chart-line"></i>
+          <span class="hidden md:inline">{{ t("buttons.viewAsGraph") }}</span>
+        </button>
+
+        <button
           v-if="authStore.user?.perm.modify"
           id="save-button"
           type="button"
@@ -161,6 +172,7 @@ import Breadcrumbs from "@/components/Breadcrumbs.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
+import { isOutFileName } from "@/utils/convergeOut";
 import { getEditorTheme } from "@/utils/theme";
 import { marked } from "marked";
 import { inject, onBeforeUnmount, onMounted, ref, watchEffect } from "vue";
@@ -187,7 +199,12 @@ const previewContent = ref("");
 const isMarkdownFile =
   fileStore.req?.name.endsWith(".md") ||
   fileStore.req?.name.endsWith(".markdown");
+const isOutFile = isOutFileName(fileStore.req?.name ?? "");
 const isSelectionEmpty = ref(true);
+
+const viewAsGraph = () => {
+  router.replace({ query: { ...route.query, view: "plot" } });
+};
 
 const executeEditorCommand = (name: string) => {
   if (name == "paste") {

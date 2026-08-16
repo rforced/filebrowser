@@ -169,7 +169,7 @@ func convergeTestHandlers(t *testing.T, userScope string, perm users.Permissions
 	return convergeHandlers(t, scopedUserStorage(t, userScope, perm, []byte("test-signing-key")))
 }
 
-func TestConvergeScanIsShallow(t *testing.T) {
+func TestConvergeScanCountsThroughOutputDirs(t *testing.T) {
 	userScope := t.TempDir()
 	caseDir := filepath.Join(userScope, "case")
 	wantCount := convergeCase(t, caseDir)
@@ -194,33 +194,39 @@ func TestConvergeScanIsShallow(t *testing.T) {
 		t.Fatal("expected the directory to be recognized as a CONVERGE case")
 	}
 
-	// 10 output files at the top level + the 2 outputs_* directories, each of
-	// which counts once because the whole tree goes. Everything under archive/
-	// is out of reach.
+	// Count prices the full sweep: 10 root files + the 2 outputs_* trees taken
+	// whole. Everything under archive/ is out of reach.
 	if got.Count != wantCount {
 		t.Errorf("Count = %d, want %d (groups: %+v)", got.Count, wantCount, got.Groups)
 	}
 
-	wantGroups := map[string]int{
-		"echo": 1, "restart": 1, "map": 1, "out": 1, "post": 2,
-		"log": 1, "run": 2, "nfs": 1, "outputs": 2,
+	// Kind tallies see through the outputs_* directories; the root share is
+	// reported alongside so the prompt can subtract what the folders subsume.
+	wantGroups := map[string][2]int{
+		"echo": {1, 1}, "restart": {2, 1}, "map": {1, 1}, "out": {2, 1},
+		"post": {4, 2}, "log": {1, 1}, "run": {2, 2}, "nfs": {1, 1},
 	}
-	gotGroups := map[string]int{}
+	gotGroups := map[string]convergeGroup{}
 	for _, g := range got.Groups {
-		gotGroups[g.Kind] = g.Count
+		gotGroups[g.Kind] = g
 	}
 	for kind, want := range wantGroups {
-		if gotGroups[kind] != want {
-			t.Errorf("group %q count = %d, want %d", kind, gotGroups[kind], want)
+		g := gotGroups[kind]
+		if g.Count != want[0] || g.RootCount != want[1] {
+			t.Errorf("group %q = count %d root %d, want count %d root %d",
+				kind, g.Count, g.RootCount, want[0], want[1])
 		}
 	}
 
-	// The outputs_* size covers the whole tree, including the file that matches
-	// no pattern and the one in the nested directory: 5 files of one byte.
-	for _, g := range got.Groups {
-		if g.Kind == "outputs" && g.Size != 5 {
-			t.Errorf("outputs group size = %d, want 5 (the whole tree)", g.Size)
-		}
+	// The outputs row is the directories as units, priced whole: 5 files of
+	// one byte across both trees, the unmatched notes.txt included.
+	if g := gotGroups["outputs"]; g.Count != 2 || g.Size != 5 {
+		t.Errorf("outputs group = %+v, want 2 dirs of 5 bytes", g)
+	}
+
+	// Both restarts are offered to the keep-newest picker, the nested one too.
+	if len(got.Restarts) != 2 {
+		t.Errorf("restarts = %+v, want the root and the nested restart", got.Restarts)
 	}
 
 	// Groups keep convergePatterns' order, with the directories last, so the
@@ -765,6 +771,43 @@ func TestConvergeSummaryStatuses(t *testing.T) {
 			},
 			want: "interrupted",
 		},
+
+		// Horizon's own job files land at the case root after the solver's last
+		// write; they must not pose as a newer run without a verdict.
+		{
+			name: "job log at root does not eclipse the finished run",
+			build: func(t *testing.T, caseDir string) {
+				for _, name := range []string{"converge.start", "converge.done"} {
+					p := writeCaseFile(t, caseDir, "", "outputs_original", name)
+					if err := os.Chtimes(p, old, old); err != nil {
+						t.Fatal(err)
+					}
+				}
+				writeCaseFile(t, caseDir, "job teardown chatter", "horizon.log")
+				writeCaseFile(t, caseDir, "mech ok", "mech_check.out")
+			},
+			want: "completed",
+		},
+		{
+			name: "restart run supersedes the original run",
+			build: func(t *testing.T, caseDir string) {
+				older := old.Add(-time.Hour)
+				for _, name := range []string{"converge.start", "converge.done"} {
+					p := writeCaseFile(t, caseDir, "", "outputs_original", name)
+					if err := os.Chtimes(p, older, older); err != nil {
+						t.Fatal(err)
+					}
+				}
+				start := writeCaseFile(t, caseDir, "", "outputs_restart1", "converge.start")
+				out := writeCaseFile(t, caseDir, "data", "outputs_restart1", "stream0", "thermo.out")
+				for _, p := range []string{start, out} {
+					if err := os.Chtimes(p, old, old); err != nil {
+						t.Fatal(err)
+					}
+				}
+			},
+			want: "interrupted",
+		},
 	}
 
 	for _, tt := range tests {
@@ -920,6 +963,157 @@ func TestConvergeCleanKeepsNewestRestarts(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(caseDir, rel)); err != nil {
 			t.Errorf("expected %s to be kept: %v", rel, err)
 		}
+	}
+}
+
+func convergeCleanRequestJSON(t *testing.T, clean http.Handler, token, body string) convergeCleanResponse {
+	t.Helper()
+
+	req, _ := http.NewRequest(http.MethodPost, "/api/converge/case", strings.NewReader(body))
+	req.Header.Set("X-Auth", token)
+	rec := httptest.NewRecorder()
+	clean.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
+	}
+
+	var got convergeCleanResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// A kind selected without "outputs" reaches matching files inside the
+// outputs_* trees while the trees themselves stay.
+func TestConvergeCleanKindsReachInsideOutputDirs(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeCase(t, caseDir)
+
+	_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+	got := convergeCleanRequestJSON(t, clean, token, `{"kinds":["post"]}`)
+
+	if got.Deleted != 4 || got.Failed != 0 {
+		t.Errorf("deleted = %d failed = %d, want 4 and 0", got.Deleted, got.Failed)
+	}
+
+	for _, rel := range []string{
+		"post00100.h5", "post00100.cgns",
+		"outputs_original/post00200.h5", "outputs_original/nested/post00300.h5",
+	} {
+		if _, err := os.Stat(filepath.Join(caseDir, filepath.FromSlash(rel))); !os.IsNotExist(err) {
+			t.Errorf("expected %s to be deleted", rel)
+		}
+	}
+	for _, rel := range []string{
+		"outputs_original", "outputs_original/thermo.out", "outputs_original/notes.txt",
+		"outputs_restart0100/restart0200.rst", "thermo.out", "restart0100.rst",
+	} {
+		if _, err := os.Stat(filepath.Join(caseDir, filepath.FromSlash(rel))); err != nil {
+			t.Errorf("expected %s to survive: %v", rel, err)
+		}
+	}
+}
+
+// Selecting the outputs folders takes them whole; other selected kinds then
+// only reach their root-level files.
+func TestConvergeCleanOutputDirsSubsumeDeepFiles(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeCase(t, caseDir)
+
+	_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+	got := convergeCleanRequestJSON(t, clean, token, `{"kinds":["outputs","post"]}`)
+
+	// The two trees whole plus the two root post files.
+	if got.Deleted != 4 || got.Failed != 0 {
+		t.Errorf("deleted = %d failed = %d, want 4 and 0", got.Deleted, got.Failed)
+	}
+
+	for _, rel := range []string{
+		"post00100.h5", "post00100.cgns", "outputs_original", "outputs_restart0100",
+	} {
+		if _, err := os.Stat(filepath.Join(caseDir, rel)); !os.IsNotExist(err) {
+			t.Errorf("expected %s to be deleted", rel)
+		}
+	}
+	for _, rel := range []string{"thermo.out", "restart0100.rst", "converge.log"} {
+		if _, err := os.Stat(filepath.Join(caseDir, rel)); err != nil {
+			t.Errorf("expected %s to survive: %v", rel, err)
+		}
+	}
+}
+
+// keep-newest ranks root and nested restarts together.
+func TestConvergeCleanKeepRestartsSpansOutputDirs(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	writeCaseFile(t, caseDir, "deck", "inputs.in")
+
+	now := time.Now()
+	paths := []string{
+		"restart0001.rst",
+		"outputs_original/restart0002.rst",
+		"outputs_original/restart0003.rst",
+	}
+	for i, rel := range paths {
+		p := writeCaseFile(t, caseDir, "data", strings.Split(rel, "/")...)
+		mod := now.Add(time.Duration(i-3) * time.Hour)
+		if err := os.Chtimes(p, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+	got := convergeCleanRequestJSON(t, clean, token, `{"kinds":["restart"],"keepRestarts":2}`)
+
+	if got.Deleted != 1 {
+		t.Errorf("deleted = %d, want 1 (the oldest, at the root)", got.Deleted)
+	}
+	if _, err := os.Stat(filepath.Join(caseDir, "restart0001.rst")); !os.IsNotExist(err) {
+		t.Error("expected the oldest root restart to be deleted")
+	}
+	for _, rel := range paths[1:] {
+		if _, err := os.Stat(filepath.Join(caseDir, filepath.FromSlash(rel))); err != nil {
+			t.Errorf("expected %s to be kept: %v", rel, err)
+		}
+	}
+}
+
+// A symlink inside an outputs_* tree is not a file a kind selection may
+// unlink; only taking the folder whole removes it.
+func TestConvergeCleanDeepSymlinksSkipped(t *testing.T) {
+	root := t.TempDir()
+	userScope := filepath.Join(root, "user")
+	outside := filepath.Join(root, "outside")
+	caseDir := filepath.Join(userScope, "case")
+
+	writeCaseFile(t, caseDir, "deck", "inputs.in")
+	writeCaseFile(t, caseDir, "data", "outputs_original", "thermo.out")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "secret.out"), []byte("secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "secret.out"),
+		filepath.Join(caseDir, "outputs_original", "linked.out")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	_, clean, token := convergeTestHandlers(t, userScope, users.Permissions{Delete: true})
+	got := convergeCleanRequestJSON(t, clean, token, `{"kinds":["out"]}`)
+
+	if got.Deleted != 1 {
+		t.Errorf("deleted = %d, want only the real thermo.out", got.Deleted)
+	}
+	if _, err := os.Lstat(filepath.Join(caseDir, "outputs_original", "linked.out")); err != nil {
+		t.Errorf("a symlink inside the tree was removed by a kind selection: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "secret.out")); err != nil {
+		t.Errorf("VULNERABLE: the link target was touched: %v", err)
 	}
 }
 

@@ -4,6 +4,10 @@
       <h2>{{ t("buttons.share") }}</h2>
     </div>
 
+    <div v-if="targets.length > 0" class="px-6 pt-4">
+      <prompt-targets :items="targets" />
+    </div>
+
     <template v-if="listing">
       <div class="px-6 py-4 flex flex-col gap-3">
         <table>
@@ -147,6 +151,7 @@ import * as api from "@/api/index";
 import { StatusError } from "@/api/utils";
 import dayjs from "dayjs";
 import { copy } from "@/utils/clipboard";
+import PromptTargets from "@/components/prompts/PromptTargets.vue";
 
 const { t, te } = useI18n();
 const route = useRoute();
@@ -173,6 +178,21 @@ const url = computed(() => {
   }
 
   return fileStore.req!.items[fileStore.selected[0]].url;
+});
+
+const targets = computed(() => {
+  if (!fileStore.isListing) {
+    return fileStore.req
+      ? [{ name: fileStore.req.name, isDir: fileStore.req.isDir }]
+      : [];
+  }
+
+  if (fileStore.selectedCount !== 1) {
+    return [];
+  }
+
+  const item = fileStore.req!.items[fileStore.selected[0]];
+  return [{ name: item.name, isDir: item.isDir }];
 });
 
 function sort() {

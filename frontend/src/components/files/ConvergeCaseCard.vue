@@ -40,16 +40,6 @@
         <i class="fa-solid fa-file-lines mr-1"></i>
         {{ t("converge.viewLog") }}
       </button>
-
-      <button
-        v-if="authStore.user?.perm.delete && summary.count > 0"
-        type="button"
-        class="btn btn-sm btn-white btn-soft"
-        @click="layoutStore.showHover('converge-clean')"
-      >
-        <i class="fa-solid fa-broom mr-1"></i>
-        {{ t("converge.cleanOutput") }}
-      </button>
     </div>
 
     <div v-if="progressBounds" class="flex flex-col gap-1">
@@ -111,9 +101,7 @@ import { useRoute, useRouter } from "vue-router";
 
 import type { ConvergeSummary } from "@/api/files";
 import Card from "@/components/ui/Card.vue";
-import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
-import { useLayoutStore } from "@/stores/layout";
 import { filesize } from "@/utils";
 import { formatOutValue } from "@/utils/convergeOut";
 import {
@@ -121,9 +109,7 @@ import {
   invalidateConvergeSummary,
 } from "@/utils/convergeSummaryCache";
 
-const authStore = useAuthStore();
 const fileStore = useFileStore();
-const layoutStore = useLayoutStore();
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();

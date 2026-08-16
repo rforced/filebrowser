@@ -329,6 +329,8 @@ export interface ConvergeGroup {
   kind: ConvergeKind;
   count: number;
   size: number;
+  rootCount?: number;
+  rootSize?: number;
 }
 
 export interface ConvergeRestartInfo {
