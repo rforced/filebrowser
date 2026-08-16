@@ -14,9 +14,9 @@
           <table>
             <thead>
               <tr>
-                <th>{{ t("settings.path") }}</th>
-                <th>{{ t("settings.shareDuration") }}</th>
-                <th>{{ t("settings.owner") }}</th>
+                <th class="text-left">{{ t("settings.path") }}</th>
+                <th class="text-left">{{ t("settings.shareDuration") }}</th>
+                <th class="text-left">{{ t("settings.owner") }}</th>
                 <th></th>
                 <th></th>
               </tr>

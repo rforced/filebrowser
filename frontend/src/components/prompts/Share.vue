@@ -8,9 +8,9 @@
       <div class="px-6 py-4 flex flex-col gap-3">
         <table>
           <tr>
-            <th>#</th>
-            <th>{{ t("settings.shareDuration") }}</th>
-            <th>{{ t("settings.owner") }}</th>
+            <th class="text-left">#</th>
+            <th class="text-left">{{ t("settings.shareDuration") }}</th>
+            <th class="text-left">{{ t("settings.owner") }}</th>
             <th></th>
             <th></th>
           </tr>
