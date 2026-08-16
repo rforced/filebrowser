@@ -70,36 +70,6 @@
             >{{ t("prompts.show") }}</a
           >
         </p>
-        <p>
-          <strong>SHA1:</strong>
-          <a
-            class="action-link"
-            @click="checksum($event, 'sha1')"
-            @keypress.enter="checksum($event, 'sha1')"
-            tabindex="3"
-            >{{ t("prompts.show") }}</a
-          >
-        </p>
-        <p>
-          <strong>SHA256:</strong>
-          <a
-            class="action-link"
-            @click="checksum($event, 'sha256')"
-            @keypress.enter="checksum($event, 'sha256')"
-            tabindex="4"
-            >{{ t("prompts.show") }}</a
-          >
-        </p>
-        <p>
-          <strong>SHA512:</strong>
-          <a
-            class="action-link"
-            @click="checksum($event, 'sha512')"
-            @keypress.enter="checksum($event, 'sha512')"
-            tabindex="5"
-            >{{ t("prompts.show") }}</a
-          >
-        </p>
       </template>
     </div>
 

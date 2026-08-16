@@ -200,8 +200,8 @@ func (a *HookAuth) SaveUser() (*users.User, error) {
 
 	if u == nil {
 		// When the hook auth is enabled, the external command is the source of
-		// truth for credentials, so local password policies (minimum length and
-		// common-password checks) do not apply.
+		// truth for credentials, so the local minimum-length policy does not
+		// apply.
 		pass, err := users.HashPwd(a.Cred.Password)
 		if err != nil {
 			return nil, err
@@ -240,8 +240,7 @@ func (a *HookAuth) SaveUser() (*users.User, error) {
 
 		// update the password when it doesn't match the current
 		if p {
-			// Hook auth bypasses local password policies (minimum length and
-			// common-password checks).
+			// Hook auth bypasses the local minimum-length policy.
 			pass, err := users.HashPwd(a.Cred.Password)
 			if err != nil {
 				return nil, err

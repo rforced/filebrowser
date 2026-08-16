@@ -39,4 +39,3 @@ build/
 !/frontend/dist/.gitkeep
 
 default.nix
-Dockerfile.dev

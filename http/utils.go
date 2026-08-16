@@ -112,22 +112,15 @@ func renderClientError(w http.ResponseWriter, status int, detail clientError) (i
 	return 0, nil
 }
 
-// passwordPolicyError describes a rejection by users.ValidateAndHashPwd, and
-// reports whether err was one of those. Callers keep the bare status line for
-// anything else, so a password check that fails for an unexpected reason still
-// says nothing about itself.
 func passwordPolicyError(err error) (clientError, bool) {
 	var short libErrors.ErrShortPassword
 
-	switch {
-	case errors.As(err, &short):
+	if errors.As(err, &short) {
 		return clientError{
 			Code:    "passwordTooShort",
 			Message: err.Error(),
 			Params:  map[string]string{"min": strconv.FormatUint(uint64(short.MinimumLength), 10)},
 		}, true
-	case errors.Is(err, libErrors.ErrEasyPassword):
-		return clientError{Code: "passwordTooCommon", Message: err.Error()}, true
 	}
 
 	return clientError{}, false

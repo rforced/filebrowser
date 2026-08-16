@@ -243,7 +243,6 @@ function copyToClipboard(text: string) {
 // everyone until the translations caught up.
 const errorMessageKeys: Record<string, string> = {
   passwordTooShort: "login.passwordTooShort",
-  passwordTooCommon: "errors.passwordTooCommon",
 };
 
 // localizeError turns a disclosed failure code into a translated message. Codes

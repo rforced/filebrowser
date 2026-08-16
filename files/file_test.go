@@ -460,9 +460,8 @@ func TestDetectType_Image(t *testing.T) {
 	// call an image has no decoder on either side and would render as a broken
 	// <img>, so it must fall back to "blob" and get the download panel.
 	//
-	// The raw camera extensions resolve through the system /etc/mime.types,
-	// which the Docker image ships via mailcap; skipped where absent so this
-	// does not fail on a bare host.
+	// The raw camera extensions resolve through the system /etc/mime.types;
+	// skipped where absent so this does not fail on a bare host.
 	cases := []struct {
 		name       string
 		contents   []byte

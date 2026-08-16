@@ -2,12 +2,8 @@ package files
 
 import (
 	"crypto/md5"
-	"crypto/sha1"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/hex"
 	"errors"
-	"hash"
 	"io"
 	"log"
 	"mime"
@@ -151,9 +147,13 @@ func stat(opts *FileOptions) (*FileInfo, error) {
 	return file, nil
 }
 
-// Checksum checksums a given File for a given User, using a specific
-// algorithm. The checksums data is saved on File object.
+// Checksum checksums a given File using the given algorithm — only md5 is
+// supported. The checksums data is saved on File object.
 func (i *FileInfo) Checksum(algo string) error {
+	if algo != "md5" {
+		return fberrors.ErrInvalidOption
+	}
+
 	if i.IsDir {
 		return fberrors.ErrIsDirectory
 	}
@@ -168,20 +168,7 @@ func (i *FileInfo) Checksum(algo string) error {
 	}
 	defer reader.Close()
 
-	var h hash.Hash
-
-	switch algo {
-	case "md5":
-		h = md5.New()
-	case "sha1":
-		h = sha1.New()
-	case "sha256":
-		h = sha256.New()
-	case "sha512":
-		h = sha512.New()
-	default:
-		return fberrors.ErrInvalidOption
-	}
+	h := md5.New()
 
 	_, err = io.Copy(h, reader)
 	if err != nil {
@@ -261,10 +248,9 @@ func isModelExtension(ext string) bool {
 // Everything else the mime tables call an image has no decoder on either side
 // and would render as a broken <img>: raw camera files (image/x-adobe-dng,
 // image/x-canon-cr2, image/x-nikon-nef — these come from the system
-// /etc/mime.types, which the Docker image ships via mailcap), image/heic, and
-// the long tail of legacy formats in mime.go (image/x-pcx, image/x-xwd,
-// image/x-portable-pixmap, image/pict, ...). Those are typed "blob" so the
-// frontend offers a download instead.
+// /etc/mime.types), image/heic, and the long tail of legacy formats in mime.go
+// (image/x-pcx, image/x-xwd, image/x-portable-pixmap, image/pict, ...). Those
+// are typed "blob" so the frontend offers a download instead.
 //
 // Matched on the media type rather than the extension so that header-sniffed
 // files — a PNG named photo.xyz — are classified the same way.

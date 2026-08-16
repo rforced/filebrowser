@@ -78,7 +78,6 @@
     "internal": "服务器内部错误。",
     "notFound": "该位置无法访问。",
     "connection": "无法连接服务器。",
-    "passwordTooCommon": "该密码过于常见，请选择一个更难猜到的密码。",
     "alreadyExists": "已存在同名的文件或文件夹。"
   },
   "files": {

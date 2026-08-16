@@ -23,7 +23,6 @@ func TestSecurityHeadersOnEveryRoute(t *testing.T) {
 		"/",              // SPA index — previously uncovered
 		"/files/nested",  // SPA route — previously uncovered
 		"/share/abc",     // SPA route — previously uncovered
-		"/health",        // matched route
 		"/api/me",        // matched route
 		"/static/app.js", // static assets
 	}

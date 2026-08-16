@@ -4,7 +4,6 @@ export const BUNDLED_MODES = [
   "c_cpp",
   "css",
   "diff",
-  "dockerfile",
   "fortran",
   "golang",
   "html",

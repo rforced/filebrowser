@@ -141,16 +141,5 @@ describe("files API", () => {
       expect(callUrl).toContain("checksum=md5");
       expect(result).toBe("abc123def456");
     });
-
-    it("supports sha256 algorithm", async () => {
-      const checksumResp = { checksums: { sha256: "deadbeef" } };
-      globalThis.fetch = mockFetchResponse(checksumResp);
-
-      const result = await checksum("/files/data.bin", "sha256");
-
-      const callUrl = (globalThis.fetch as any).mock.calls[0][0];
-      expect(callUrl).toContain("checksum=sha256");
-      expect(result).toBe("deadbeef");
-    });
   });
 });

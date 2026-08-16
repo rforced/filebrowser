@@ -78,7 +78,6 @@
     "internal": "Da ist etwas schiefgelaufen.",
     "notFound": "Dieser Ort ist nicht erreichbar.",
     "connection": "Der Server ist nicht erreichbar.",
-    "passwordTooCommon": "Dieses Passwort ist zu gebräuchlich. Bitte wähle ein weniger vorhersehbares.",
     "alreadyExists": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits."
   },
   "files": {

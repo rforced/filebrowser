@@ -78,7 +78,6 @@
     "internal": "Si è verificato un errore imprevisto.",
     "notFound": "Questo percorso non può essere raggiunto.",
     "connection": "Il server non è raggiungibile.",
-    "passwordTooCommon": "Questa password è troppo comune. Scegline una meno prevedibile.",
     "alreadyExists": "Esiste già un file o una cartella con questo nome."
   },
   "files": {

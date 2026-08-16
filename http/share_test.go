@@ -391,12 +391,7 @@ func TestSharePostEnforcesPasswordPolicy(t *testing.T) {
 			wantCode:     "passwordTooShort",
 			wantParams:   map[string]string{"min": "12"},
 		},
-		"common password is rejected": {
-			password:     "123456789012",
-			expectedCode: http.StatusBadRequest,
-			wantCode:     "passwordTooCommon",
-		},
-		"long enough and not common": {
+		"long enough": {
 			password:     "sh4re-P@ssw0rd-x",
 			expectedCode: http.StatusOK,
 		},

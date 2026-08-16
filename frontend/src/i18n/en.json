@@ -83,7 +83,6 @@
     "internal": "Something really went wrong.",
     "notFound": "This location can't be reached.",
     "connection": "The server can't be reached.",
-    "passwordTooCommon": "This password is too common. Please choose a less predictable one.",
     "alreadyExists": "A file or folder with this name already exists."
   },
   "files": {
