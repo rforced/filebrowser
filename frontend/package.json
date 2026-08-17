@@ -28,7 +28,7 @@
     "dompurify": "^3.4.13",
     "filesize": "^11.0.22",
     "marked": "^18.0.9",
-    "pinia": "^4.0.2",
+    "pinia": "^4.0.3",
     "qrcode.vue": "^3.10.0",
     "tailwindcss": "^4.3.3",
     "three": "0.185.1",
@@ -43,11 +43,11 @@
     "vue-router": "^5.2.0"
   },
   "devDependencies": {
-    "@intlify/unplugin-vue-i18n": "^11.2.4",
+    "@intlify/unplugin-vue-i18n": "^11.2.5",
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^26.2.0",
-    "@types/three": "0.185.1",
-    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@types/three": "0.185.4",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/eslint-config-prettier": "^10.2.0",
     "@vue/eslint-config-typescript": "^14.9.0",
