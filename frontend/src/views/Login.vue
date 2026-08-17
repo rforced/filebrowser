@@ -23,6 +23,16 @@
         </div>
 
         <div
+          v-if="mfaNotice !== ''"
+          class="flex gap-2 items-start rounded-md bg-blue-50 dark:bg-gray-900 px-3 py-2 text-sm text-blue-700 dark:text-gray-300"
+        >
+          <i
+            class="fa-solid fa-shield-halved mt-0.5 text-blue-400 dark:text-teal"
+          ></i>
+          <span>{{ mfaNotice }}</span>
+        </div>
+
+        <div
           v-if="error !== ''"
           class="flex gap-2 items-start rounded-md bg-red-50 dark:bg-red-900/40 px-3 py-2 text-sm text-red-700 dark:text-red-200"
           role="alert"
@@ -61,6 +71,32 @@
               :placeholder="t('login.password')"
             />
           </div>
+
+          <div v-if="mfaVisible" class="flex flex-col gap-1">
+            <label for="login-mfa-code" class="form-label">{{
+              t("login.mfaCode")
+            }}</label>
+            <input
+              id="login-mfa-code"
+              ref="mfaInput"
+              v-model="mfaCode"
+              class="form-control"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              autocapitalize="off"
+              :placeholder="t('login.mfaCode')"
+            />
+          </div>
+
+          <button
+            v-else
+            type="button"
+            class="self-start text-sm text-blue-600 hover:underline dark:text-teal"
+            @click="revealMfa"
+          >
+            {{ t("login.mfaHaveCode") }}
+          </button>
         </div>
 
         <button
@@ -93,7 +129,7 @@ import {
   recaptchaKey,
   version,
 } from "@/utils/constants";
-import { inject, ref, onMounted, onBeforeUnmount } from "vue";
+import { inject, nextTick, ref, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import Card from "@/components/ui/Card.vue";
@@ -104,6 +140,10 @@ const error = ref<string>("");
 const username = ref<string>("");
 const password = ref<string>("");
 const loading = ref<boolean>(false);
+const mfaCode = ref<string>("");
+const mfaVisible = ref<boolean>(false);
+const mfaNotice = ref<string>("");
+const mfaInput = ref<HTMLInputElement | null>(null);
 
 const route = useRoute();
 const router = useRouter();
@@ -143,12 +183,19 @@ onBeforeUnmount(() => {
   }
 });
 
+const revealMfa = async () => {
+  mfaVisible.value = true;
+  await nextTick();
+  mfaInput.value?.focus();
+};
+
 const submit = async (event: Event) => {
   event.preventDefault();
   event.stopPropagation();
 
   loading.value = true;
   error.value = "";
+  mfaNotice.value = "";
 
   const redirect = (route.query.redirect || "/files/") as string;
 
@@ -192,7 +239,12 @@ const submit = async (event: Event) => {
   }
 
   try {
-    await auth.login(username.value, password.value, captcha);
+    await auth.login(
+      username.value,
+      password.value,
+      captcha,
+      mfaCode.value.trim()
+    );
     router.push({ path: redirect });
   } catch (e: any) {
     loading.value = false;
@@ -201,6 +253,20 @@ const submit = async (event: Event) => {
         error.value = t("login.rateLimited");
       } else if (e.status === 429) {
         error.value = t("login.captchaFailed");
+      } else if (
+        e.status === 401 &&
+        (e.code === "mfaRequired" || e.code === "mfaInvalid")
+      ) {
+        mfaCode.value = "";
+        if (e.code === "mfaInvalid") {
+          error.value = t("login.mfaInvalid");
+        } else {
+          mfaNotice.value =
+            e.params?.method === "totp"
+              ? t("login.mfaTotp")
+              : t("login.mfaEmail");
+        }
+        await revealMfa();
       } else if (e.status === 403) {
         error.value = t("login.wrongCredentials");
       } else if (e.status === 400) {

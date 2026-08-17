@@ -29,9 +29,25 @@ type hookCred struct {
 	Password  string `json:"password"`
 	Username  string `json:"username"`
 	ReCaptcha string `json:"recaptcha"`
+	MFACode   string `json:"mfaCode"`
 }
 
-// HookAuth is a hook implementation of an Auther.
+var ErrMFARequired = errors.New("multi-factor authentication required")
+
+type MFAChallenge struct {
+	Method  string
+	Invalid bool
+}
+
+func (c *MFAChallenge) Error() string {
+	if c.Invalid {
+		return "invalid multi-factor authentication code"
+	}
+	return ErrMFARequired.Error()
+}
+
+func (c *MFAChallenge) Unwrap() error { return ErrMFARequired }
+
 type HookAuth struct {
 	Users     users.Store        `json:"-"`
 	Settings  *settings.Settings `json:"-"`
@@ -85,6 +101,11 @@ func (a *HookAuth) Auth(r *http.Request, usr users.Store, stg *settings.Settings
 		return u, nil
 	case "block":
 		return nil, os.ErrPermission
+	case "mfa":
+		return nil, &MFAChallenge{
+			Method:  a.Fields.GetString("hook.mfa.method", ""),
+			Invalid: a.Fields.GetString("hook.mfa.error", "") == "invalid",
+		}
 	case "pass":
 		u, err := a.Users.Get(a.Server.Root, a.Cred.Username)
 		if err != nil || !users.CheckPwd(a.Cred.Password, u.Password) {
@@ -108,7 +129,7 @@ func (a *HookAuth) RunCommand(ctx context.Context) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.WaitDelay = hookWaitDelay
 	cmd.Env = append(os.Environ(), fmt.Sprintf("USERNAME=%s", a.Cred.Username))
-	cmd.Stdin = strings.NewReader(a.Cred.Password)
+	cmd.Stdin = strings.NewReader(a.Cred.Password + "\x00" + a.Cred.MFACode + "\x00")
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -291,14 +312,14 @@ func (a *HookAuth) GetUser(d *users.User) *users.User {
 	return &user
 }
 
-// hookFields is used to access fields from the hook
 type hookFields struct {
 	Values map[string]string
 }
 
-// validHookFields contains names of the fields that can be used
 var validHookFields = []string{
 	"hook.action",
+	"hook.mfa.method",
+	"hook.mfa.error",
 	"user.scope",
 	"user.locale",
 	"user.viewMode",

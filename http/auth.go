@@ -210,6 +210,8 @@ func loginHandler(policy tokenPolicy) handleFunc {
 		switch {
 		case errors.Is(err, fbAuth.ErrCaptchaFailed):
 			return http.StatusTooManyRequests, nil
+		case errors.Is(err, fbAuth.ErrMFARequired):
+			return renderMFAChallenge(w, err)
 		case errors.Is(err, os.ErrPermission):
 			return http.StatusForbidden, nil
 		case err != nil:
@@ -220,11 +222,25 @@ func loginHandler(policy tokenPolicy) handleFunc {
 	}
 }
 
+func renderMFAChallenge(w http.ResponseWriter, err error) (int, error) {
+	detail := clientError{Code: "mfaRequired", Message: fbAuth.ErrMFARequired.Error()}
+
+	var challenge *fbAuth.MFAChallenge
+	if errors.As(err, &challenge) {
+		if challenge.Invalid {
+			detail.Code = "mfaInvalid"
+			detail.Message = challenge.Error()
+		}
+		if challenge.Method != "" {
+			detail.Params = map[string]string{"method": challenge.Method}
+		}
+	}
+
+	return renderClientError(w, http.StatusUnauthorized, detail)
+}
+
 func renewHandler(policy tokenPolicy) handleFunc {
 	return withUser(func(w http.ResponseWriter, _ *http.Request, d *data) (int, error) {
-		// Renewal slides the expiry forward, but only within the session's
-		// absolute lifetime. Without that ceiling a stolen token could be walked
-		// forward indefinitely and would outlive any password change.
 		startedAt := d.token.CreatedAt
 		_ = d.store.Tokens.Delete(d.tokenStr)
 

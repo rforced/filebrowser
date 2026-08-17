@@ -20,13 +20,7 @@ export class StatusError extends Error {
   }
 }
 
-// applyErrorDetail lifts a structured failure body onto the error it describes.
-//
-// Most failures answer with a bare status line, but a handler may instead send
-// JSON naming a cause the requester can act on. Callers that want to localize it
-// read `code`/`params`; callers that simply display the error get the server's
-// English rendering as the message rather than raw JSON.
-function applyErrorDetail(error: StatusError, body: string) {
+export function applyErrorDetail(error: StatusError, body: string) {
   if (!body.startsWith("{")) return;
 
   try {

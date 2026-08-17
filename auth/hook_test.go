@@ -2,7 +2,11 @@ package auth
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -13,12 +17,23 @@ import (
 	"github.com/rforced/filebrowser/v2/users"
 )
 
-// writeHookScript writes a POSIX shell script to a temp file and returns its
-// path, marking it executable.
 func writeHookScript(t *testing.T, body string) string {
 	t.Helper()
+	return writeShellScript(t, "#!/bin/sh\n", body)
+}
+
+func writeBashHookScript(t *testing.T, body string) string {
+	t.Helper()
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is not available")
+	}
+	return writeShellScript(t, "#!/usr/bin/env bash\n", body)
+}
+
+func writeShellScript(t *testing.T, shebang, body string) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "hook.sh")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body), 0o700); err != nil {
+	if err := os.WriteFile(path, []byte(shebang+body), 0o700); err != nil {
 		t.Fatalf("failed to write hook script: %v", err)
 	}
 	return path
@@ -31,9 +46,6 @@ func TestRunCommandNoCredentialInjection(t *testing.T) {
 
 	marker := filepath.Join(t.TempDir(), "pwned")
 
-	// The hook simply blocks. If the credential were ever interpolated into the
-	// command string and evaluated by a shell, the embedded `touch` would
-	// create the marker file.
 	script := writeHookScript(t, "echo hook.action=block\n")
 
 	a := &HookAuth{
@@ -61,8 +73,9 @@ func TestRunCommandReceivesCredentials(t *testing.T) {
 		t.Skip("uses POSIX shell")
 	}
 
-	script := writeHookScript(t, `PASSWORD=$(cat)
-if [ "$USERNAME" = alice ] && [ "$PASSWORD" = secret ]; then
+	script := writeBashHookScript(t, `IFS= read -r -d '' PASSWORD
+IFS= read -r -d '' MFA_CODE
+if [ "$USERNAME" = alice ] && [ "$PASSWORD" = secret ] && [ "$MFA_CODE" = 123456 ]; then
   echo hook.action=auth
 else
   echo hook.action=block
@@ -74,6 +87,7 @@ fi
 		Cred: hookCred{
 			Username: "alice",
 			Password: "secret",
+			MFACode:  "123456",
 		},
 	}
 
@@ -86,6 +100,71 @@ fi
 	}
 }
 
+// A password containing the delimiters a naive framing would break on must
+// still arrive intact, and must not bleed into the second field.
+func TestRunCommandFramesAwkwardPassword(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+
+	out := filepath.Join(t.TempDir(), "fields.txt")
+	script := writeBashHookScript(t, `IFS= read -r -d '' PASSWORD
+IFS= read -r -d '' MFA_CODE
+printf '[%s][%s]' "$PASSWORD" "$MFA_CODE" > `+out+`
+echo hook.action=block
+`)
+
+	const password = "line one\nline two\ttabbed  "
+	a := &HookAuth{
+		Command: script,
+		Cred:    hookCred{Username: "alice", Password: password, MFACode: "123456"},
+	}
+
+	if _, err := a.RunCommand(context.Background()); err != nil {
+		t.Fatalf("RunCommand returned error: %v", err)
+	}
+
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("failed to read captured fields: %v", err)
+	}
+	if want := "[" + password + "][123456]"; string(got) != want {
+		t.Errorf("hook received %q, want %q", got, want)
+	}
+}
+
+// A hook written before the second field reads stdin whole. It must still see
+// exactly the password when no code is in play, which is the common case and
+// the one that decides whether an in-flight deploy can log anyone in.
+func TestRunCommandStdinCompatibleWithSingleFieldHook(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+
+	out := filepath.Join(t.TempDir(), "password.txt")
+	script := writeBashHookScript(t, `PASSWORD=$(cat)
+printf '[%s]' "$PASSWORD" > `+out+`
+echo hook.action=block
+`)
+
+	a := &HookAuth{
+		Command: script,
+		Cred:    hookCred{Username: "alice", Password: "secret"},
+	}
+
+	if _, err := a.RunCommand(context.Background()); err != nil {
+		t.Fatalf("RunCommand returned error: %v", err)
+	}
+
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("failed to read captured password: %v", err)
+	}
+	if string(got) != "[secret]" {
+		t.Errorf("a single-field hook received %q, want %q", got, "[secret]")
+	}
+}
+
 func TestRunCommandKeepsPasswordOutOfEnvironment(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses POSIX shell")
@@ -95,9 +174,10 @@ func TestRunCommandKeepsPasswordOutOfEnvironment(t *testing.T) {
 	script := writeHookScript(t, "env > "+out+"\necho hook.action=block\n")
 
 	const password = "uniq-passphrase-do-not-leak"
+	const mfaCode = "uniq-code-do-not-leak"
 	a := &HookAuth{
 		Command: script,
-		Cred:    hookCred{Username: "alice", Password: password},
+		Cred:    hookCred{Username: "alice", Password: password, MFACode: mfaCode},
 	}
 
 	if _, err := a.RunCommand(context.Background()); err != nil {
@@ -111,8 +191,79 @@ func TestRunCommandKeepsPasswordOutOfEnvironment(t *testing.T) {
 	if strings.Contains(string(env), password) {
 		t.Error("VULNERABLE: the password was passed in the hook's environment")
 	}
+	if strings.Contains(string(env), mfaCode) {
+		t.Error("VULNERABLE: the MFA code was passed in the hook's environment")
+	}
 	if !strings.Contains(string(env), "USERNAME=alice") {
 		t.Error("the username should still be provided in the environment")
+	}
+}
+
+// A hook that asks for a second factor must be distinguishable from one that
+// rejected the credentials: the login page keeps the form open and prompts for
+// a code, rather than reporting the password as wrong.
+func TestAuthReturnsMFAChallenge(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+
+	tests := []struct {
+		name        string
+		output      string
+		wantMethod  string
+		wantInvalid bool
+	}{
+		{
+			name:       "emailed code",
+			output:     "hook.action=mfa\nhook.mfa.method=email\n",
+			wantMethod: "email",
+		},
+		{
+			name:       "authenticator code",
+			output:     "hook.action=mfa\nhook.mfa.method=totp\n",
+			wantMethod: "totp",
+		},
+		{
+			name:        "code rejected",
+			output:      "hook.action=mfa\nhook.mfa.method=email\nhook.mfa.error=invalid\n",
+			wantMethod:  "email",
+			wantInvalid: true,
+		},
+		{
+			name:   "method withheld",
+			output: "hook.action=mfa\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &HookAuth{Command: writeHookScript(t, "cat <<'FIELDS'\n"+tt.output+"FIELDS\n")}
+
+			body := strings.NewReader(`{"username":"alice","password":"secret","mfaCode":"000000"}`)
+			r := httptest.NewRequest(http.MethodPost, "/api/login", body)
+
+			u, err := a.Auth(r, nil, &settings.Settings{}, &settings.Server{})
+			if u != nil {
+				t.Fatal("a challenge must not authenticate the user")
+			}
+			if !errors.Is(err, ErrMFARequired) {
+				t.Fatalf("expected an MFA challenge, got %v", err)
+			}
+			if errors.Is(err, os.ErrPermission) {
+				t.Error("a challenge must not read as a rejected credential")
+			}
+
+			var challenge *MFAChallenge
+			if !errors.As(err, &challenge) {
+				t.Fatalf("expected an *MFAChallenge, got %T", err)
+			}
+			if challenge.Method != tt.wantMethod {
+				t.Errorf("method = %q, want %q", challenge.Method, tt.wantMethod)
+			}
+			if challenge.Invalid != tt.wantInvalid {
+				t.Errorf("invalid = %v, want %v", challenge.Invalid, tt.wantInvalid)
+			}
+		})
 	}
 }
 

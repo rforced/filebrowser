@@ -143,7 +143,9 @@
           {{ t("outPlot.series") }}
         </span>
 
-        <div class="flex flex-wrap gap-1.5 items-center min-w-0 max-h-24 overflow-y-auto">
+        <div
+          class="flex flex-wrap gap-1.5 items-center min-w-0 max-h-24 overflow-y-auto"
+        >
           <button
             v-for="column in yCandidates"
             :key="column.index"

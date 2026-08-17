@@ -36,8 +36,9 @@ vi.mock("@/router", () => ({
   default: { push: routerPush },
 }));
 
-import { logout, saveToken } from "../auth";
+import { login, logout, saveToken } from "../auth";
 import { useAuthStore } from "@/stores/auth";
+import { StatusError } from "@/api/utils";
 
 function mockMeOk(user: Partial<IUser> = { locale: "en" }) {
   return vi.fn().mockResolvedValue({
@@ -116,6 +117,95 @@ describe("logout(reason)", () => {
     expect(authStore.token).toBe("");
     expect(authStore.user).toBeNull();
     expect(localStorage.getItem("token")).toBe("");
+  });
+});
+
+describe("login", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+  });
+
+  function mockLoginResponse(status: number, body: string) {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: "",
+      headers: new Headers(),
+      text: () => Promise.resolve(body),
+      json: () => Promise.resolve({ locale: "en" }),
+    });
+  }
+
+  it("sends the MFA code alongside the credentials", async () => {
+    mockLoginResponse(200, "issued-token");
+
+    await login("alice", "secret", "captcha-token", "123456");
+
+    const [url, opts] = (globalThis.fetch as any).mock.calls[0];
+    expect(url).toBe("/test/api/login");
+    expect(JSON.parse(opts.body)).toEqual({
+      username: "alice",
+      password: "secret",
+      recaptcha: "captcha-token",
+      mfaCode: "123456",
+    });
+  });
+
+  it("defaults the MFA code to empty when the user has not been asked for one", async () => {
+    mockLoginResponse(200, "issued-token");
+
+    await login("alice", "secret", "captcha-token");
+
+    const [, opts] = (globalThis.fetch as any).mock.calls[0];
+    expect(JSON.parse(opts.body).mfaCode).toBe("");
+  });
+
+  // The login page distinguishes "needs a second factor" from "wrong password"
+  // by the structured code, so it must survive the throw.
+  it("surfaces the MFA challenge code and method from a 401", async () => {
+    mockLoginResponse(
+      401,
+      JSON.stringify({
+        code: "mfaRequired",
+        message: "multi-factor authentication required",
+        params: { method: "email" },
+      })
+    );
+
+    const err = await login("alice", "secret", "captcha-token").catch((e) => e);
+
+    expect(err).toBeInstanceOf(StatusError);
+    expect(err.status).toBe(401);
+    expect(err.code).toBe("mfaRequired");
+    expect(err.params).toEqual({ method: "email" });
+  });
+
+  it("surfaces a rejected code as mfaInvalid rather than a generic failure", async () => {
+    mockLoginResponse(
+      401,
+      JSON.stringify({
+        code: "mfaInvalid",
+        message: "invalid multi-factor authentication code",
+        params: { method: "totp" },
+      })
+    );
+
+    const err = await login("alice", "secret", "captcha-token", "000000").catch(
+      (e) => e
+    );
+
+    expect(err.code).toBe("mfaInvalid");
+    expect(err.params).toEqual({ method: "totp" });
+  });
+
+  it("leaves the code unset for a plain rejection, so it reads as wrong credentials", async () => {
+    mockLoginResponse(403, "");
+
+    const err = await login("alice", "wrong", "captcha-token").catch((e) => e);
+
+    expect(err.status).toBe(403);
+    expect(err.code).toBeUndefined();
   });
 });
 

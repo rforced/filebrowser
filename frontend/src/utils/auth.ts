@@ -1,7 +1,7 @@
 import { useAuthStore } from "@/stores/auth";
 import router from "@/router";
 import { baseURL, logoutPage } from "./constants";
-import { StatusError } from "@/api/utils";
+import { StatusError, applyErrorDetail } from "@/api/utils";
 
 export async function saveToken(token: string) {
   const authStore = useAuthStore();
@@ -41,9 +41,10 @@ export async function validateLogin() {
 export async function login(
   username: string,
   password: string,
-  recaptcha: string
+  recaptcha: string,
+  mfaCode = ""
 ) {
-  const data = { username, password, recaptcha };
+  const data = { username, password, recaptcha, mfaCode };
 
   const res = await fetch(`${baseURL}/api/login`, {
     method: "POST",
@@ -65,6 +66,7 @@ export async function login(
     if (res.headers.get("Retry-After")) {
       err.retryAfter = parseInt(res.headers.get("Retry-After")!, 10);
     }
+    applyErrorDetail(err, body);
     throw err;
   }
 }
