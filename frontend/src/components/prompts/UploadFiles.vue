@@ -1,8 +1,7 @@
 <template>
   <Card
     v-if="uploadStore.activeUploads.size > 0"
-    class="fixed left-4 bottom-4 z-110 flex flex-col overflow-hidden"
-    style="width: min(420px, 100% - 2rem)"
+    class="flex flex-col overflow-hidden w-full pointer-events-auto"
   >
     <div class="flex items-start gap-3 px-4 py-3">
       <div class="flex-1 min-w-0 flex flex-col gap-1">

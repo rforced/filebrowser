@@ -242,7 +242,6 @@
     "extractFiles": "file estratti",
     "extractMessage": "Inserisci un nome di cartella in cui estrarre o lascia vuoto per estrarre nella cartella corrente.",
     "extractOverwrite": "La cartella di destinazione esiste già. Vuoi sovrascriverla?",
-    "extracting": "Estrazione in corso…",
     "fastConflictResolve": "Nella cartella di destinazione sono presenti {count} file con lo stesso nome.",
     "fileInfo": "Informazioni sul file",
     "filesInDest": "File nella destinazione",

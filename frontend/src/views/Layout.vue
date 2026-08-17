@@ -19,7 +19,15 @@
     <app-footer />
 
     <prompts />
-    <upload-files />
+
+    <div
+      class="fixed left-4 bottom-4 z-110 flex flex-col gap-3 pointer-events-none"
+      style="width: min(420px, 100% - 2rem)"
+    >
+      <extract-files />
+      <upload-files />
+    </div>
+
     <toasts />
   </div>
 </template>
@@ -35,6 +43,7 @@ import { useUploadStore } from "@/stores/upload";
 import AppHeader from "@/components/layout/AppHeader.vue";
 import AppFooter from "@/components/layout/AppFooter.vue";
 import Prompts from "@/components/prompts/Prompts.vue";
+import ExtractFiles from "@/components/prompts/ExtractFiles.vue";
 import UploadFiles from "@/components/prompts/UploadFiles.vue";
 import Toasts from "@/components/ui/Toasts.vue";
 

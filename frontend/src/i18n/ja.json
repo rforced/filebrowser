@@ -242,7 +242,6 @@
     "extractFiles": "ファイルを展開しました",
     "extractMessage": "展開先のフォルダー名を入力するか、現在のフォルダーに展開する場合は空白のままにしてください。",
     "extractOverwrite": "展開先フォルダーはすでに存在します。上書きしますか？",
-    "extracting": "展開中…",
     "fastConflictResolve": "移動先フォルダーに同じ名前のファイルが {count} 個あります。",
     "fileInfo": "ファイル情報",
     "filesInDest": "移動先のファイル",

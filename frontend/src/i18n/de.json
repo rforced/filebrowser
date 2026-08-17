@@ -242,7 +242,6 @@
     "extractFiles": "Dateien entpackt",
     "extractMessage": "Gib einen Ordnernamen zum Entpacken ein oder lass das Feld leer, um in den aktuellen Ordner zu entpacken.",
     "extractOverwrite": "Der Zielordner existiert bereits. Möchtest du ihn überschreiben?",
-    "extracting": "Wird entpackt …",
     "fastConflictResolve": "Der Zielordner enthält {count} Dateien mit demselben Namen.",
     "fileInfo": "Dateiinformationen",
     "filesInDest": "Dateien im Zielordner",
