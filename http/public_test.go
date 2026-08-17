@@ -60,6 +60,18 @@ func TestPublicShareHandlerAuthentication(t *testing.T) {
 			req:                newHTTPRequest(t, func(r *http.Request) { r.Header.Set("X-SHARE-PASSWORD", "wrong-password") }),
 			expectedStatusCode: 401,
 		},
+		// The two branches that used to return (0, err), which handle() renders
+		// as an empty 200 — a share answering OK on its own failure path.
+		"Private share, malformed password header, 400": {
+			share:              &share.Link{Hash: "h", UserID: 1, PasswordHash: passwordBcrypt},
+			req:                newHTTPRequest(t, func(r *http.Request) { r.Header.Set("X-SHARE-PASSWORD", "%zz") }),
+			expectedStatusCode: 400,
+		},
+		"Private share, unusable stored hash, 500": {
+			share:              &share.Link{Hash: "h", UserID: 1, PasswordHash: "not-a-bcrypt-hash"},
+			req:                newHTTPRequest(t, func(r *http.Request) { r.Header.Set("X-SHARE-PASSWORD", "password") }),
+			expectedStatusCode: 500,
+		},
 		"Private share, authentication via query parameter": {
 			share:              &share.Link{Hash: "h", UserID: 1, PasswordHash: passwordBcrypt},
 			req:                newHTTPRequest(t, func(r *http.Request) { r.URL.RawQuery = "password=password" }),

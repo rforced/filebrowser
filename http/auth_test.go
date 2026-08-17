@@ -204,6 +204,40 @@ func TestWithUser_ExpiredToken(t *testing.T) {
 	}
 }
 
+// TestWithUser_DeletedUser pins the 401: a token outliving its user is a dead
+// session, not a server fault, and the client only logs out on a 401.
+func TestWithUser_DeletedUser(t *testing.T) {
+	t.Parallel()
+	env := setupTestStorage(t)
+
+	tokenStr := createTestToken(t, env, env.user.ID, 1*time.Hour)
+	if err := env.storage.Users.Delete(env.user.ID); err != nil {
+		t.Fatalf("failed to delete user: %v", err)
+	}
+
+	reached := false
+	handler := handle(withUser(func(_ http.ResponseWriter, _ *http.Request, _ *data) (int, error) {
+		reached = true
+		return http.StatusOK, nil
+	}), "", env.storage, env.server)
+
+	r, _ := http.NewRequest(http.MethodGet, "/", http.NoBody)
+	r.Header.Set("X-Auth", tokenStr)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, r)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+	}
+	if reached {
+		t.Error("handler ran for a token whose user no longer exists")
+	}
+
+	if _, err := env.storage.Tokens.Get(tokenStr); err == nil {
+		t.Error("orphaned token should have been deleted from store")
+	}
+}
+
 func TestWithUser_ValidToken(t *testing.T) {
 	t.Parallel()
 	env := setupTestStorage(t)
