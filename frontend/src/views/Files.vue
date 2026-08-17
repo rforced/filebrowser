@@ -83,6 +83,7 @@ import { useLayoutStore } from "@/stores/layout";
 import { StatusError } from "@/api/utils";
 import { name, disableUsedPercentage, domain } from "@/utils/constants";
 import { isOutFileName } from "@/utils/convergeOut";
+import { isSurfaceDatFile } from "@/utils/convergeSurface";
 import { isLogFileName } from "@/utils/logTail";
 import { useFileActions } from "@/composables/useFileActions";
 
@@ -104,6 +105,9 @@ const OutViewer = defineAsyncComponent(
 );
 const LogViewer = defineAsyncComponent(
   () => import("@/views/files/LogViewer.vue")
+);
+const SurfaceViewer = defineAsyncComponent(
+  () => import("@/views/files/SurfaceViewer.vue")
 );
 
 const layoutStore = useLayoutStore();
@@ -139,9 +143,16 @@ const currentView = computed(() => {
     isLogFileName(fileStore.req.name) &&
     (route.query.view === "follow" || fileStore.req.type === "blob")
   ) {
-    // Logs likewise: text first, ?view=follow tails the file. Logs past the
-    // text ceiling only ever load as a tail, so follow is their default.
     return LogViewer;
+  } else if (
+    isSurfaceDatFile(
+      fileStore.req.name,
+      fileStore.req.type,
+      fileStore.req.content
+    ) &&
+    route.query.view !== "text"
+  ) {
+    return SurfaceViewer;
   } else if (
     fileStore.req.type === "text" ||
     fileStore.req.type === "textImmutable"
@@ -157,7 +168,8 @@ const isFullBleed = computed(
     currentView.value === Editor ||
     currentView.value === Preview ||
     currentView.value === OutViewer ||
-    currentView.value === LogViewer
+    currentView.value === LogViewer ||
+    currentView.value === SurfaceViewer
 );
 
 const showSidebar = computed(

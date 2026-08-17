@@ -41,6 +41,7 @@
     "pause": "Pause",
     "play": "Play",
     "viewAsGraph": "View as graph",
+    "view3d": "View 3D",
     "overrideAll": "Replace all files in destination folder",
     "paste": "Paste",
     "permalink": "Get Permanent Link",
@@ -159,6 +160,11 @@
     "empty": "No plottable data was found in this file.",
     "tooLarge": "This file is too large to plot in the browser.",
     "loadError": "The file could not be loaded."
+  },
+  "surfaceView": {
+    "boundaries": "Boundaries",
+    "boundary": "Boundary {id}",
+    "triangles": "{count} triangles"
   },
   "converge": {
     "caseTitle": "CONVERGE case",

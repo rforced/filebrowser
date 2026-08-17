@@ -73,6 +73,17 @@
         </button>
 
         <button
+          v-if="isSurfaceFile"
+          type="button"
+          class="btn btn-flex btn-white btn-soft"
+          :aria-label="t('buttons.view3d')"
+          @click="view3d"
+        >
+          <i class="fa-solid fa-cube"></i>
+          <span class="hidden md:inline">{{ t("buttons.view3d") }}</span>
+        </button>
+
+        <button
           v-if="isLogFile"
           type="button"
           class="btn btn-flex btn-white btn-soft"
@@ -184,6 +195,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { isOutFileName } from "@/utils/convergeOut";
+import { isSurfaceDatFile } from "@/utils/convergeSurface";
 import { isLogFileName } from "@/utils/logTail";
 import { getEditorTheme } from "@/utils/theme";
 import { marked } from "marked";
@@ -213,10 +225,19 @@ const isMarkdownFile =
   fileStore.req?.name.endsWith(".markdown");
 const isOutFile = isOutFileName(fileStore.req?.name ?? "");
 const isLogFile = isLogFileName(fileStore.req?.name ?? "");
+const isSurfaceFile = isSurfaceDatFile(
+  fileStore.req?.name ?? "",
+  fileStore.req?.type ?? "",
+  fileStore.req?.content
+);
 const isSelectionEmpty = ref(true);
 
 const viewAsGraph = () => {
   router.replace({ query: { ...route.query, view: "plot" } });
+};
+
+const view3d = () => {
+  router.replace({ query: { ...route.query, view: "3d" } });
 };
 
 const followLog = () => {

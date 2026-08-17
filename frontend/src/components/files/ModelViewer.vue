@@ -44,8 +44,12 @@ import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   Box3,
+  BufferAttribute,
+  BufferGeometry,
+  Color,
   DirectionalLight,
   DoubleSide,
+  Group,
   HemisphereLight,
   LoadingManager,
   Mesh,
@@ -56,12 +60,18 @@ import {
   Scene,
   Sphere,
   WebGLRenderer,
-  type BufferGeometry,
+  type ColorRepresentation,
   type Material,
   type Object3D,
   type Texture,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import {
+  boundaryColor,
+  boundaryColorCss,
+  parseSurfaceDat,
+  type SurfaceBoundaryInfo,
+} from "@/utils/convergeSurface";
 
 // Models are parsed entirely in the browser, so refuse anything large enough to
 // risk exhausting memory rather than hanging the tab.
@@ -71,9 +81,17 @@ interface Props {
   src: string;
   extension: string;
   size: number;
+  // Already-fetched file text (surfaces ride along on the resource response);
+  // saves refetching the raw file.
+  content?: string;
 }
 
 const props = defineProps<Props>();
+
+const emit = defineEmits<{
+  boundaries: [boundaries: SurfaceBoundaryInfo[]];
+  failed: [];
+}>();
 
 const { t } = useI18n({});
 
@@ -95,13 +113,15 @@ let invalidated = true;
 // Guards against a slow load for a previous file overwriting a newer one.
 let loadToken = 0;
 
-const createMaterial = (vertexColors: boolean) =>
+const createMaterial = (
+  vertexColors: boolean,
+  color: ColorRepresentation = 0xb9bec5
+) =>
   new MeshStandardMaterial({
-    color: vertexColors ? 0xffffff : 0xb9bec5,
+    color: vertexColors ? 0xffffff : color,
     vertexColors,
     metalness: 0.1,
     roughness: 0.75,
-    // Meshes exported from CAD tools frequently have inconsistent winding.
     side: DoubleSide,
     wireframe: wireframe.value,
   });
@@ -133,6 +153,42 @@ const loadObject = async (
   );
 
   switch (extension) {
+    case ".dat": {
+      let text = props.content;
+      if (text === undefined) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        text = await res.text();
+      }
+      const surface = parseSurfaceDat(text);
+
+      const group = new Group();
+      group.userData.surfaceBoundaries = surface.boundaries.map(
+        (boundary, slot) => {
+          const geometry = new BufferGeometry();
+          geometry.setAttribute(
+            "position",
+            new BufferAttribute(boundary.positions, 3)
+          );
+          geometry.computeVertexNormals();
+
+          const { h, s, l } = boundaryColor(slot);
+          const child = new Mesh(
+            geometry,
+            createMaterial(false, new Color().setHSL(h / 360, s, l))
+          );
+          child.userData.boundaryId = boundary.id;
+          group.add(child);
+
+          return {
+            id: boundary.id,
+            triangleCount: boundary.triangleCount,
+            color: boundaryColorCss(slot),
+          } satisfies SurfaceBoundaryInfo;
+        }
+      );
+      return group;
+    }
     case ".stl": {
       const { STLLoader } = await import("three/addons/loaders/STLLoader.js");
       return meshFromGeometry(await new STLLoader(manager).loadAsync(url));
@@ -298,6 +354,9 @@ const initScene = () => {
   controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.1;
+  controls.addEventListener("change", () => {
+    invalidated = true;
+  });
 
   return true;
 };
@@ -341,6 +400,11 @@ const load = async () => {
     model = object;
     scene.add(object);
 
+    emit(
+      "boundaries",
+      (object.userData.surfaceBoundaries as SurfaceBoundaryInfo[]) ?? []
+    );
+
     resetView();
     resize();
     loading.value = false;
@@ -351,8 +415,20 @@ const load = async () => {
     console.error("Failed to load 3D model:", e);
     error.value = t("files.modelLoadFailed");
     loading.value = false;
+    emit("failed");
   }
 };
+
+const setBoundaryVisible = (id: number, visible: boolean) => {
+  model?.traverse((child) => {
+    if (child.userData.boundaryId === id) {
+      child.visible = visible;
+    }
+  });
+  invalidated = true;
+};
+
+defineExpose({ setBoundaryVisible });
 
 onMounted(() => {
   if (!initScene()) {

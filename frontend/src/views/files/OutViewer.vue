@@ -602,7 +602,6 @@ const load = async () => {
     redirected = fallbackToText();
     if (!redirected) failure.value = "outPlot.loadError";
   } finally {
-
     if (!redirected) loading.value = false;
   }
 };
