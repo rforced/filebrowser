@@ -259,7 +259,9 @@ export interface ExtractProgress {
 export async function extract(
   url: string,
   options: ExtractOptions,
-  onProgress?: (progress: ExtractProgress) => void
+  onProgress?: (progress: ExtractProgress) => void,
+  onStart?: () => void,
+  signal?: AbortSignal
 ): Promise<void> {
   url = removePrefix(url);
   const authStore = useAuthStore();
@@ -271,6 +273,7 @@ export async function extract(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(options),
+    signal,
   });
 
   if (
@@ -280,6 +283,8 @@ export async function extract(
     const text = await res.text();
     throw new Error(text || `${res.status} ${res.statusText}`);
   }
+
+  onStart?.();
 
   const reader = res.body?.getReader();
   if (!reader) throw new Error("No response body");

@@ -129,10 +129,11 @@ const currentView = computed(() => {
     return FileListing;
   } else if (
     isOutFileName(fileStore.req.name) &&
-    (route.query.view === "plot" || fileStore.req.type === "blob")
+    (fileStore.req.type === "blob" ||
+      ((fileStore.req.type === "text" ||
+        fileStore.req.type === "textImmutable") &&
+        route.query.view !== "text"))
   ) {
-    // CONVERGE time series open as text by default; ?view=plot is the graph.
-    // Oversized .out files have no text view, so the graph is their default.
     return OutViewer;
   } else if (
     isLogFileName(fileStore.req.name) &&

@@ -553,12 +553,19 @@ const onVisibility = () => {
   }
 };
 
+const fallbackToText = () => {
+  if (!canOpenAsText.value || route.query.view === "plot") return false;
+  router.replace({ query: { ...route.query, view: "text" } });
+  return true;
+};
+
 const load = async () => {
   const req = fileStore.req;
   if (!req) return;
 
   loading.value = true;
   failure.value = null;
+  let redirected = false;
 
   try {
     if (req.size > MAX_PLOT_BYTES) {
@@ -585,15 +592,18 @@ const load = async () => {
 
     table.value = parseOutFile(text);
     if (table.value.rowCount === 0 || table.value.columns.length < 2) {
-      failure.value = "outPlot.empty";
+      redirected = fallbackToText();
+      if (!redirected) failure.value = "outPlot.empty";
       return;
     }
 
     restoreSelection();
   } catch {
-    failure.value = "outPlot.loadError";
+    redirected = fallbackToText();
+    if (!redirected) failure.value = "outPlot.loadError";
   } finally {
-    loading.value = false;
+
+    if (!redirected) loading.value = false;
   }
 };
 
@@ -749,7 +759,7 @@ onBeforeUnmount(() => {
 });
 
 const openAsText = () => {
-  router.replace({ query: { ...route.query, view: undefined } });
+  router.replace({ query: { ...route.query, view: "text" } });
 };
 
 const close = () => {
