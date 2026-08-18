@@ -60,10 +60,13 @@
       </a>
     </div>
 
-    <div v-else-if="summary" class="flex-1 min-h-0 overflow-y-auto">
+    <div
+      v-else-if="summary"
+      class="flex-1 min-h-0 overflow-y-auto flex flex-col"
+    >
       <!-- Header facts: what this file is, when it was written, how big. -->
       <div
-        class="flex flex-wrap gap-x-8 gap-y-3 px-3 md:px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700"
+        class="flex flex-wrap gap-x-8 gap-y-3 px-3 md:px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0"
       >
         <div v-for="fact in facts" :key="fact.label" class="min-w-0">
           <div
@@ -82,7 +85,7 @@
 
       <div
         v-if="diverged.length"
-        class="px-3 md:px-6 py-2.5 bg-red-50 dark:bg-red-950 border-b border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-200"
+        class="px-3 md:px-6 py-2.5 bg-red-50 dark:bg-red-950 border-b border-red-200 dark:border-red-900 text-sm text-red-800 dark:text-red-200 shrink-0"
       >
         <i class="fa-solid fa-triangle-exclamation mr-1.5"></i>
         {{
@@ -94,7 +97,7 @@
 
       <div
         v-if="tabs.length > 1"
-        class="flex gap-1 px-3 md:px-6 pt-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+        class="flex gap-1 px-3 md:px-6 pt-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
       >
         <button
           v-for="tab in tabs"
@@ -276,11 +279,10 @@
       <!-- Surface: the wetted boundary, lifted out of the mesh itself. -->
       <section
         v-show="activeTab === 'surface'"
-        class="flex flex-col"
-        style="height: calc(100vh - 14rem)"
+        class="flex flex-col flex-1 min-h-72"
       >
         <div
-          class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+          class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
         >
           <label class="text-sm text-gray-600 dark:text-gray-300">
             {{ t("h5View.colourBy") }}
@@ -344,12 +346,11 @@
       <!-- Parcels: a spray cloud needs no mesh, so it renders directly. -->
       <section
         v-show="activeTab === 'parcels'"
-        class="flex flex-col"
-        style="height: calc(100vh - 14rem)"
+        class="flex flex-col flex-1 min-h-72"
       >
         <div
           v-if="parcelGroups.length"
-          class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+          class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
         >
           <select
             v-if="parcelGroups.length > 1"
