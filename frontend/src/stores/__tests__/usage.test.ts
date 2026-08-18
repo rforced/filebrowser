@@ -137,8 +137,6 @@ describe("usage store", () => {
 
     await store.measure("/cases/big");
     expect(api.dirSize).not.toHaveBeenCalled();
-
-    expect(store.cachedBreakdown("/cases")?.children).toHaveLength(3);
   });
 
   /*

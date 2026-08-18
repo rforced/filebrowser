@@ -39,13 +39,6 @@ export const useUsageStore = defineStore("usage", () => {
   const pending = reactive(new Set<string>());
   const failed = reactive(new Set<string>());
 
-  // Whole breakdowns, kept so a surface that wants the child rows can show
-  // them without launching a walk of its own. Nothing here ever triggers a
-  // fetch — a scan is only ever started by an explicit user action.
-  const breakdowns = reactive(
-    new Map<string, { at: number; data: UsageBreakdown }>()
-  );
-
   // Kept out of the reactive state: these are plumbing, not something a
   // template should re-render on.
   const inflight = new Map<string, Promise<DirSizeInfo | null>>();
@@ -158,17 +151,8 @@ export const useUsageStore = defineStore("usage", () => {
       record(`${base}${child.name}`, child);
     }
     record(path, result);
-    breakdowns.set(path, { at: Date.now(), data: result });
 
     return result;
-  };
-
-  // Whatever has already been measured for this directory, or undefined. Used
-  // by surfaces that want to show a breakdown but must not cause one.
-  const cachedBreakdown = (path: string): UsageBreakdown | undefined => {
-    const hit = breakdowns.get(path);
-    if (hit && Date.now() - hit.at < CACHE_TTL) return hit.data;
-    return undefined;
   };
 
   const cancel = (path: string) => {
@@ -187,12 +171,10 @@ export const useUsageStore = defineStore("usage", () => {
     if (path === undefined) {
       sizes.clear();
       failed.clear();
-      breakdowns.clear();
       return;
     }
     sizes.delete(path);
     failed.delete(path);
-    breakdowns.delete(path);
   };
 
   return {
@@ -202,7 +184,6 @@ export const useUsageStore = defineStore("usage", () => {
     fresh,
     measure,
     breakdown,
-    cachedBreakdown,
     cancel,
     cancelAll,
     invalidate,

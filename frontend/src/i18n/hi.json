@@ -279,6 +279,7 @@
     "uploadingFiles": "फ़ाइलें अपलोड हो रही हैं"
   },
   "search": {
+    "fields": "फ़ील्ड",
     "images": "चित्र",
     "inputs": "इनपुट",
     "logs": "लॉग",

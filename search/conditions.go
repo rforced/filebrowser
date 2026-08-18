@@ -40,6 +40,18 @@ func videoCondition(path string) bool {
 	return strings.HasPrefix(mimetype, "video")
 }
 
+// fieldCondition matches 3D field output: post*.h5 snapshots and any CGNS,
+// which unlike HDF5 is always CFD field data. A bare *.h5 is not enough —
+// CONVERGE also uses the container for restarts, mapped initial conditions and
+// lookup tables, which are not what someone searching for fields wants.
+func fieldCondition(path string) bool {
+	name := strings.ToLower(filepath.Base(path))
+	if strings.HasSuffix(name, ".cgns") {
+		return true
+	}
+	return strings.HasPrefix(name, "post") && strings.HasSuffix(name, ".h5")
+}
+
 func parseSearch(value string) *searchOptions {
 	opts := &searchOptions{
 		CaseSensitive: strings.Contains(value, "case:sensitive"),
@@ -73,6 +85,8 @@ func parseSearch(value string) *searchOptions {
 			opts.Conditions = append(opts.Conditions, extensionCondition("log"))
 		case "restart", "restarts":
 			opts.Conditions = append(opts.Conditions, extensionCondition("rst"))
+		case "field", "fields":
+			opts.Conditions = append(opts.Conditions, fieldCondition)
 		default:
 			opts.Conditions = append(opts.Conditions, extensionCondition(t[1]))
 		}

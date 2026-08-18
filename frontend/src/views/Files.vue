@@ -84,6 +84,7 @@ import { StatusError } from "@/api/utils";
 import { name, disableUsedPercentage, domain } from "@/utils/constants";
 import { isOutFileName } from "@/utils/convergeOut";
 import { isSurfaceDatFile } from "@/utils/convergeSurface";
+import { isH5FileName } from "@/utils/convergeH5";
 import { isLogFileName } from "@/utils/logTail";
 import { useFileActions } from "@/composables/useFileActions";
 
@@ -108,6 +109,9 @@ const LogViewer = defineAsyncComponent(
 );
 const SurfaceViewer = defineAsyncComponent(
   () => import("@/views/files/SurfaceViewer.vue")
+);
+const H5Viewer = defineAsyncComponent(
+  () => import("@/views/files/H5Viewer.vue")
 );
 const DiskUsage = defineAsyncComponent(
   () => import("@/views/files/DiskUsage.vue")
@@ -157,6 +161,8 @@ const currentView = computed(() => {
     route.query.view !== "text"
   ) {
     return SurfaceViewer;
+  } else if (isH5FileName(fileStore.req.name) && route.query.view !== "raw") {
+    return H5Viewer;
   } else if (
     fileStore.req.type === "text" ||
     fileStore.req.type === "textImmutable"
@@ -173,7 +179,8 @@ const isFullBleed = computed(
     currentView.value === Preview ||
     currentView.value === OutViewer ||
     currentView.value === LogViewer ||
-    currentView.value === SurfaceViewer
+    currentView.value === SurfaceViewer ||
+    currentView.value === H5Viewer
 );
 
 const showSidebar = computed(

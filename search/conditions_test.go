@@ -29,6 +29,21 @@ func TestParseSearchTypes(t *testing.T) {
 			noMatch: []string{"/case/post000100.h5"},
 		},
 		{
+			query: "type:fields",
+			match: []string{
+				"/case/outputs_original/output/post000014_-3.59945e+02.h5",
+				"/case/outputs_original/paraview_catalyst/slice1_STREAM_00_000009.cgns",
+			},
+			// The container alone means nothing: restarts, mapped initial
+			// conditions and lookup tables are all HDF5 too.
+			noMatch: []string{
+				"/case/map.h5",
+				"/case/sl_table.h5",
+				"/case/outputs_original/stream0/map_-1.201942e+02.h5",
+				"/case/outputs_original/restart0074.rst",
+			},
+		},
+		{
 			query:   "type:pdf",
 			match:   []string{"/case/report.pdf"},
 			noMatch: []string{"/case/inputs.in"},

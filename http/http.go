@@ -98,6 +98,8 @@ func NewHandler(
 	api.PathPrefix("/converge").Handler(monkey(convergeScanHandler, "/api/converge")).Methods("GET")
 	api.PathPrefix("/converge").Handler(monkey(convergeCleanHandler, "/api/converge")).Methods("POST")
 
+	api.PathPrefix("/h5").Handler(monkey(h5Handler, "/api/h5")).Methods("GET")
+
 	api.PathPrefix("/raw").Handler(monkey(rawHandler, "/api/raw")).Methods("GET")
 	api.PathPrefix("/preview/{size}/{path:.*}").
 		Handler(monkey(previewHandler(imgSvc, fileCache, server.EnableThumbnails, server.ResizePreview), "/api/preview")).Methods("GET")

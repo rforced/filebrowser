@@ -122,6 +122,7 @@ import { StatusError } from "@/api/utils";
 const BOXES = {
   inputs: { label: "inputs", icon: "fa-file-pen" },
   outputs: { label: "outputs", icon: "fa-chart-line" },
+  fields: { label: "fields", icon: "fa-cubes" },
   logs: { label: "logs", icon: "fa-file-lines" },
   restarts: { label: "restarts", icon: "fa-rotate-right" },
   image: { label: "images", icon: "fa-image" },

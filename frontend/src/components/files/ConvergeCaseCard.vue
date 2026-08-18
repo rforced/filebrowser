@@ -124,6 +124,21 @@
         {{ fromNow(newestRestart.modified) }}
       </span>
     </div>
+
+    <OutputSizeStrip
+      v-if="postFiles.length > 1"
+      :items="postFiles"
+      :start="summary.progress?.start"
+      :end="summary.progress?.end"
+      :unit="timeUnit"
+      @open="openOutput"
+    />
+
+    <RestartChooser
+      v-if="summary.restarts.length > 0"
+      :restarts="summary.restarts"
+      :unit="timeUnit"
+    />
   </Card>
 </template>
 
@@ -133,8 +148,11 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
+import * as api from "@/api";
 import type { ConvergeRun, ConvergeStatus, ConvergeSummary } from "@/api/files";
 import Card from "@/components/ui/Card.vue";
+import OutputSizeStrip from "@/components/files/OutputSizeStrip.vue";
+import RestartChooser from "@/components/files/RestartChooser.vue";
 import { useFileStore } from "@/stores/file";
 import { filesize } from "@/utils";
 import { formatOutValue } from "@/utils/convergeOut";
@@ -160,6 +178,7 @@ const load = async () => {
 
   try {
     summary.value = await cachedConvergeSummary(route.path, controller.signal);
+    loadOutputSizes();
   } catch {}
 };
 
@@ -263,6 +282,49 @@ const progressClass = computed(() => {
 });
 
 const newestRestart = computed(() => summary.value?.restarts[0] ?? null);
+
+const timeUnit = computed(() =>
+  summary.value?.progress?.unit === "deg" ? "deg" : "s"
+);
+
+// The newest leg is the one still being written, so its output directory is
+// the profile worth showing.
+const newestRun = computed(() => summary.value?.runs[0] ?? null);
+
+const postFiles = ref<{ name: string; size: number }[]>([]);
+const outputDir = ref("");
+
+// Sizes come from a plain directory listing — post file size tracks cell count
+// closely, so the profile costs one stat per file and opens nothing.
+const loadOutputSizes = async () => {
+  postFiles.value = [];
+  outputDir.value = "";
+
+  const run = newestRun.value;
+  const hasPost = summary.value?.groups.some(
+    (g) => g.kind === "post" && g.count > 1
+  );
+  if (!run || !hasPost) return;
+
+  const dir = `${run.path}/output`;
+  try {
+    const res = await api.files.fetch(dir);
+    if (!res.isDir) return;
+    postFiles.value = (res.items ?? []).map((item) => ({
+      name: item.name,
+      size: item.size,
+    }));
+    outputDir.value = dir;
+  } catch {
+    // No output subdirectory (older flat layouts) simply means no profile.
+  }
+};
+
+const openOutput = (name: string) => {
+  if (outputDir.value) {
+    router.push({ path: `/files${outputDir.value}/${name}` });
+  }
+};
 
 // The chain reads oldest to newest, the direction the solve ran, while the API
 // reports runs newest-first. Each leg only records where it stopped, so the one
