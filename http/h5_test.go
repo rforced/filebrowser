@@ -328,6 +328,52 @@ func TestH5SubsetDownload(t *testing.T) {
 	}
 }
 
+// h5GetQueryAuth requests with the token in the query and no header, the way a
+// browser-initiated download arrives.
+func h5GetQueryAuth(t *testing.T, h http.Handler, token, url string) *httptest.ResponseRecorder {
+	t.Helper()
+	sep := "?"
+	if strings.Contains(url, "?") {
+		sep = "&"
+	}
+	req, _ := http.NewRequest(http.MethodGet, url+sep+"auth="+token, http.NoBody)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+// TestH5QueryTokenOnlyForDownload pins the auth split. The CSV subset is pulled
+// by an anchor that cannot carry a header, so it accepts a query token like
+// /api/raw does; the JSON modes are all script-driven and must not, because a
+// token in a URL survives in history, proxy logs and referrers.
+func TestH5QueryTokenOnlyForDownload(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	rec := h5GetQueryAuth(t, h, token,
+		"/api/h5/post.h5?subset=STREAM_00/CELL_CENTER_DATA/TEMPERATURE")
+	if rec.Code != http.StatusOK {
+		t.Errorf("subset via query token: status = %d, want 200", rec.Code)
+	}
+	if !strings.HasPrefix(rec.Body.String(), "TEMPERATURE") {
+		t.Errorf("subset body = %q", rec.Body.String()[:min(40, rec.Body.Len())])
+	}
+
+	for _, url := range []string{
+		"/api/h5/post.h5",
+		"/api/h5/post.h5?stats=STREAM_00/CELL_CENTER_DATA/TEMPERATURE",
+		"/api/h5/post.h5?parcels=STREAM_00/PARCEL_DATA/LIQUID_PARCEL_DATA/LIQPARCEL_1",
+	} {
+		if rec := h5GetQueryAuth(t, h, token, url); rec.Code != http.StatusUnauthorized {
+			t.Errorf("%s via query token: status = %d, want 401", url, rec.Code)
+		}
+	}
+
+	// The same requests must still work with the header.
+	if rec := h5Get(t, h, token, "/api/h5/post.h5"); rec.Code != http.StatusOK {
+		t.Errorf("summary via header: status = %d, want 200", rec.Code)
+	}
+}
+
 func TestH5RejectsNonHDF5(t *testing.T) {
 	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
 

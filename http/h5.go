@@ -108,9 +108,20 @@ type h5ParcelCloud struct {
 
 // h5Handler serves metadata, statistics, parcel clouds and variable subsets
 // for the HDF5 files CONVERGE writes. Everything it does is read-only.
-var h5Handler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+//
+// It takes withMediaUser for the sake of one mode: the CSV subset is fetched
+// by a plain anchor so the browser can stream it to disk, and an anchor cannot
+// set the X-Auth header — the same reason /api/raw and /api/preview accept a
+// query token. Every other mode is called from script, so the guard below
+// keeps them header-only rather than widening token-in-URL exposure to the
+// whole endpoint.
+var h5Handler = withMediaUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 	if !d.user.Perm.Download {
 		return http.StatusForbidden, nil
+	}
+
+	if r.URL.Query().Get("subset") == "" && r.Header.Get("X-Auth") == "" {
+		return http.StatusUnauthorized, nil
 	}
 
 	path := r.URL.Path
