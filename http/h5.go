@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/afero"
-
 	"github.com/rforced/filebrowser/v2/hdf5"
 )
 
@@ -339,7 +337,7 @@ func h5ReadBoundaries(f *hdf5.File) []h5Boundary {
 
 // h5ReadStream describes one STREAM_* group: its mesh sizes, the cell
 // variables, and any parcel clouds hanging off it.
-func h5ReadStream(f *hdf5.File, name string, rootAttrs hdf5.Attrs) (h5Stream, bool, error) {
+func h5ReadStream(f *hdf5.File, name string, _ hdf5.Attrs) (h5Stream, bool, error) {
 	g, err := f.Group(name)
 	if err != nil {
 		return h5Stream{}, false, err
@@ -627,7 +625,7 @@ func h5ParcelCoords(f *hdf5.File, base string) (xs, ys, zs []float64, err error)
 // h5SubsetResponse streams the chosen variables as CSV. Pulling one field
 // out of a post file is a seek and a read, so this turns a 60-220MB download
 // into a few hundred KB over a WAN link.
-func h5SubsetResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, name string, query map[string][]string) (int, error) {
+func h5SubsetResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, name string, query map[string][]string) (int, error) {
 	paths := h5SplitList(firstValue(query, "subset"))
 	if len(paths) == 0 {
 		return http.StatusBadRequest, errors.New("no variables requested")
@@ -701,29 +699,4 @@ func firstValue(query map[string][]string, key string) string {
 		return v[0]
 	}
 	return ""
-}
-
-// h5RootAttrs reads only a file's root attributes. The restart chooser calls
-// this per candidate, so it must stay cheap: it touches the superblock and
-// one object header, not the 400MB of data behind them.
-func h5RootAttrs(fs afero.Fs, path string) (hdf5.Attrs, int64, error) {
-	info, err := fs.Stat(path)
-	if err != nil {
-		return nil, 0, err
-	}
-	fh, err := fs.Open(path)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer fh.Close()
-
-	f, err := hdf5.Open(fh, info.Size())
-	if err != nil {
-		return nil, info.Size(), err
-	}
-	root, err := f.Root()
-	if err != nil {
-		return nil, info.Size(), err
-	}
-	return root.Attrs, info.Size(), nil
 }

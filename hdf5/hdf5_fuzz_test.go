@@ -24,7 +24,7 @@ func FuzzOpen(f *testing.F) {
 	f.Add([]byte("\x89HDF\r\n\x1a\n"))
 	f.Add([]byte{})
 
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(_ *testing.T, data []byte) {
 		file, err := Open(strings.NewReader(string(data)), int64(len(data)))
 		if err != nil {
 			return

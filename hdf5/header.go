@@ -151,11 +151,9 @@ func (f *File) parseDataspace(b []byte) (dataspace, error) {
 	// v1 reserves bytes 4-7; v2 replaces them with a type byte at 4.
 	pos := 8
 	if version == 2 {
-		pos = 4
 		if b[4] == 0 {
 			rank = 0 // scalar
 		}
-		pos = 8
 	}
 
 	ds := dataspace{}
