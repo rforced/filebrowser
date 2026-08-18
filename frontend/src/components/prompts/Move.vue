@@ -5,6 +5,12 @@
     </div>
 
     <div class="px-6 py-4 flex flex-col gap-3">
+      <prompt-targets
+        v-if="targets.length > 0"
+        :items="targets"
+        :label="t('prompts.moving')"
+      />
+
       <p>{{ t("prompts.moveMessage") }}</p>
       <file-list
         ref="fileList"
@@ -60,10 +66,12 @@ import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { useAuthStore } from "@/stores/auth";
 import FileList from "./FileList.vue";
+import PromptTargets from "./PromptTargets.vue";
 import { files as api } from "@/api";
 import buttons from "@/utils/buttons";
 import * as upload from "@/utils/upload";
 import { removePrefix } from "@/api/utils";
+import { usePromptTargets } from "@/composables/usePromptTargets";
 
 const $showError = inject<IToastError>("$showError")!;
 
@@ -76,6 +84,8 @@ const { t } = useI18n();
 
 const fileList = ref<InstanceType<typeof FileList> | null>(null);
 const dest = ref<string | null>(null);
+
+const { selectedTargets: targets } = usePromptTargets();
 
 const excludedFolders = computed(() => {
   return fileStore.selected
