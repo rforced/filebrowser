@@ -84,10 +84,14 @@ describe("isSurfaceDatFile", () => {
     expect(isSurfaceDatFile("surface.out", "text", SURFACE)).toBe(false);
   });
 
-  it("only trusts the canonical name for blob-typed files", () => {
+  it("falls back to the name for blob-typed files", () => {
     expect(isSurfaceDatFile("surface.dat", "blob")).toBe(true);
     expect(isSurfaceDatFile("Surface.DAT", "blob")).toBe(true);
-    expect(isSurfaceDatFile("surface_big.dat", "blob")).toBe(false);
+    expect(isSurfaceDatFile("surface_big.dat", "blob")).toBe(true);
+    expect(
+      isSurfaceDatFile("surface_cyl1_piston_Gamma_Crev_CR12.dat", "blob")
+    ).toBe(true);
+    expect(isSurfaceDatFile("therm.dat", "blob")).toBe(false);
   });
 });
 

@@ -63,7 +63,9 @@ export function isSurfaceDatFile(
 ): boolean {
   const lower = name.toLowerCase();
   if (!lower.endsWith(".dat")) return false;
-  if (type === "blob") return lower === "surface.dat";
+  // Past the server's 25 MB text limit a .dat arrives as a blob with no content
+  // inlined, so the name is all there is to go on until the viewer fetches it.
+  if (type === "blob") return isSurfaceDatName(lower);
   if (type !== "text" && type !== "textImmutable") return false;
   return content !== undefined && sniffSurfaceDat(content);
 }
