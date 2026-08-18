@@ -139,21 +139,28 @@ func (d dataspace) count() (uint64, bool) {
 // parseDataspace handles versions 1 and 2. Only the current dimensions are
 // used; max dimensions and permutation indices are skipped.
 func (f *File) parseDataspace(b []byte) (dataspace, error) {
-	if len(b) < 8 {
+	if len(b) < 4 {
 		return dataspace{}, fmt.Errorf("%w: short dataspace message", ErrNotHDF5)
-	}
-	version := b[0]
-	if version != 1 && version != 2 {
-		return dataspace{}, fmt.Errorf("%w: dataspace version %d", ErrUnsupported, version)
 	}
 	rank := int(b[1])
 
-	// v1 reserves bytes 4-7; v2 replaces them with a type byte at 4.
-	pos := 8
-	if version == 2 {
-		if b[4] == 0 {
-			rank = 0 // scalar
+	// v1: version, rank, flags, then five reserved bytes before the dims.
+	// v2: version, rank, flags, then a type byte at 3 — scalar (0) and null
+	// (2) spaces carry no dims — with the dims directly at 4.
+	var pos int
+	switch b[0] {
+	case 1:
+		if len(b) < 8 {
+			return dataspace{}, fmt.Errorf("%w: short dataspace message", ErrNotHDF5)
 		}
+		pos = 8
+	case 2:
+		pos = 4
+		if b[3] == 0 || b[3] == 2 {
+			rank = 0
+		}
+	default:
+		return dataspace{}, fmt.Errorf("%w: dataspace version %d", ErrUnsupported, b[0])
 	}
 
 	ds := dataspace{}

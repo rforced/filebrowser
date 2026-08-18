@@ -1,6 +1,7 @@
 package hdf5
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -416,6 +417,53 @@ func TestScalarAndMultiDim(t *testing.T) {
 	tv, err := two.Floats()
 	if err != nil || fmt.Sprint(tv) != "[0 1 2 3 4 5]" {
 		t.Errorf("twod = %v, %v", tv, err)
+	}
+}
+
+// TestParseDataspaceLayouts pins the on-disk layouts against the reference
+// library: v1 puts five reserved bytes between the flags and the dims, while
+// v2 replaces them with a type byte at 3 and starts the dims at 4.
+func TestParseDataspaceLayouts(t *testing.T) {
+	f := &File{lengthSz: 8}
+
+	le := func(vals ...uint64) []byte {
+		b := make([]byte, 0, 8*len(vals))
+		for _, v := range vals {
+			b = binary.LittleEndian.AppendUint64(b, v)
+		}
+		return b
+	}
+
+	cases := []struct {
+		name string
+		msg  []byte
+		want string
+	}{
+		{"v1 with maxdims", append([]byte{1, 2, 1, 0, 0, 0, 0, 0}, le(2, 3, 2, 3)...), "[2 3]"},
+		{"v2 simple with maxdims", append([]byte{2, 2, 1, 1}, le(2, 3, 2, 3)...), "[2 3]"},
+		{"v2 scalar", []byte{2, 0, 0, 0}, "[]"},
+		{"v2 null", []byte{2, 0, 0, 2}, "[]"},
+		{"v2 dim divisible by 256", append([]byte{2, 1, 0, 1}, le(256)...), "[256]"},
+	}
+	for _, tc := range cases {
+		ds, err := f.parseDataspace(tc.msg)
+		if err != nil {
+			t.Errorf("%s: %v", tc.name, err)
+			continue
+		}
+		if got := fmt.Sprint(ds.dims); got != tc.want {
+			t.Errorf("%s: dims = %s, want %s", tc.name, got, tc.want)
+		}
+	}
+
+	if _, err := f.parseDataspace(append([]byte{2, 2, 0, 1}, le(2)...)); !errors.Is(err, ErrNotHDF5) {
+		t.Errorf("truncated v2 dims = %v, want ErrNotHDF5", err)
+	}
+	if _, err := f.parseDataspace([]byte{3, 0, 0, 0, 0, 0, 0, 0}); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("version 3 = %v, want ErrUnsupported", err)
+	}
+	if _, err := f.parseDataspace([]byte{2, 0}); !errors.Is(err, ErrNotHDF5) {
+		t.Errorf("short message = %v, want ErrNotHDF5", err)
 	}
 }
 
