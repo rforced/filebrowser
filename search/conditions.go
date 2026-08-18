@@ -65,6 +65,14 @@ func parseSearch(value string) *searchOptions {
 			opts.Conditions = append(opts.Conditions, audioCondition)
 		case "video":
 			opts.Conditions = append(opts.Conditions, videoCondition)
+		case "input", "inputs":
+			opts.Conditions = append(opts.Conditions, extensionCondition("in"))
+		case "output", "outputs":
+			opts.Conditions = append(opts.Conditions, extensionCondition("out"))
+		case "log", "logs":
+			opts.Conditions = append(opts.Conditions, extensionCondition("log"))
+		case "restart", "restarts":
+			opts.Conditions = append(opts.Conditions, extensionCondition("rst"))
 		default:
 			opts.Conditions = append(opts.Conditions, extensionCondition(t[1]))
 		}

@@ -280,14 +280,16 @@
   },
   "search": {
     "images": "चित्र",
-    "music": "संगीत",
-    "pdf": "PDF",
+    "inputs": "इनपुट",
+    "logs": "लॉग",
+    "outputs": "आउटपुट",
     "pressToSearch": "खोजने के लिए एंटर दबाएँ...",
+    "restarts": "रीस्टार्ट",
+    "scope": "{path} और उसके सबफ़ोल्डर में खोज रहे हैं",
     "search": "खोजें...",
     "showingResults": "{total} में से {shown} परिणाम दिखाए जा रहे हैं",
     "typeToSearch": "खोजने के लिए टाइप करें...",
-    "types": "प्रकार",
-    "video": "वीडियो"
+    "types": "प्रकार"
   },
   "settings": {
     "admin": "व्यवस्थापक",

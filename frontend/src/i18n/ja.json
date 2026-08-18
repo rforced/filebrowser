@@ -280,14 +280,16 @@
   },
   "search": {
     "images": "画像",
-    "music": "音楽",
-    "pdf": "PDF",
+    "inputs": "入力ファイル",
+    "logs": "ログ",
+    "outputs": "出力ファイル",
     "pressToSearch": "Enter キーを押して検索…",
+    "restarts": "リスタート",
+    "scope": "{path} とそのサブフォルダー内を検索します",
     "search": "検索…",
     "showingResults": "{total} 件中 {shown} 件を表示",
     "typeToSearch": "入力して検索…",
-    "types": "ファイルの種類",
-    "video": "動画"
+    "types": "ファイルの種類"
   },
   "settings": {
     "admin": "管理者",

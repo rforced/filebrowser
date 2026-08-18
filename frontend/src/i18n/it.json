@@ -280,14 +280,16 @@
   },
   "search": {
     "images": "Immagini",
-    "music": "Musica",
-    "pdf": "PDF",
+    "inputs": "Input",
+    "logs": "Log",
+    "outputs": "Output",
     "pressToSearch": "Premi Invio per cercare…",
+    "restarts": "Restart",
+    "scope": "Ricerca in {path} e nelle sue sottocartelle",
     "search": "Cerca…",
     "showingResults": "Visualizzati {shown} di {total} risultati",
     "typeToSearch": "Scrivi per cercare…",
-    "types": "Tipi",
-    "video": "Video"
+    "types": "Tipi"
   },
   "settings": {
     "admin": "Admin",

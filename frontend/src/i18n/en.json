@@ -289,14 +289,16 @@
   },
   "search": {
     "images": "Images",
-    "music": "Music",
-    "pdf": "PDF",
+    "inputs": "Inputs",
+    "logs": "Logs",
+    "outputs": "Outputs",
     "pressToSearch": "Press enter to search...",
+    "restarts": "Restarts",
+    "scope": "Searching in {path} and its subfolders",
     "search": "Search...",
     "showingResults": "Showing {shown} of {total} results",
     "typeToSearch": "Type to search...",
-    "types": "Types",
-    "video": "Video"
+    "types": "Types"
   },
   "settings": {
     "admin": "Admin",

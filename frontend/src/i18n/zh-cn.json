@@ -280,14 +280,16 @@
   },
   "search": {
     "images": "图像",
-    "music": "音乐",
-    "pdf": "PDF",
+    "inputs": "输入文件",
+    "logs": "日志",
+    "outputs": "输出文件",
     "pressToSearch": "按下回车开始搜索…",
+    "restarts": "重启文件",
+    "scope": "在 {path} 及其子文件夹中搜索",
     "search": "搜索…",
     "showingResults": "显示 {total} 个结果中的 {shown} 个",
     "typeToSearch": "输入内容进行搜索…",
-    "types": "类型",
-    "video": "视频"
+    "types": "类型"
   },
   "settings": {
     "admin": "管理员",

@@ -69,7 +69,18 @@
       </ul>
 
       <div v-else class="p-3 flex flex-col gap-3">
-        <p class="text-sm text-gray-600 dark:text-gray-300">{{ text }}</p>
+        <p v-if="text" class="text-sm text-gray-600 dark:text-gray-300">
+          {{ text }}
+        </p>
+
+        <p
+          class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400"
+        >
+          <i class="fa-solid fa-folder-open fa-fw shrink-0"></i>
+          <span class="truncate">{{
+            t("search.scope", { path: scopeLabel })
+          }}</span>
+        </p>
 
         <div v-if="prompt.length === 0" class="flex flex-col gap-2">
           <h3
@@ -109,10 +120,11 @@ import { search } from "@/api";
 import { StatusError } from "@/api/utils";
 
 const BOXES = {
+  inputs: { label: "inputs", icon: "fa-file-pen" },
+  outputs: { label: "outputs", icon: "fa-chart-line" },
+  logs: { label: "logs", icon: "fa-file-lines" },
+  restarts: { label: "restarts", icon: "fa-rotate-right" },
   image: { label: "images", icon: "fa-image" },
-  audio: { label: "music", icon: "fa-volume-high" },
-  video: { label: "video", icon: "fa-film" },
-  pdf: { label: "pdf", icon: "fa-file-pdf" },
 };
 
 const layoutStore = useLayoutStore();
@@ -144,6 +156,17 @@ const text = computed(() => {
   return prompt.value === ""
     ? t("search.typeToSearch")
     : t("search.pressToSearch");
+});
+
+const scopePath = computed(() =>
+  fileStore.isListing ? route.path : url.removeLastDir(route.path) + "/"
+);
+
+const scopeLabel = computed(() => {
+  const parts = scopePath.value.split("/").filter((part) => part !== "");
+  return parts.length > 1
+    ? decodeURIComponent(parts[parts.length - 1])
+    : t("files.home");
 });
 
 watch(currentPromptName, (newVal, oldVal) => {
@@ -203,18 +226,13 @@ const submit = async (event: Event) => {
 
   if (prompt.value === "") return;
 
-  let path = route.path;
-  if (!fileStore.isListing) {
-    path = url.removeLastDir(path) + "/";
-  }
-
   ongoing.value = true;
 
   try {
     abort();
     controller = new AbortController();
     results.value = [];
-    await search(path, prompt.value, controller.signal, (item) =>
+    await search(scopePath.value, prompt.value, controller.signal, (item) =>
       results.value.push(item)
     );
   } catch (error: any) {
