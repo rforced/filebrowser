@@ -106,7 +106,12 @@ const rampCss = RAMP.map(
   ([r, g, b]) => `rgb(${r * 255} ${g * 255} ${b * 255})`
 ).join(", ");
 
+// What a parcel with no usable value is drawn as: outside the ramp, so it
+// cannot be mistaken for a reading at either end of it.
+const NO_VALUE: [number, number, number] = [0.55, 0.55, 0.58];
+
 const rampAt = (t: number): [number, number, number] => {
+  if (!Number.isFinite(t)) return NO_VALUE;
   const clamped = Math.min(1, Math.max(0, t));
   const scaled = clamped * (RAMP.length - 1);
   const i = Math.min(RAMP.length - 2, Math.floor(scaled));
@@ -158,19 +163,24 @@ const build = (data: h5.H5ParcelCloud) => {
   const geometry = new BufferGeometry();
   geometry.setAttribute("position", new Float32BufferAttribute(data.points, 3));
 
+  const coloured = data.values !== undefined && data.values.length > 0;
   const material = new PointsMaterial({
     size: 2.5,
     sizeAttenuation: false,
-    vertexColors: data.values !== undefined && data.values.length > 0,
-    color: 0x4b8bd6,
+    vertexColors: coloured,
+    // three multiplies the material colour into the vertex colours, so a tint
+    // here would pull every point off the ramp the legend is showing.
+    color: coloured ? 0xffffff : 0x4b8bd6,
   });
 
-  if (material.vertexColors && data.values) {
+  if (coloured && data.values) {
     const [lo, hi] = data.range;
     const span = hi - lo;
     const colors = new Float32Array(data.values.length * 3);
     for (let i = 0; i < data.values.length; i++) {
-      const [r, g, b] = rampAt(span === 0 ? 0.5 : (data.values[i] - lo) / span);
+      const v = data.values[i];
+      const [r, g, b] =
+        v === null ? NO_VALUE : rampAt(span === 0 ? 0.5 : (v - lo) / span);
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
       colors[i * 3 + 2] = b;
@@ -187,8 +197,12 @@ const build = (data: h5.H5ParcelCloud) => {
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
   const cz = (minZ + maxZ) / 2;
-  const radius =
-    Math.max(maxX - minX, maxY - minY, maxZ - minZ, Number.EPSILON) / 2;
+  const extent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+  // A single parcel, or a spray still bunched at the injector, spans nothing.
+  // Framing that literally gives a far plane nearer than the near plane — an
+  // invalid frustum, and a canvas that draws nothing at all — so fall back to
+  // a scene a millimetre across, the scale these sprays start at.
+  const radius = (Number.isFinite(extent) && extent > 0 ? extent : 1e-3) / 2;
 
   controls.target.set(cx, cy, cz);
   camera.position.set(cx + radius * 2.2, cy + radius * 1.6, cz + radius * 2.2);

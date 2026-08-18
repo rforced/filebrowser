@@ -80,6 +80,13 @@ func Open(r io.ReaderAt, size int64) (*File, error) {
 	// more offset-sized fields, then the root group's symbol table entry.
 	o := int(f.offsetSz)
 	f.base = f.offset(buf[24:])
+	// Every address in the file is relative to the base. A file whose
+	// superblock sits at offset 0 states a base of 0; anything else would
+	// have to be added to each address, and reading it as absolute would
+	// return whatever bytes happen to live there.
+	if f.base != 0 {
+		return nil, fmt.Errorf("%w: base address %d", ErrUnsupported, f.base)
+	}
 	rootEntry := 24 + 4*o
 	if len(buf) < rootEntry+2*o+8 {
 		return nil, ErrNotHDF5

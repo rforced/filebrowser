@@ -8,6 +8,10 @@ containing any customer data:
                 negative-owner encoding, cell data, and a parcel branch
     restart.h5  the root attributes a .rst carries
     odd.h5      types the reader must reject or handle at the edges
+    links.h5    link storage and dataspaces outside the CONVERGE subset, which
+                must not take the rest of the file down with them
+    diverged.h5 a run that blew up, and the empty edges around it: NaN
+                positions, non-finite scalars, zero parcels, zero cells
 
 libver="earliest" is what makes these match CONVERGE: it forces superblock v0
 and old-style symbol-table groups, which is the dialect the reader implements.
@@ -138,8 +142,72 @@ def odd():
         f.create_dataset("empty", data=np.zeros(0, dtype=np.float32))
 
 
+def links():
+    """Link storage the reader does not implement, alongside data it does.
+
+    A soft link has no object header of its own, and an external link forces
+    h5py to store its group's links as messages rather than in a symbol table
+    even under libver="earliest". Both used to be fatal to the whole file: the
+    soft link failed the root listing, and the new-style group reported no
+    children at all. `ok` and `null` are here to prove the readable parts stay
+    readable, and the new-style group is named STREAM_00 so that the summary
+    has to answer for it rather than quietly leaving it out.
+    """
+    with h5py.File(f"{HERE}/links.h5", "w", libver="earliest") as f:
+        f.create_dataset("ok", data=np.array([300, 450.5, 1200, 900], np.float32))
+        f["soft"] = h5py.SoftLink("/ok")
+        # An H5S_NULL dataspace: no dimensions, and no elements either.
+        f.create_dataset("null", data=h5py.Empty("f4"))
+        g = f.create_group("STREAM_00")
+        g.create_dataset("hidden", data=np.arange(4, dtype=np.float32))
+        g["ext"] = h5py.ExternalLink("elsewhere.h5", "/ok")
+
+
+def diverged():
+    """What a solve looks like once it has gone non-finite, and the empty
+    cases around it.
+
+    A diverged run is exactly when someone opens the viewer, so every path has
+    to survive NaN rather than refuse it: JSON cannot carry NaN at all, a NaN
+    position has no place in the scene, and a field that is entirely NaN has no
+    range to speak of. The zero-length groups cover the other end — a spray
+    that has not been injected yet.
+    """
+    with h5py.File(f"{HERE}/diverged.h5", "w", libver="earliest") as f:
+        f.attrs.create("OUTPUT_TIME", np.array([-10.0]))
+        f.attrs.create("CRANK_FLAG", np.array([1]))
+
+        s = f.create_group("STREAM_00")
+        s.attrs.create("CELL_COUNT", np.array([6]))
+
+        d = s.create_group("CELL_CENTER_DATA")
+        d.create_dataset("ALL_ZERO", data=np.zeros(6, np.float32))
+        d.create_dataset("ALL_NAN", data=np.full(6, np.nan, np.float32))
+        d.create_dataset("NO_CELLS", data=np.zeros(0, np.float32))
+
+        p = f["STREAM_00"].create_group("PARCEL_DATA").create_group(
+            "LIQUID_PARCEL_DATA"
+        )
+
+        # Parcel 1 is fine, parcel 2 has lost its position, parcel 3 has kept
+        # its position but lost its temperature.
+        one = p.create_group("LIQPARCEL_1")
+        one.create_dataset("PARCEL_X", data=np.array([0.0, np.nan, 2.0], np.float64))
+        one.create_dataset("PARCEL_Y", data=np.array([0.0, 1.0, 2.0], np.float64))
+        one.create_dataset("PARCEL_Z", data=np.array([0.0, 1.0, 2.0], np.float64))
+        one.create_dataset("RADIUS", data=np.array([1e-6, 2e-6, 3e-6], np.float64))
+        one.create_dataset("TEMP", data=np.array([300.0, 320.0, np.inf], np.float64))
+
+        # Injection has not started: the group exists with nothing in it.
+        empty = p.create_group("LIQPARCEL_EMPTY")
+        for name in ("PARCEL_X", "PARCEL_Y", "PARCEL_Z", "RADIUS", "TEMP"):
+            empty.create_dataset(name, data=np.zeros(0, np.float64))
+
+
 if __name__ == "__main__":
     post()
     restart()
     odd()
-    print("wrote post.h5, restart.h5, odd.h5")
+    links()
+    diverged()
+    print("wrote post.h5, restart.h5, odd.h5, links.h5, diverged.h5")

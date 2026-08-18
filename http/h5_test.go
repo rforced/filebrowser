@@ -2,6 +2,7 @@ package fbhttp
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rforced/filebrowser/v2/hdf5"
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/users"
 )
@@ -19,7 +21,7 @@ import (
 func h5Scope(t *testing.T) string {
 	t.Helper()
 	scope := t.TempDir()
-	for _, name := range []string{"post.h5", "restart.h5", "odd.h5"} {
+	for _, name := range []string{"post.h5", "restart.h5", "odd.h5", "links.h5", "diverged.h5"} {
 		b, err := os.ReadFile(filepath.Join("..", "hdf5", "testdata", name))
 		if err != nil {
 			t.Fatalf("read fixture %s: %v", name, err)
@@ -287,6 +289,183 @@ func TestH5ParcelsStrideDownsamples(t *testing.T) {
 	}
 	if got.Points[3] != 2 {
 		t.Errorf("second point x = %v, want 2 (strided, not sequential)", got.Points[3])
+	}
+}
+
+// TestH5ParcelsSurviveDivergence is the case the parcel view exists for. JSON
+// cannot carry NaN or Inf at all, so a diverged spray used to fail marshalling
+// and answer 500 — no cloud, no message, nothing to look at.
+func TestH5ParcelsSurviveDivergence(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	rec := h5Get(t, h, token,
+		"/api/h5/diverged.h5?parcels=STREAM_00/PARCEL_DATA/LIQUID_PARCEL_DATA/LIQPARCEL_1&scalar=TEMP")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
+	}
+
+	var got struct {
+		Count  uint64     `json:"count"`
+		Sent   uint64     `json:"sent"`
+		Points []float32  `json:"points"`
+		Values []*float32 `json:"values"`
+		Bounds [6]float64 `json:"bounds"`
+		Range  [2]float64 `json:"range"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v body = %q", err, rec.Body.String())
+	}
+
+	// Three parcels, one of which has lost its position and cannot be placed
+	// in the scene. Count still reports the whole cloud.
+	if got.Count != 3 || got.Sent != 2 {
+		t.Errorf("count = %d, sent = %d; want 3, 2", got.Count, got.Sent)
+	}
+	if len(got.Points) != 6 {
+		t.Fatalf("points = %d floats, want 6", len(got.Points))
+	}
+	if got.Points[0] != 0 || got.Points[3] != 2 {
+		t.Errorf("x coords = %v, %v; want the NaN parcel skipped", got.Points[0], got.Points[3])
+	}
+
+	// The parcel that kept its position but lost its temperature is still
+	// drawn; its value is null rather than a number it does not have.
+	if len(got.Values) != 2 {
+		t.Fatalf("values = %v, want 2", got.Values)
+	}
+	if got.Values[0] == nil || *got.Values[0] != 300 {
+		t.Errorf("first value = %v, want 300", got.Values[0])
+	}
+	if got.Values[1] != nil {
+		t.Errorf("non-finite value = %v, want null", *got.Values[1])
+	}
+
+	// Neither bounds nor range may inherit the non-finite values.
+	if got.Range[0] != 300 || got.Range[1] != 300 {
+		t.Errorf("range = %v, want finite values only", got.Range)
+	}
+	for i, v := range got.Bounds {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			t.Errorf("bounds[%d] = %v, want finite", i, v)
+		}
+	}
+}
+
+// TestH5ParcelsBeforeInjection covers a spray group that exists but holds
+// nothing yet, which is every engine case before the injector opens.
+func TestH5ParcelsBeforeInjection(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	rec := h5Get(t, h, token,
+		"/api/h5/diverged.h5?parcels=STREAM_00/PARCEL_DATA/LIQUID_PARCEL_DATA/LIQPARCEL_EMPTY")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
+	}
+	// An empty cloud must still be an empty list, not null: the client counts
+	// points before it draws them.
+	if !strings.Contains(rec.Body.String(), `"points":[]`) {
+		t.Errorf("empty cloud body = %q", rec.Body.String())
+	}
+
+	var got h5ParcelCloud
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Count != 0 || got.Sent != 0 {
+		t.Errorf("count = %d, sent = %d; want 0, 0", got.Count, got.Sent)
+	}
+	if got.Bounds != [6]float64{} || got.Range != [2]float64{} {
+		t.Errorf("bounds = %v range = %v; want zeroed", got.Bounds, got.Range)
+	}
+}
+
+// TestH5StatsOnDegenerateFields covers the fields that have no spread: all
+// zero, all NaN, and no cells at all.
+func TestH5StatsOnDegenerateFields(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	rec := h5Get(t, h, token, "/api/h5/diverged.h5?stats="+
+		"STREAM_00/CELL_CENTER_DATA/ALL_ZERO,"+
+		"STREAM_00/CELL_CENTER_DATA/ALL_NAN,"+
+		"STREAM_00/CELL_CENTER_DATA/NO_CELLS")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Stats []h5StatsEntry `json:"stats"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Stats) != 3 {
+		t.Fatalf("entries = %d", len(got.Stats))
+	}
+
+	if z := got.Stats[0]; z.Err != "" || z.Finite != 6 || z.Min != 0 || z.Max != 0 || z.Mean != 0 {
+		t.Errorf("all-zero stats = %+v", z)
+	}
+	// Nothing finite means no range to report, and the NaN count is what says
+	// the field diverged.
+	if n := got.Stats[1]; n.Err != "" || n.NaN != 6 || n.Finite != 0 || n.Min != 0 || n.Max != 0 {
+		t.Errorf("all-NaN stats = %+v", n)
+	}
+	if e := got.Stats[2]; e.Err != "" || e.Count != 0 || e.Finite != 0 {
+		t.Errorf("empty field stats = %+v", e)
+	}
+}
+
+// TestH5SummaryReportsUnlistableStream pins the rule that a stream the reader
+// cannot describe is an error, not an omission: a summary reporting no streams
+// reads as an empty file, which is the one answer that is certainly wrong.
+func TestH5SummaryReportsUnlistableStream(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	rec := h5Get(t, h, token, "/api/h5/links.h5")
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("status = %d body = %q, want 422", rec.Code, rec.Body.String())
+	}
+}
+
+// TestH5ScalarVariableDims pins the shape of a 0-rank dataset on the wire. A
+// nil slice marshals to null, and the client multiplies the dimensions out to
+// a element count as soon as it renders the row.
+func TestH5ScalarVariableDims(t *testing.T) {
+	fh, err := os.Open(filepath.Join("..", "hdf5", "testdata", "odd.h5"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+	st, err := fh.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := hdf5.Open(fh, st.Size())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	vars, _, err := h5ReadVariables(f, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var scalar *h5Variable
+	for i := range vars {
+		if vars[i].Name == "scalar" {
+			scalar = &vars[i]
+		}
+	}
+	if scalar == nil {
+		t.Fatal("no scalar dataset in the fixture")
+	}
+	if scalar.Dims == nil {
+		t.Error("scalar dims are nil; they must marshal as an empty list")
+	}
+	body, err := json.Marshal(scalar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"dims":[]`) {
+		t.Errorf("scalar variable = %s", body)
 	}
 }
 

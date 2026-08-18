@@ -97,11 +97,41 @@ type h5ParcelCloud struct {
 	Stride uint64     `json:"stride"`
 	Scalar string     `json:"scalar,omitempty"`
 	Bounds [6]float64 `json:"bounds"`
-	Points []float32  `json:"points"`
-	Radius []float32  `json:"radius,omitempty"`
-	Values []float32  `json:"values,omitempty"`
+	Points h5Floats   `json:"points"`
+	Radius h5Floats   `json:"radius,omitempty"`
+	Values h5Floats   `json:"values,omitempty"`
 	Range  [2]float64 `json:"range"`
 	Vars   []string   `json:"variables"`
+}
+
+// h5Floats is a float array that survives a diverged run. encoding/json
+// refuses NaN and Inf outright, which would turn the one view someone opens to
+// look at a divergence into a 500; here they become null, which the client can
+// draw as "no value".
+type h5Floats []float32
+
+func (v h5Floats) MarshalJSON() ([]byte, error) {
+	buf := make([]byte, 0, len(v)*8+2)
+	buf = append(buf, '[')
+	for i, f := range v {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		if f64 := float64(f); math.IsNaN(f64) || math.IsInf(f64, 0) {
+			buf = append(buf, "null"...)
+		} else {
+			buf = strconv.AppendFloat(buf, f64, 'g', -1, 32)
+		}
+	}
+	return append(buf, ']'), nil
+}
+
+// h5FiniteCoord reports whether a position survives the trip to float32. A
+// coordinate that does not cannot be placed in the scene at all, unlike a
+// scalar value, which is still worth sending as null.
+func h5FiniteCoord(v float32) bool {
+	f := float64(v)
+	return !math.IsNaN(f) && !math.IsInf(f, 0)
 }
 
 // h5Handler serves metadata, statistics, parcel clouds and variable subsets
@@ -221,7 +251,10 @@ func h5Describe(f *hdf5.File, name string, size int64) (*h5Summary, error) {
 		case strings.HasPrefix(l.Name, "STREAM_"):
 			st, truncated, err := h5ReadStream(f, l.Name, root.Attrs)
 			if err != nil {
-				continue
+				// A stream the reader cannot describe is reported rather than
+				// dropped: a summary listing no streams reads as an empty
+				// file, which is the one answer that is certainly wrong.
+				return nil, err
 			}
 			s.Truncated = s.Truncated || truncated
 			s.Streams = append(s.Streams, st)
@@ -358,24 +391,39 @@ func h5ReadStream(f *hdf5.File, name string, _ hdf5.Attrs) (h5Stream, bool, erro
 	// CELL_CENTER_DATA is the post file's name for it; restarts and maps use
 	// CELL_CENTER for the same thing.
 	for _, sub := range []string{"CELL_CENTER_DATA", "CELL_CENTER"} {
-		vars, cut := h5ReadVariables(f, name+"/"+sub)
+		vars, cut, err := h5ReadVariables(f, name+"/"+sub)
+		if err != nil {
+			return h5Stream{}, false, err
+		}
 		truncated = truncated || cut
 		st.Variables = append(st.Variables, vars...)
 	}
 	sort.Slice(st.Variables, func(i, j int) bool { return st.Variables[i].Name < st.Variables[j].Name })
 
-	st.Parcels = h5ReadParcelGroups(f, name+"/PARCEL_DATA")
+	parcels, err := h5ReadParcelGroups(f, name+"/PARCEL_DATA")
+	if err != nil {
+		return h5Stream{}, false, err
+	}
+	st.Parcels = parcels
 	return st, truncated, nil
 }
 
-func h5ReadVariables(f *hdf5.File, path string) ([]h5Variable, bool) {
+// h5ReadVariables lists one group of datasets. A group that is simply absent
+// is not an error — post files name it CELL_CENTER_DATA and restarts
+// CELL_CENTER, so one of the two always misses — but a group the reader cannot
+// list is, because reporting it as empty would describe a file full of
+// variables as having none.
+func h5ReadVariables(f *hdf5.File, path string) ([]h5Variable, bool, error) {
 	g, err := f.Group(path)
 	if err != nil {
-		return nil, false
+		if errors.Is(err, hdf5.ErrNotFound) {
+			return nil, false, nil
+		}
+		return nil, false, err
 	}
 	links, err := g.Children()
 	if err != nil {
-		return nil, false
+		return nil, false, err
 	}
 
 	out := make([]h5Variable, 0, len(links))
@@ -384,34 +432,46 @@ func h5ReadVariables(f *hdf5.File, path string) ([]h5Variable, bool) {
 			continue
 		}
 		if len(out) >= h5MaxVariables {
-			return out, true
+			return out, true, nil
 		}
 		ds, err := f.Dataset(path + "/" + l.Name)
 		if err != nil {
 			continue
 		}
+		// A scalar dataset has no dimensions. Sending null instead of an
+		// empty list would leave the client multiplying out a missing array.
+		dims := ds.Dims
+		if dims == nil {
+			dims = []uint64{}
+		}
 		out = append(out, h5Variable{
 			Name:  l.Name,
 			Path:  path + "/" + l.Name,
 			Type:  ds.Type.String(),
-			Dims:  ds.Dims,
+			Dims:  dims,
 			Bytes: ds.ByteSize(),
 		})
 	}
-	return out, false
+	return out, false, nil
 }
 
 // h5ReadParcelGroups walks the parcel branch. v6 post files nest one level
 // (LIQUID_PARCEL_DATA/LIQPARCEL_1) while map_parcel files add a state level
 // above it (AIRBORNE/…, WALL_ATTACHED/…), so the walk descends until it finds
 // groups that hold datasets.
-func h5ReadParcelGroups(f *hdf5.File, path string) []h5ParcelGroup {
+func h5ReadParcelGroups(f *hdf5.File, path string) ([]h5ParcelGroup, error) {
 	g, err := f.Group(path)
 	if err != nil {
-		return nil
+		// Most files carry no parcels at all; only a branch the reader cannot
+		// walk is worth reporting.
+		if errors.Is(err, hdf5.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
 	}
 
 	var out []h5ParcelGroup
+	var walkErr error
 	var walk func(prefix string, group *hdf5.Group, depth int)
 	walk = func(prefix string, group *hdf5.Group, depth int) {
 		if depth > 4 || len(out) >= 64 {
@@ -419,6 +479,9 @@ func h5ReadParcelGroups(f *hdf5.File, path string) []h5ParcelGroup {
 		}
 		links, err := group.Children()
 		if err != nil {
+			if walkErr == nil {
+				walkErr = err
+			}
 			return
 		}
 
@@ -456,13 +519,16 @@ func h5ReadParcelGroups(f *hdf5.File, path string) []h5ParcelGroup {
 			}
 			sub, err := f.Group(prefix + "/" + l.Name)
 			if err != nil {
+				if walkErr == nil {
+					walkErr = err
+				}
 				continue
 			}
 			walk(prefix+"/"+l.Name, sub, depth+1)
 		}
 	}
 	walk(path, g, 0)
-	return out
+	return out, walkErr
 }
 
 // h5StatsResponse scans the named datasets. Each is a full read of that
@@ -563,7 +629,14 @@ func h5ParcelResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, quer
 	}
 
 	for i := uint64(0); i < total; i += stride {
-		cloud.Points = append(cloud.Points, float32(xs[i]), float32(ys[i]), float32(zs[i]))
+		x, y, z := float32(xs[i]), float32(ys[i]), float32(zs[i])
+		// A parcel with no usable position is dropped rather than sent as a
+		// hole: it cannot be drawn, and a NaN here would poison the bounds
+		// the camera frames on. Count minus Sent still says how many went.
+		if !h5FiniteCoord(x) || !h5FiniteCoord(y) || !h5FiniteCoord(z) {
+			continue
+		}
+		cloud.Points = append(cloud.Points, x, y, z)
 		cloud.Bounds[0] = math.Min(cloud.Bounds[0], xs[i])
 		cloud.Bounds[1] = math.Min(cloud.Bounds[1], ys[i])
 		cloud.Bounds[2] = math.Min(cloud.Bounds[2], zs[i])

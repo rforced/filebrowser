@@ -57,7 +57,13 @@ func (g *Group) Children() ([]Link, error) {
 
 	st := oh.first(msgSymbolTable)
 	if st == nil {
-		// A group with no symbol table message has no children (or is not a
+		// A new-style group keeps its links in link messages and a fractal
+		// heap instead of a symbol table. Reporting "no children" would hide
+		// every dataset it holds, so say so instead.
+		if oh.first(msgLink) != nil || oh.first(msgLinkInfo) != nil {
+			return nil, fmt.Errorf("%w: group %s stores links without a symbol table", ErrUnsupported, g.Name)
+		}
+		// A group with no link storage at all has no children (or is not a
 		// group at all, which callers detect via Kind).
 		return nil, nil
 	}
@@ -74,7 +80,7 @@ func (g *Group) Children() ([]Link, error) {
 	}
 
 	var links []Link
-	if err := g.f.walkBTree(btreeAddr, heap, &links); err != nil {
+	if err := g.f.walkBTree(btreeAddr, heap, &links, 0); err != nil {
 		return nil, err
 	}
 	return links, nil
@@ -120,6 +126,12 @@ func (f *File) readLocalHeap(addr uint64) (localHeap, error) {
 	return localHeap{data: data}, nil
 }
 
+// maxBTreeDepth bounds the descent. Group B-trees are two or three levels
+// deep in practice; the cap is what stops a child pointer that loops back on
+// itself from recursing until the stack overflows, which in Go is a fatal
+// error no recover() can catch.
+const maxBTreeDepth = 32
+
 // walkBTree descends a v1 B-tree of node type 0 (group nodes), collecting the
 // symbol table entries at the leaves.
 //
@@ -127,9 +139,12 @@ func (f *File) readLocalHeap(addr uint64) (localHeap, error) {
 // right sibling, then alternating keys and child addresses with one trailing
 // key. Keys are length-sized offsets into the local heap; at level 0 the
 // children are symbol table nodes, above that they are further B-tree nodes.
-func (f *File) walkBTree(addr uint64, heap localHeap, out *[]Link) error {
+func (f *File) walkBTree(addr uint64, heap localHeap, out *[]Link, depth int) error {
 	if f.undefined(addr) {
 		return nil
+	}
+	if depth > maxBTreeDepth {
+		return fmt.Errorf("%w: B-tree nested deeper than %d levels", ErrNotHDF5, maxBTreeDepth)
 	}
 	o := int(f.offsetSz)
 	l := int(f.lengthSz)
@@ -158,7 +173,7 @@ func (f *File) walkBTree(addr uint64, heap localHeap, out *[]Link) error {
 	for i := 0; i < used; i++ {
 		child := f.offset(body[i*(l+o)+l:])
 		if level > 0 {
-			if err := f.walkBTree(child, heap, out); err != nil {
+			if err := f.walkBTree(child, heap, out, depth+1); err != nil {
 				return err
 			}
 			continue
@@ -205,17 +220,24 @@ func (f *File) readSymbolTableNode(addr uint64, heap localHeap, out *[]Link) err
 
 		// Cache type 1 means the scratch pad holds the group's B-tree and heap
 		// addresses, so the object is definitely a group. Type 0 needs the
-		// object header to tell group from dataset; a symbol table message
+		// object header to tell group from dataset; a link storage message
 		// there is the marker.
 		kind := KindDataset
-		if cacheType == 1 {
+		switch cacheType {
+		case 1:
 			kind = KindGroup
-		} else {
+		case 2:
+			// A symbolic link names no object of its own: the scratch pad
+			// holds the target path and the header address is undefined.
+			// Whatever it points at is listed under its real name, so drop
+			// the entry rather than failing the whole group on it.
+			continue
+		default:
 			oh, err := f.readObjectHeader(objAddr)
 			if err != nil {
 				return err
 			}
-			if oh.first(msgSymbolTable) != nil {
+			if oh.first(msgSymbolTable) != nil || oh.first(msgLink) != nil || oh.first(msgLinkInfo) != nil {
 				kind = KindGroup
 			}
 		}

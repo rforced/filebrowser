@@ -145,15 +145,14 @@ export function outputProfile(
   }
 
   // Sequence is the true write order; a restart can revisit a crank angle, so
-  // sorting on time alone would fold the series back on itself.
+  // sorting on time alone would fold the series back on itself. A name with no
+  // index sorts after the indexed ones rather than being compared on time
+  // against them: mixing the two rules makes the order depend on which pair
+  // the sort happens to hand the comparator.
   points.sort((a, b) => {
-    if (
-      a.sequence !== null &&
-      b.sequence !== null &&
-      a.sequence !== b.sequence
-    ) {
-      return a.sequence - b.sequence;
-    }
+    const sa = a.sequence ?? Number.POSITIVE_INFINITY;
+    const sb = b.sequence ?? Number.POSITIVE_INFINITY;
+    if (sa !== sb) return sa - sb;
     return (a.time ?? 0) - (b.time ?? 0);
   });
   return points;

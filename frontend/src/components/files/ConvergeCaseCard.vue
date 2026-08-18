@@ -283,9 +283,13 @@ const progressClass = computed(() => {
 
 const newestRestart = computed(() => summary.value?.restarts[0] ?? null);
 
-const timeUnit = computed(() =>
-  summary.value?.progress?.unit === "deg" ? "deg" : "s"
-);
+// Left undefined when the deck did not say, so the number renders bare rather
+// than carrying a unit nobody established. Labelling crank degrees as seconds
+// is a wrong reading, not a cosmetic slip.
+const timeUnit = computed<"s" | "deg" | undefined>(() => {
+  const unit = summary.value?.progress?.unit;
+  return unit === "deg" || unit === "s" ? unit : undefined;
+});
 
 // The newest leg is the one still being written, so its output directory is
 // the profile worth showing.

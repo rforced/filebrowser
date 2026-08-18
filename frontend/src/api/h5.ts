@@ -77,8 +77,10 @@ export interface H5ParcelCloud {
   scalar?: string;
   bounds: number[];
   points: number[];
-  radius?: number[];
-  values?: number[];
+  radius?: (number | null)[];
+  // A parcel that has gone non-finite keeps its place in the cloud but has no
+  // value to colour by; JSON cannot carry NaN, so it arrives as null.
+  values?: (number | null)[];
   range: number[];
   variables: string[];
 }

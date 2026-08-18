@@ -10,7 +10,9 @@ import (
 const (
 	msgNIL          = 0x0000
 	msgDataspace    = 0x0001
+	msgLinkInfo     = 0x0002
 	msgDatatype     = 0x0003
+	msgLink         = 0x0006
 	msgLayout       = 0x0008
 	msgAttribute    = 0x000C
 	msgContinuation = 0x0010
@@ -114,12 +116,19 @@ func (oh *objectHeader) first(typ uint16) []byte {
 // dataspace is the shape of a dataset or attribute.
 type dataspace struct {
 	dims []uint64
+	// null marks an H5S_NULL space. It carries no dimensions, like a scalar,
+	// but holds no elements at all — the difference decides whether a
+	// dataset reads as one fabricated zero or as empty.
+	null bool
 }
 
 // count multiplies the dimensions, reporting false if the product overflows.
 // A corrupt dataspace can claim dimensions whose product wraps, which would
 // otherwise turn a bounds check into a pass and index out of range.
 func (d dataspace) count() (uint64, bool) {
+	if d.null {
+		return 0, true
+	}
 	if len(d.dims) == 0 {
 		return 1, true // scalar
 	}
@@ -148,6 +157,7 @@ func (f *File) parseDataspace(b []byte) (dataspace, error) {
 	// v2: version, rank, flags, then a type byte at 3 — scalar (0) and null
 	// (2) spaces carry no dims — with the dims directly at 4.
 	var pos int
+	null := false
 	switch b[0] {
 	case 1:
 		if len(b) < 8 {
@@ -159,11 +169,12 @@ func (f *File) parseDataspace(b []byte) (dataspace, error) {
 		if b[3] == 0 || b[3] == 2 {
 			rank = 0
 		}
+		null = b[3] == 2
 	default:
 		return dataspace{}, fmt.Errorf("%w: dataspace version %d", ErrUnsupported, b[0])
 	}
 
-	ds := dataspace{}
+	ds := dataspace{null: null}
 	l := int(f.lengthSz)
 	for i := 0; i < rank; i++ {
 		if pos+l > len(b) {

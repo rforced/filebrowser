@@ -201,6 +201,31 @@ func convergeTestHandlers(t *testing.T, userScope string, perm users.Permissions
 	return convergeHandlers(t, scopedUserStorage(t, userScope, perm, []byte("test-signing-key")))
 }
 
+// TestConvergeRestartOrderTiebreak covers restarts that share an mtime, which
+// is what a case restored from an archive looks like. The name is then all
+// there is to order by, and comparing it lexically puts restart2 above
+// restart0010 — the wrong leg to resubmit from.
+func TestConvergeRestartOrderTiebreak(t *testing.T) {
+	stamp := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	matches := []convergeMatch{
+		{path: "/case/restart2.rst", kind: "restart", modTime: stamp},
+		{path: "/case/restart0010.rst", kind: "restart", modTime: stamp},
+		{path: "/case/restart9.rst", kind: "restart", modTime: stamp},
+		// No digits at all: CONVERGE writes this one for the latest restart,
+		// and it sorts below the numbered ones rather than above them.
+		{path: "/case/restart.rst", kind: "restart", modTime: stamp},
+	}
+
+	var names []string
+	for _, r := range convergeRestartsFromMatches(matches) {
+		names = append(names, r.Name)
+	}
+	want := "restart0010.rst,restart9.rst,restart2.rst,restart.rst"
+	if got := strings.Join(names, ","); got != want {
+		t.Errorf("restart order = %s, want %s", got, want)
+	}
+}
+
 func TestConvergeScanCountsThroughOutputDirs(t *testing.T) {
 	userScope := t.TempDir()
 	caseDir := filepath.Join(userScope, "case")

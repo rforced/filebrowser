@@ -1,6 +1,7 @@
 package hdf5
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 // open loads a fixture. See testdata/generate.py for how they are produced and
@@ -503,6 +505,150 @@ func TestContiguousExtent(t *testing.T) {
 	}
 	if string(raw) != string(direct) {
 		t.Error("Contiguous extent does not match Raw bytes")
+	}
+}
+
+// TestLinkStorageOutsideSubset pins the blast radius of a link the reader does
+// not implement. Both cases below used to cost the whole file: a soft link has
+// no object header, and reading one as an object failed the entire listing;
+// a group whose links are messages rather than a symbol table reported no
+// children at all, describing a group full of datasets as empty.
+func TestLinkStorageOutsideSubset(t *testing.T) {
+	f := open(t, "links.h5")
+	root, err := f.Root()
+	if err != nil {
+		t.Fatal(err)
+	}
+	links, err := root.Children()
+	if err != nil {
+		t.Fatalf("a soft link must not fail the listing: %v", err)
+	}
+
+	var names []string
+	for _, l := range links {
+		names = append(names, l.Name)
+	}
+	sort.Strings(names)
+	// "soft" is deliberately absent: it names no object of its own, and what
+	// it points at is listed under its real name.
+	if got := strings.Join(names, ","); got != "STREAM_00,null,ok" {
+		t.Errorf("root children = %s, want STREAM_00,null,ok", got)
+	}
+
+	// The readable part of the file stays readable.
+	ds, err := f.Dataset("ok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, err := ds.Floats(); err != nil || fmt.Sprint(v) != "[300 450.5 1200 900]" {
+		t.Errorf("ok = %v, %v", v, err)
+	}
+
+	// A new-style group is still recognised as a group, so the error names the
+	// real limitation rather than claiming the path is not a group.
+	g, err := f.Group("STREAM_00")
+	if err != nil {
+		t.Fatalf("new-style group not recognised as a group: %v", err)
+	}
+	kids, err := g.Children()
+	if !errors.Is(err, ErrUnsupported) {
+		t.Errorf("new-style group children = %v (%d links), want ErrUnsupported", err, len(kids))
+	}
+}
+
+// TestNullDataspaceHasNoElements separates H5S_NULL from a scalar. Both carry
+// no dimensions, but a null space holds nothing at all, and counting it as one
+// element invented a value the file does not contain.
+func TestNullDataspaceHasNoElements(t *testing.T) {
+	f := open(t, "links.h5")
+	ds, err := f.Dataset("null")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ds.Len() != 0 || ds.ByteSize() != 0 {
+		t.Errorf("null dataspace: len = %d, bytes = %d; want 0, 0", ds.Len(), ds.ByteSize())
+	}
+	v, err := ds.Floats()
+	if err != nil || len(v) != 0 {
+		t.Errorf("null dataspace values = %v, %v; want empty", v, err)
+	}
+	s, err := ds.Stats()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Count != 0 || s.Present {
+		t.Errorf("null dataspace stats = %+v; want zeroed and absent", s)
+	}
+
+	// A scalar still holds exactly one element.
+	sc, err := open(t, "odd.h5").Dataset("scalar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sc.Len() != 1 {
+		t.Errorf("scalar len = %d, want 1", sc.Len())
+	}
+}
+
+// TestCyclicBTreeRejected covers a group B-tree whose child pointer loops back
+// on itself. Unbounded descent here is not a hang but a stack overflow, which
+// in Go is a fatal error that no recover() in the HTTP layer can catch: one
+// corrupt file would take the whole server down with it.
+func TestCyclicBTreeRejected(t *testing.T) {
+	raw, err := os.ReadFile("testdata/post.h5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree := bytes.Index(raw, []byte("TREE"))
+	if tree < 0 {
+		t.Fatal("no B-tree node in the fixture")
+	}
+
+	data := append([]byte(nil), raw...)
+	// Claim one entry at level 1, so the child is read as another B-tree node,
+	// and point that child back at this node.
+	data[tree+5] = 1
+	binary.LittleEndian.PutUint16(data[tree+6:], 1)
+	binary.LittleEndian.PutUint64(data[tree+8+16+8:], uint64(tree))
+
+	f, err := Open(strings.NewReader(string(data)), int64(len(data)))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	root, err := f.Root()
+	if err != nil {
+		t.Fatalf("Root: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := root.Children()
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("cyclic B-tree traversed without error")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("cyclic B-tree did not terminate")
+	}
+}
+
+// TestNonZeroBaseAddressRejected pins the superblock's base address. Every
+// address in the file is relative to it, and the reader treats them as
+// absolute — correct only while the base is zero, which is what a file with
+// its superblock at offset 0 declares.
+func TestNonZeroBaseAddressRejected(t *testing.T) {
+	raw, err := os.ReadFile("testdata/post.h5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := append([]byte(nil), raw...)
+	binary.LittleEndian.PutUint64(data[24:], 512)
+
+	if _, err := Open(strings.NewReader(string(data)), int64(len(data))); !errors.Is(err, ErrUnsupported) {
+		t.Errorf("non-zero base address = %v, want ErrUnsupported", err)
 	}
 }
 

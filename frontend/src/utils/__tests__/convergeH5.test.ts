@@ -93,6 +93,36 @@ describe("outputProfile", () => {
   it("drops files with no parseable time rather than plotting them at zero", () => {
     expect(outputProfile([{ name: "post.h5", size: 10 }])).toEqual([]);
   });
+
+  it("orders the same however the listing arrives", () => {
+    // A stamped name with no write index used to be compared on time against
+    // the indexed ones and on index against nothing. That is not a consistent
+    // order, and these three sorted three different ways depending on which
+    // pairs the sort happened to compare.
+    const indexed = { name: "post000001_+1.00000e+02.h5", size: 10 };
+    const later = { name: "post000002_+1.00000e+01.h5", size: 20 };
+    const unindexed = { name: "post_+5.00000e+01.h5", size: 25 };
+
+    const orderings = [
+      [indexed, later, unindexed],
+      [indexed, unindexed, later],
+      [later, indexed, unindexed],
+      [later, unindexed, indexed],
+      [unindexed, indexed, later],
+      [unindexed, later, indexed],
+    ];
+
+    for (const listing of orderings) {
+      // Indexed files keep their write order, and the one that carries no
+      // index sorts after them rather than being slotted in by a time it
+      // cannot be compared against.
+      expect(outputProfile(listing).map((p) => p.name)).toEqual([
+        indexed.name,
+        later.name,
+        unindexed.name,
+      ]);
+    }
+  });
 });
 
 describe("projectTotal", () => {

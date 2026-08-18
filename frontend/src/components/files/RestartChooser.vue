@@ -21,6 +21,18 @@
         <span>{{ mismatch }}</span>
       </p>
 
+      <p
+        v-if="restarts.length > probed.length"
+        class="text-xs text-gray-500 dark:text-gray-400"
+      >
+        {{
+          t("converge.restartsShown", {
+            shown: probed.length,
+            total: restarts.length,
+          })
+        }}
+      </p>
+
       <button
         v-for="entry in entries"
         :key="entry.info.path"

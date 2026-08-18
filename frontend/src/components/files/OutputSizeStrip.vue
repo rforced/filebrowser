@@ -5,7 +5,14 @@
         {{ t("h5View.runProfile") }}
       </span>
       <span class="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-        {{ t("h5View.writtenSoFar", { size: writtenLabel, percent: percent }) }}
+        {{
+          projection
+            ? t("h5View.writtenSoFar", {
+                size: writtenLabel,
+                percent: percent,
+              })
+            : t("h5View.written", { size: writtenLabel })
+        }}
       </span>
       <span
         v-if="projection"
@@ -96,6 +103,8 @@ const percent = computed(() =>
   projection.value ? Math.round(projection.value.fraction * 100) : 0
 );
 
+// No unit prop means the deck never said which one this case runs in, and
+// formatSimTime renders the number bare rather than guessing at it.
 const label = (time: number | null) =>
-  time === null ? "" : formatSimTime(time, props.unit ?? "s");
+  time === null ? "" : formatSimTime(time, props.unit);
 </script>

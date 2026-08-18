@@ -140,7 +140,11 @@
               </button>
 
               <a
-                v-if="selected.size > 0 && authStore.user?.perm.download"
+                v-if="
+                  selected.size > 0 &&
+                  selected.size <= MAX_SUBSET &&
+                  authStore.user?.perm.download
+                "
                 :href="subsetHref"
                 class="btn btn-flex btn-blue btn-soft btn-sm"
               >
@@ -151,6 +155,21 @@
               </a>
             </div>
           </div>
+
+          <p
+            v-if="statsError"
+            class="mb-2 text-xs text-red-700 dark:text-red-400"
+          >
+            <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+            {{ t("h5View.statsFailed", { message: statsError }) }}
+          </p>
+
+          <p
+            v-if="selected.size > MAX_SUBSET"
+            class="mb-2 text-xs text-amber-700 dark:text-amber-400"
+          >
+            {{ t("h5View.subsetTooMany", { n: MAX_SUBSET }) }}
+          </p>
 
           <p
             v-if="selected.size > 0"
@@ -365,6 +384,9 @@ const error = ref("");
 const summary = ref<h5.H5Summary | null>(null);
 const stats = ref<Map<string, h5.H5Stats>>(new Map());
 const statsPending = ref(false);
+// Kept apart from `error`: that one replaces the whole viewer, and a stats
+// batch failing is no reason to take the file's manifest off the screen.
+const statsError = ref("");
 const selected = ref<Set<string>>(new Set());
 const activeTab = ref("variables");
 const parcelGroup = ref("");
@@ -534,18 +556,31 @@ const toggleOne = (v: h5.H5Variable) => {
 // part of the initial load, and requested in bounded batches.
 const STATS_BATCH = 32;
 
+// What the server accepts in one subset request. The link is a plain anchor,
+// so exceeding it would navigate the tab to a bare "400" page rather than
+// failing where the user is looking.
+const MAX_SUBSET = 64;
+
 const loadStats = async (stream: h5.H5Stream) => {
   const numeric = stream.variables.filter((v) => !v.type.startsWith("string"));
   if (numeric.length === 0) return;
 
+  // Every post file in a case names its variables identically, so a batch
+  // that outlives a file switch would file the old file's numbers under the
+  // new file's paths and read as perfectly plausible. Bind the whole run to
+  // the load that started it.
+  const signal = controller?.signal;
   statsPending.value = true;
+  statsError.value = "";
   try {
     for (let i = 0; i < numeric.length; i += STATS_BATCH) {
       const batch = numeric.slice(i, i + STATS_BATCH);
       const res = await h5.stats(
         path.value,
-        batch.map((v) => v.path)
+        batch.map((v) => v.path),
+        signal
       );
+      if (signal?.aborted) return;
       const next = new Map(stats.value);
       for (const entry of res) {
         if (!entry.error) next.set(entry.path, entry);
@@ -553,9 +588,10 @@ const loadStats = async (stream: h5.H5Stream) => {
       stats.value = next;
     }
   } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    if (e?.name === "AbortError") return;
+    statsError.value = e?.message ?? String(e);
   } finally {
-    statsPending.value = false;
+    if (!signal?.aborted) statsPending.value = false;
   }
 };
 
@@ -566,6 +602,8 @@ const load = async () => {
 
   loading.value = true;
   error.value = "";
+  statsError.value = "";
+  statsPending.value = false;
   stats.value = new Map();
   selected.value = new Set();
 
@@ -592,6 +630,23 @@ const keyEvent = (event: KeyboardEvent) => {
 };
 
 watch(path, () => load());
+
+// A restart has no parcels to show, so switching to one from a post file
+// would otherwise leave the viewer on a tab that is no longer offered — and
+// with a single tab the bar is hidden, so there is nothing to click back to.
+watch(tabs, (list) => {
+  if (!list.some((tab) => tab.id === activeTab.value)) {
+    activeTab.value = list[0].id;
+  }
+});
+
+// Groups do not all carry the same variables; asking for a scalar the new
+// group lacks is a 404 where a cloud should be.
+watch(parcelGroup, () => {
+  if (!parcelScalars.value.includes(parcelScalar.value)) {
+    parcelScalar.value = parcelScalars.value.includes("TEMP") ? "TEMP" : "";
+  }
+});
 
 onMounted(() => {
   window.addEventListener("keydown", keyEvent);

@@ -341,10 +341,35 @@ func convergeRestartsFromMatches(matches []convergeMatch) []convergeRestart {
 			return restarts[i].Modified.After(restarts[j].Modified)
 		}
 
+		// Same mtime happens whenever a case is restored from an archive that
+		// flattened them, and then the name is all there is to go on. Compare
+		// the digits as a number: lexically, restart2 outranks restart0010.
+		if ni, nj := convergeRestartIndex(restarts[i].Name), convergeRestartIndex(restarts[j].Name); ni != nj {
+			return ni > nj
+		}
 		return restarts[i].Name > restarts[j].Name
 	})
 
 	return restarts
+}
+
+// convergeRestartIndex is the run of digits in a restart's name, or -1 when it
+// has none — "restart.rst", which CONVERGE writes for the latest one.
+func convergeRestartIndex(name string) int64 {
+	digits := strings.TrimSuffix(name, ".rst")
+	start := strings.IndexFunc(digits, func(r rune) bool { return r >= '0' && r <= '9' })
+	if start < 0 {
+		return -1
+	}
+	end := start
+	for end < len(digits) && digits[end] >= '0' && digits[end] <= '9' {
+		end++
+	}
+	n, err := strconv.ParseInt(digits[start:end], 10, 64)
+	if err != nil {
+		return -1
+	}
+	return n
 }
 
 // convergeOutputDir is one outputs_* run as the clean prompt sees it. Groups
@@ -475,10 +500,12 @@ type convergeJobInfo struct {
 }
 
 type convergeProgress struct {
-	Current float64  `json:"current"`
-	Unit    string   `json:"unit"`
-	Start   *float64 `json:"start,omitempty"`
-	End     *float64 `json:"end,omitempty"`
+	Current float64 `json:"current"`
+	// Absent when the deck could not be read: the client renders the number
+	// bare rather than labelling it with a guess.
+	Unit  string   `json:"unit,omitempty"`
+	Start *float64 `json:"start,omitempty"`
+	End   *float64 `json:"end,omitempty"`
 }
 
 // convergeRun is one leg of a restart chain: a single outputs_* tree. From
@@ -898,7 +925,10 @@ func convergeDeckTimes(d *data, dir string) (start, end *float64, unit string) {
 
 	raw, err := convergeReadSmall(d.user.Fs, path.Join(dir, convergeCaseFile))
 	if err != nil {
-		return nil, nil, unit
+		// Without the deck there is nothing that says which unit this case
+		// runs in. "s" is only CONVERGE's default for a deck we have actually
+		// read; guessing it here would label crank degrees as seconds.
+		return nil, nil, ""
 	}
 
 	parse := func(fields []string) *float64 {

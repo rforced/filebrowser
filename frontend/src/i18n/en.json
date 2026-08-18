@@ -192,6 +192,7 @@
     "restartPoints": "Restart points ({count})",
     "restartRankMismatch": "These restarts were decomposed for different rank counts ({counts}).",
     "restartSolverMismatch": "These restarts were written by different builds ({versions}). Resuming with a mismatched solver can fail.",
+    "restartsShown": "Showing the {shown} newest of {total}.",
     "runChain": "Runs ({count})",
     "simTime": "Simulation time",
     "status": {
@@ -466,12 +467,15 @@
     "simTime": "Sim time",
     "size": "Size",
     "solver": "Solver",
+    "statsFailed": "Could not compute statistics: {message}",
     "subsetHint": "Selected variables hold {selected} of this {total} file.",
+    "subsetTooMany": "Select at most {n} variables to download as CSV.",
     "truncated": "Only the first variables are listed.",
     "type": "Type",
     "uniform": "Uniform",
     "variable": "Variable",
     "variables": "Variables",
+    "written": "{size} written",
     "writtenSoFar": "{size} written, {percent}% of the deck"
   }
 }
