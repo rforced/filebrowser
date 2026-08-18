@@ -128,6 +128,10 @@ export interface H5SurfaceBoundary {
   // Where this boundary's triangles sit in the shared index array.
   indexOffset: number;
   indexCount: number;
+  // This boundary's slice of the edge index array; zero unless edges were
+  // requested.
+  edgeOffset?: number;
+  edgeCount?: number;
 }
 
 export interface H5SurfaceHeader {
@@ -143,6 +147,8 @@ export interface H5SurfaceHeader {
   bounds: number[];
   scalar?: string;
   range: number[];
+  // Total entries in the edge index array, when edges were requested.
+  edges?: number;
   boundaries: H5SurfaceBoundary[];
 }
 
@@ -152,6 +158,9 @@ export interface H5Surface extends H5SurfaceHeader {
   // Per-vertex, averaged over the boundary faces meeting there. NaN where no
   // adjacent face had a usable value.
   values?: Float32Array;
+  // Polygon-perimeter line segments as index pairs over the shared vertices —
+  // the cell edges, without the ear-clip diagonals the triangles carry.
+  edgeIndices?: Uint32Array;
 }
 
 const SURFACE_MAGIC = "FBSURF01";
@@ -171,6 +180,7 @@ export async function surface(
     scalar?: string;
     boundaries?: number[];
     limit?: number;
+    edges?: boolean;
   } = {},
   signal?: AbortSignal
 ): Promise<H5Surface> {
@@ -180,6 +190,7 @@ export async function surface(
     params.set("boundaries", opts.boundaries.join(","));
   }
   if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.edges) params.set("edges", "1");
 
   const res = await fetchURL(endpoint(path, `?${params}`), { signal });
   const buffer = await res.arrayBuffer();
@@ -212,8 +223,13 @@ export function parseSurface(buffer: ArrayBuffer): H5Surface {
   const values = header.scalar
     ? new Float32Array(buffer, offset, header.vertices)
     : undefined;
+  if (values) offset += header.vertices * 4;
 
-  return { ...header, positions, indices, values };
+  const edgeIndices = header.edges
+    ? new Uint32Array(buffer, offset, header.edges)
+    : undefined;
+
+  return { ...header, positions, indices, values, edgeIndices };
 }
 
 /**

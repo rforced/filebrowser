@@ -40,7 +40,8 @@ function encode(
   positions: number[],
   indices: number[],
   values?: number[],
-  magic = "FBSURF01"
+  magic = "FBSURF01",
+  edges?: number[]
 ): ArrayBuffer {
   const full: H5SurfaceHeader = {
     stream: "STREAM_00",
@@ -51,6 +52,7 @@ function encode(
     stride: 1,
     bounds: [0, 0, 0, 1, 1, 1],
     range: [0, 0],
+    edges: edges?.length,
     boundaries: [],
     ...header,
   };
@@ -68,7 +70,8 @@ function encode(
     meta.length +
     positions.length * 4 +
     indices.length * 4 +
-    (values?.length ?? 0) * 4;
+    (values?.length ?? 0) * 4 +
+    (edges?.length ?? 0) * 4;
   const buffer = new ArrayBuffer(size);
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
@@ -88,6 +91,10 @@ function encode(
   }
   for (const v of values ?? []) {
     view.setFloat32(offset, v, true);
+    offset += 4;
+  }
+  for (const v of edges ?? []) {
+    view.setUint32(offset, v, true);
     offset += 4;
   }
   return buffer;
@@ -160,6 +167,36 @@ describe("parseSurface", () => {
     expect(surface.values![0]).toBe(0);
     expect(Number.isNaN(surface.values![1])).toBe(true);
     expect(surface.values![2]).toBe(1);
+  });
+
+  // The edge section rides after the values, so it has to parse with and
+  // without a scalar in between.
+  it("reads edge indices when edges were requested", () => {
+    const positions = [0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0];
+    const edges = [0, 1, 1, 3, 3, 2, 2, 0];
+
+    const bare = parseSurface(
+      encode({}, positions, [0, 1, 2, 1, 3, 2], undefined, "FBSURF01", edges)
+    );
+    expect(Array.from(bare.edgeIndices!)).toEqual(edges);
+    expect(bare.values).toBeUndefined();
+
+    const withScalar = parseSurface(
+      encode(
+        { scalar: "TEMP", range: [1, 4] },
+        positions,
+        [0, 1, 2, 1, 3, 2],
+        [1, 2, 3, 4],
+        "FBSURF01",
+        edges
+      )
+    );
+    expect(Array.from(withScalar.values!)).toEqual([1, 2, 3, 4]);
+    expect(Array.from(withScalar.edgeIndices!)).toEqual(edges);
+
+    // And absent entirely when not requested, rather than empty-but-present.
+    const none = parseSurface(encode({}, positions, [0, 1, 2, 1, 3, 2]));
+    expect(none.edgeIndices).toBeUndefined();
   });
 
   it("survives a header whose length is not already 4-byte aligned", () => {

@@ -2,16 +2,17 @@
   <div class="relative w-full h-full" @wheel.stop @touchmove.stop>
     <canvas ref="canvasEl" class="w-full h-full block"></canvas>
 
+    <!-- Light-on-dark in both themes: the stage behind the canvas is dark. -->
     <div
       v-if="loading"
-      class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400"
+      class="absolute inset-0 flex items-center justify-center text-gray-400"
     >
       <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
     </div>
 
     <div
       v-else-if="error"
-      class="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-gray-600 dark:text-gray-300"
+      class="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-gray-300"
     >
       {{ error }}
     </div>
@@ -74,20 +75,6 @@
         </button>
         <button
           type="button"
-          class="flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-colors backdrop-blur-sm"
-          :class="
-            wireframe
-              ? 'bg-blue-500 text-white hover:bg-blue-600'
-              : 'bg-white/85 text-gray-700 hover:bg-white dark:bg-gray-900/85 dark:text-gray-200 dark:hover:bg-gray-800'
-          "
-          :aria-label="t('buttons.wireframe')"
-          :title="t('buttons.wireframe')"
-          @click="toggleWireframe"
-        >
-          <i class="fa-solid fa-border-all"></i>
-        </button>
-        <button
-          type="button"
           class="flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-colors backdrop-blur-sm bg-white/85 text-gray-700 hover:bg-white dark:bg-gray-900/85 dark:text-gray-200 dark:hover:bg-gray-800"
           :aria-label="t('buttons.savePng')"
           :title="t('buttons.savePng')"
@@ -112,6 +99,8 @@ import {
   Float32BufferAttribute,
   Group,
   HemisphereLight,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshStandardMaterial,
   PerspectiveCamera,
@@ -140,6 +129,7 @@ const props = defineProps<{
   path: string;
   stream: string;
   scalar?: string;
+  representation?: "surface" | "edges" | "wireframe";
 }>();
 
 const emit = defineEmits<{
@@ -151,8 +141,9 @@ const { t } = useI18n({});
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 const loading = ref(true);
 const error = ref("");
-const wireframe = ref(false);
 const surface = ref<h5.H5Surface | null>(null);
+
+const rep = () => props.representation ?? "surface";
 
 let renderer: WebGLRenderer | null = null;
 let controls: OrbitControls | null = null;
@@ -167,10 +158,17 @@ let controller: AbortController | null = null;
 let radius = 1;
 let center: [number, number, number] = [0, 0, 0];
 
+// One material serves every boundary's outline; near-black reads as a mesh
+// line over any boundary colour or ramp.
+const edgeMaterial = new LineBasicMaterial({ color: 0x0d0d0d });
+
 const disposeModel = () => {
   if (!model) return;
   for (const child of model.children) {
     const mesh = child as Mesh;
+    for (const lines of mesh.children) {
+      (lines as LineSegments).geometry.dispose();
+    }
     mesh.geometry.dispose();
     (mesh.material as MeshStandardMaterial).dispose();
   }
@@ -232,11 +230,33 @@ const build = (data: h5.H5Surface) => {
         color: colors ? 0xffffff : new Color().setHSL(h / 360, s, l),
         metalness: 0.1,
         roughness: 0.75,
-        wireframe: wireframe.value,
+        wireframe: rep() === "wireframe",
+        // The fill sits a hair behind its depth so the edge lines cannot
+        // z-fight it.
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1,
       })
     );
     mesh.userData.boundaryId = boundary.id;
     group.add(mesh);
+
+    if (data.edgeIndices && boundary.edgeCount) {
+      const outline = new BufferGeometry();
+      outline.setAttribute("position", positions);
+      outline.setIndex(
+        new BufferAttribute(
+          data.edgeIndices.subarray(
+            boundary.edgeOffset ?? 0,
+            (boundary.edgeOffset ?? 0) + boundary.edgeCount
+          ),
+          1
+        )
+      );
+      const lines = new LineSegments(outline, edgeMaterial);
+      lines.visible = rep() === "edges";
+      mesh.add(lines);
+    }
 
     legend.push({
       id: boundary.id,
@@ -277,12 +297,16 @@ const savePng = () => {
   saveViewPng(renderer, scene, camera, pngFilename(base, props.scalar));
 };
 
-const toggleWireframe = () => {
-  wireframe.value = !wireframe.value;
+const applyRepresentation = () => {
+  const mode = rep();
   model?.traverse((child) => {
+    if ((child as LineSegments).isLineSegments) {
+      child.visible = mode === "edges";
+      return;
+    }
     const material = (child as Mesh).material as MeshStandardMaterial;
     if (material && "wireframe" in material) {
-      material.wireframe = wireframe.value;
+      material.wireframe = mode === "wireframe";
     }
   });
   invalidated = true;
@@ -326,6 +350,7 @@ const load = async () => {
   loading.value = true;
   error.value = "";
 
+  const withEdges = rep() === "edges";
   try {
     const data = await h5.surface(
       props.path,
@@ -333,6 +358,7 @@ const load = async () => {
         stream: props.stream,
         scalar: props.scalar,
         limit: TRIANGLE_LIMIT,
+        edges: withEdges,
       },
       controller.signal
     );
@@ -345,6 +371,12 @@ const load = async () => {
     }
     build(data);
     resize();
+
+    // The representation moved to edges while this request was in flight
+    // without them; go straight back for the same surface with its outline.
+    if (!withEdges && rep() === "edges") {
+      load();
+    }
   } catch (e: any) {
     if (token !== loadToken || e?.name === "AbortError" || e?.is_canceled) {
       return;
@@ -399,6 +431,19 @@ onMounted(() => {
 // so changing it is a refetch rather than a recolour.
 watch(() => [props.path, props.stream, props.scalar], load);
 
+// The representation is local except the first time edges are asked of a
+// surface fetched without them — the outline only travels on request.
+watch(
+  () => props.representation,
+  () => {
+    if (rep() === "edges" && surface.value && !surface.value.edgeIndices) {
+      load();
+      return;
+    }
+    applyRepresentation();
+  }
+);
+
 onBeforeUnmount(() => {
   loadToken++;
   controller?.abort();
@@ -407,6 +452,7 @@ onBeforeUnmount(() => {
   observer = null;
 
   disposeModel();
+  edgeMaterial.dispose();
   controls?.dispose();
   controls = null;
 

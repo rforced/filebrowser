@@ -2,16 +2,17 @@
   <div class="relative w-full h-full">
     <canvas ref="canvasEl" class="w-full h-full block"></canvas>
 
+    <!-- Light-on-dark in both themes: the stage behind the canvas is dark. -->
     <div
       v-if="loading"
-      class="absolute inset-0 flex items-center justify-center text-gray-500 dark:text-gray-400"
+      class="absolute inset-0 flex items-center justify-center text-gray-400"
     >
       <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
     </div>
 
     <div
       v-else-if="error"
-      class="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-gray-600 dark:text-gray-300"
+      class="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-gray-300"
     >
       {{ error }}
     </div>

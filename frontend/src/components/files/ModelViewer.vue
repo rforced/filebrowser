@@ -28,12 +28,21 @@
       </button>
       <button
         class="model-button"
-        :class="{ 'model-button--active': wireframe }"
-        :aria-label="t('buttons.wireframe')"
-        :title="t('buttons.wireframe')"
-        @click="toggleWireframe"
+        :class="{ 'model-button--active': representation === 'edges' }"
+        :aria-label="t('buttons.edges')"
+        :title="t('buttons.edges')"
+        @click="setRepresentation('edges')"
       >
         <i class="fa-solid fa-border-all"></i>
+      </button>
+      <button
+        class="model-button"
+        :class="{ 'model-button--active': representation === 'wireframe' }"
+        :aria-label="t('buttons.wireframe')"
+        :title="t('buttons.wireframe')"
+        @click="setRepresentation('wireframe')"
+      >
+        <i class="fa-solid fa-draw-polygon"></i>
       </button>
       <button
         class="model-button"
@@ -61,6 +70,7 @@ import {
   HemisphereLight,
   LoadingManager,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
   Points,
@@ -71,6 +81,7 @@ import {
   type ColorRepresentation,
   type Material,
   type Object3D,
+  type SkinnedMesh,
   type Texture,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -109,7 +120,7 @@ const { t } = useI18n({});
 const canvasEl = ref<HTMLCanvasElement | null>(null);
 const loading = ref(true);
 const error = ref("");
-const wireframe = ref(false);
+const representation = ref<"surface" | "edges" | "wireframe">("surface");
 
 let renderer: WebGLRenderer | null = null;
 let controls: OrbitControls | null = null;
@@ -134,7 +145,12 @@ const createMaterial = (
     metalness: 0.1,
     roughness: 0.75,
     side: DoubleSide,
-    wireframe: wireframe.value,
+    wireframe: representation.value === "wireframe",
+    // The fill sits a hair behind its depth so an edge overlay cannot
+    // z-fight it.
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
   });
 
 const meshFromGeometry = (geometry: BufferGeometry) => {
@@ -265,18 +281,60 @@ const savePng = () => {
   saveViewPng(renderer, scene, camera, pngFilename(props.name ?? "model"));
 };
 
-const toggleWireframe = () => {
-  wireframe.value = !wireframe.value;
+// One material serves every edge overlay: the mesh's own triangles drawn as
+// lines over the offset fill.
+const edgeMaterial = new MeshBasicMaterial({
+  color: 0x0d0d0d,
+  wireframe: true,
+});
+
+const setRepresentation = (mode: "edges" | "wireframe") => {
+  representation.value = representation.value === mode ? "surface" : mode;
+  applyRepresentation();
+};
+
+const ensureEdgeOverlay = (mesh: Mesh) => {
+  let overlay = mesh.children.find((child) => child.userData.edgeOverlay);
+  if (!overlay) {
+    overlay = new Mesh(mesh.geometry, edgeMaterial);
+    overlay.userData.edgeOverlay = true;
+    // Loader-supplied materials have no polygon offset until an overlay
+    // needs one.
+    const materials = mesh.material;
+    for (const material of Array.isArray(materials) ? materials : [materials]) {
+      if ("polygonOffset" in material) {
+        material.polygonOffset = true;
+        material.polygonOffsetFactor = 1;
+        material.polygonOffsetUnits = 1;
+        material.needsUpdate = true;
+      }
+    }
+    mesh.add(overlay);
+  }
+  return overlay;
+};
+
+const applyRepresentation = () => {
+  const mode = representation.value;
 
   model?.traverse((child) => {
-    const materials = (child as Mesh).material;
-    if (!materials) {
+    if (child.userData.edgeOverlay) {
+      child.visible = mode === "edges";
       return;
     }
+    const mesh = child as Mesh;
+    if (!mesh.isMesh || !mesh.material) {
+      return;
+    }
+    const materials = mesh.material;
     for (const material of Array.isArray(materials) ? materials : [materials]) {
       if ("wireframe" in material) {
-        material.wireframe = wireframe.value;
+        material.wireframe = mode === "wireframe";
       }
+    }
+    // A skinned mesh is left alone: its overlay would not follow the bones.
+    if (mode === "edges" && !(mesh as SkinnedMesh).isSkinnedMesh) {
+      ensureEdgeOverlay(mesh).visible = true;
     }
   });
 
@@ -300,6 +358,11 @@ const disposeModel = () => {
   }
 
   model.traverse((child) => {
+    // Overlays borrow their parent's geometry and the shared edge material,
+    // both of which outlive them.
+    if (child.userData.edgeOverlay) {
+      return;
+    }
     const mesh = child as Mesh;
     mesh.geometry?.dispose();
     if (mesh.material) {
@@ -417,6 +480,8 @@ const load = async () => {
 
     model = object;
     scene.add(object);
+    // Carries a representation chosen before this file over to it.
+    applyRepresentation();
 
     emit(
       "boundaries",
@@ -472,6 +537,7 @@ onBeforeUnmount(() => {
   observer = null;
 
   disposeModel();
+  edgeMaterial.dispose();
 
   controls?.dispose();
   controls = null;

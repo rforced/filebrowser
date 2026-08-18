@@ -3,6 +3,7 @@ package fbhttp
 import (
 	"encoding/binary"
 	"encoding/json"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ type decodedSurface struct {
 	positions []float32
 	indices   []uint32
 	values    []float32
+	edges     []uint32
 }
 
 func decodeSurface(t *testing.T, rec *httptest.ResponseRecorder) decodedSurface {
@@ -58,6 +60,11 @@ func decodeSurface(t *testing.T, rec *httptest.ResponseRecorder) decodedSurface 
 	}
 	if out.header.Scalar != "" {
 		out.values = read(out.header.Vertices)
+	}
+	out.edges = make([]uint32, out.header.Edges)
+	for i := range out.edges {
+		out.edges[i] = binary.LittleEndian.Uint32(body[cursor:])
+		cursor += 4
 	}
 	if cursor != len(body) {
 		t.Errorf("decoded %d bytes of a %d byte body", cursor, len(body))
@@ -208,6 +215,76 @@ func TestH5SurfaceScalarSurvivesNonFinite(t *testing.T) {
 	}
 	if got.header.Triangles != 7 {
 		t.Errorf("triangles = %d: a non-finite field must not drop geometry", got.header.Triangles)
+	}
+}
+
+// Edges are the polygon perimeters, never the triangulation: a quad face
+// contributes its four sides and not its ear-clip diagonal, and neighbouring
+// faces of one boundary share their common edge exactly once. An edge on the
+// junction of two boundaries belongs to both outlines.
+func TestH5SurfaceEdges(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	rec := h5Get(t, h, token, "/api/h5/post.h5?surface=STREAM_00&edges=1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+
+	got := decodeSurface(t, rec)
+	if got.header.Edges != len(got.edges) {
+		t.Fatalf("header says %d edge indices, body carries %d", got.header.Edges, len(got.edges))
+	}
+
+	edgeSet := func(b h5SurfaceBoundary) map[[2]uint32]bool {
+		set := map[[2]uint32]bool{}
+		for i := b.EdgeOffset; i < b.EdgeOffset+b.EdgeCount; i += 2 {
+			a, c := got.edges[i], got.edges[i+1]
+			if a == c {
+				t.Fatalf("boundary %d carries the degenerate edge %d-%d", b.ID, a, c)
+			}
+			if int(a) >= got.header.Vertices || int(c) >= got.header.Vertices {
+				t.Fatalf("edge %d-%d addresses no vertex (%d sent)", a, c, got.header.Vertices)
+			}
+			key := [2]uint32{min(a, c), max(a, c)}
+			if set[key] {
+				t.Fatalf("boundary %d sends edge %v twice", b.ID, key)
+			}
+			set[key] = true
+		}
+		return set
+	}
+
+	// Boundary 1's faces carry vertices [0,1,2] and [0,1,2,3]: perimeters
+	// {01,12,02} and {01,12,23,03}, five unique edges — a fan diagonal like
+	// 0-2 appearing inside the quad would be a sixth.
+	b := got.header.Boundaries[0]
+	if b.EdgeOffset != 0 || b.EdgeCount != 10 {
+		t.Errorf("boundary 1 edges at %d+%d, want 0+10", b.EdgeOffset, b.EdgeCount)
+	}
+	want := map[[2]uint32]bool{
+		{0, 1}: true, {1, 2}: true, {0, 2}: true, {2, 3}: true, {0, 3}: true,
+	}
+	if set := edgeSet(b); !maps.Equal(set, want) {
+		t.Errorf("boundary 1 edges = %v, want %v", set, want)
+	}
+
+	// Boundary 2's faces are [1,2,3], [0,2,3] and [0,1,2,3]: six unique edges.
+	b = got.header.Boundaries[1]
+	if b.EdgeOffset != 10 || b.EdgeCount != 12 {
+		t.Errorf("boundary 2 edges at %d+%d, want 10+12", b.EdgeOffset, b.EdgeCount)
+	}
+	want = map[[2]uint32]bool{
+		{1, 2}: true, {2, 3}: true, {1, 3}: true,
+		{0, 2}: true, {0, 3}: true, {0, 1}: true,
+	}
+	if set := edgeSet(b); !maps.Equal(set, want) {
+		t.Errorf("boundary 2 edges = %v, want %v", set, want)
+	}
+
+	// Without the flag the section must be absent, not empty-but-present.
+	rec = h5Get(t, h, token, "/api/h5/post.h5?surface=STREAM_00")
+	if plain := decodeSurface(t, rec); plain.header.Edges != 0 {
+		t.Errorf("edges = %d without edges=1, want none", plain.header.Edges)
 	}
 }
 

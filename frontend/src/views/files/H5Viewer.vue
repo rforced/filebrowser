@@ -298,6 +298,19 @@
             </option>
           </select>
 
+          <label class="text-sm text-gray-600 dark:text-gray-300">
+            {{ t("h5View.representation") }}
+          </label>
+          <select
+            v-model="surfaceRepresentation"
+            class="form-control py-1 text-sm w-auto"
+            :aria-label="t('h5View.representation')"
+          >
+            <option value="surface">{{ t("h5View.repSurface") }}</option>
+            <option value="edges">{{ t("h5View.repEdges") }}</option>
+            <option value="wireframe">{{ t("h5View.repWireframe") }}</option>
+          </select>
+
           <div
             v-if="surfaceBoundaries.length"
             class="flex flex-wrap gap-1.5 items-center min-w-0 max-h-20 overflow-y-auto"
@@ -329,7 +342,7 @@
           </div>
         </div>
 
-        <div class="flex-1 min-h-0">
+        <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
           <!-- Mounted on first use and kept: the surface is megabytes of
                geometry, so opening any post file must not fetch it. -->
           <BoundarySurface
@@ -338,6 +351,7 @@
             :path="path"
             :stream="surfaceStream"
             :scalar="surfaceScalar || undefined"
+            :representation="surfaceRepresentation"
             @boundaries="onSurfaceBoundaries"
           />
         </div>
@@ -378,7 +392,7 @@
           </select>
         </div>
 
-        <div class="flex-1 min-h-0">
+        <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
           <ParcelCloud
             v-if="parcelGroup"
             :key="parcelGroup"
@@ -463,6 +477,7 @@ const activeTab = ref("variables");
 const parcelGroup = ref("");
 const parcelScalar = ref("");
 const surfaceScalar = ref("");
+const surfaceRepresentation = ref<"surface" | "edges" | "wireframe">("surface");
 const surfaceOpened = ref(false);
 const surfaceBoundaries = ref<SurfaceBoundaryInfo[]>([]);
 const hiddenBoundaries = ref<Set<number>>(new Set());

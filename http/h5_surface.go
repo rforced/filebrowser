@@ -51,6 +51,10 @@ type h5SurfaceBoundary struct {
 	// uploaded vertex buffer.
 	IndexOffset int `json:"indexOffset"`
 	IndexCount  int `json:"indexCount"`
+	// EdgeOffset and EdgeCount address this boundary's slice of the edge index
+	// array; both stay zero unless edges were requested.
+	EdgeOffset int `json:"edgeOffset"`
+	EdgeCount  int `json:"edgeCount"`
 }
 
 type h5SurfaceHeader struct {
@@ -65,6 +69,7 @@ type h5SurfaceHeader struct {
 	Bounds     [6]float64          `json:"bounds"`
 	Scalar     string              `json:"scalar,omitempty"`
 	Range      [2]float64          `json:"range"`
+	Edges      int                 `json:"edges,omitempty"`
 	Boundaries []h5SurfaceBoundary `json:"boundaries"`
 }
 
@@ -174,6 +179,7 @@ func h5SurfaceResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, que
 		}
 	}
 
+	edges := firstValue(query, "edges")
 	surface := h5ExtractSurface(h5SurfaceInput{
 		Offsets:      offsets,
 		PolyToVertex: polyToVertex,
@@ -183,6 +189,7 @@ func h5SurfaceResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, que
 		ByBoundary: byBoundary,
 		CellValues: cellValues,
 		Stride:     stride,
+		WithEdges:  edges == "1" || edges == "true",
 	})
 
 	names := map[int64]string{}
@@ -199,9 +206,10 @@ func h5SurfaceResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, que
 	header.Stride = stride
 	header.Truncated = stride > 1
 	header.Scalar = scalar
+	header.Edges = len(surface.Edges)
 	header.Boundaries = surface.Boundaries
 
-	return h5WriteSurface(w, header, surface.Positions, surface.Indices, surface.Values)
+	return h5WriteSurface(w, header, surface.Positions, surface.Indices, surface.Values, surface.Edges)
 }
 
 type h5SurfaceInput struct {
@@ -213,6 +221,7 @@ type h5SurfaceInput struct {
 	ByBoundary   map[int64][]int32
 	CellValues   []float64
 	Stride       int
+	WithEdges    bool
 }
 
 type h5SurfaceResult struct {
@@ -221,6 +230,7 @@ type h5SurfaceResult struct {
 	Positions  []float32
 	Indices    []uint32
 	Values     []float32
+	Edges      []uint32
 }
 
 // h5ExtractSurface walks the selected faces and builds the drawable mesh. It
@@ -250,8 +260,16 @@ func h5ExtractSurface(in h5SurfaceInput) h5SurfaceResult {
 		math.Inf(-1), math.Inf(-1), math.Inf(-1),
 	}
 
+	var seenEdges map[uint64]struct{}
 	for _, id := range in.IDs {
-		entry := h5SurfaceBoundary{ID: id, IndexOffset: len(out.Indices)}
+		entry := h5SurfaceBoundary{
+			ID:          id,
+			IndexOffset: len(out.Indices),
+			EdgeOffset:  len(out.Edges),
+		}
+		if in.WithEdges {
+			seenEdges = make(map[uint64]struct{}, 2*len(in.ByBoundary[id]))
+		}
 
 		for k, face := range in.ByBoundary[id] {
 			if in.Stride > 1 && k%in.Stride != 0 {
@@ -317,6 +335,26 @@ func h5ExtractSurface(in h5SurfaceInput) h5SurfaceResult {
 				out.Indices = append(out.Indices, uint32(remap[global[corner]]))
 			}
 
+			// The edges are the polygon's perimeter, never the triangulation:
+			// an ear-clip diagonal is an artifact of drawing, not of the mesh.
+			// Neighbouring faces of one boundary share their common edge, so
+			// each is deduplicated within the boundary's run.
+			if in.WithEdges {
+				for i := range global {
+					a := uint32(remap[global[i]])
+					b := uint32(remap[global[(i+1)%len(global)]])
+					if a == b {
+						continue
+					}
+					key := uint64(min(a, b))<<32 | uint64(max(a, b))
+					if _, ok := seenEdges[key]; ok {
+						continue
+					}
+					seenEdges[key] = struct{}{}
+					out.Edges = append(out.Edges, a, b)
+				}
+			}
+
 			if in.CellValues != nil {
 				// The cell on the fluid side sits in the slot the boundary did
 				// not take; the owner slot is always the negative one.
@@ -337,6 +375,7 @@ func h5ExtractSurface(in h5SurfaceInput) h5SurfaceResult {
 		}
 
 		entry.IndexCount = len(out.Indices) - entry.IndexOffset
+		entry.EdgeCount = len(out.Edges) - entry.EdgeOffset
 		if entry.IndexCount == 0 {
 			continue
 		}
@@ -566,7 +605,7 @@ func h5SurfaceFilter(list string) map[int64]bool {
 // header padded to a 4-byte boundary, then the raw arrays. The padding is what
 // lets the client lay Float32Array and Uint32Array views straight over the
 // response buffer instead of copying it.
-func h5WriteSurface(w http.ResponseWriter, header h5SurfaceHeader, positions []float32, indices []uint32, values []float32) (int, error) {
+func h5WriteSurface(w http.ResponseWriter, header h5SurfaceHeader, positions []float32, indices []uint32, values []float32, edges []uint32) (int, error) {
 	if header.Boundaries == nil {
 		header.Boundaries = []h5SurfaceBoundary{}
 	}
@@ -579,7 +618,7 @@ func h5WriteSurface(w http.ResponseWriter, header h5SurfaceHeader, positions []f
 	}
 
 	total := len(h5SurfaceMagic) + 4 + len(meta) +
-		len(positions)*4 + len(indices)*4 + len(values)*4
+		len(positions)*4 + len(indices)*4 + len(values)*4 + len(edges)*4
 	buf := make([]byte, 0, total)
 	buf = append(buf, h5SurfaceMagic...)
 	buf = binary.LittleEndian.AppendUint32(buf, uint32(len(meta)))
@@ -592,6 +631,9 @@ func h5WriteSurface(w http.ResponseWriter, header h5SurfaceHeader, positions []f
 	}
 	for _, v := range values {
 		buf = binary.LittleEndian.AppendUint32(buf, math.Float32bits(v))
+	}
+	for _, v := range edges {
+		buf = binary.LittleEndian.AppendUint32(buf, v)
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
