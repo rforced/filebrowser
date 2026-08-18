@@ -7,6 +7,7 @@ import i18n from "@/i18n";
 import App from "@/App.vue";
 import { useToastStore } from "@/stores/toast";
 import { tooltip } from "@/utils/tooltip";
+import { embedded } from "@/utils/embedded";
 
 import dayjs from "dayjs";
 import localizedFormat from "dayjs/plugin/localizedFormat";
@@ -18,6 +19,9 @@ import "./css/app.css";
 dayjs.extend(localizedFormat);
 dayjs.extend(relativeTime);
 dayjs.extend(duration);
+
+// CSS hook for the slimmed-down chrome inside the platform's iframe.
+document.documentElement.classList.toggle("embedded", embedded);
 
 const pinia = createPinia(router);
 

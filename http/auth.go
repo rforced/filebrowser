@@ -1,6 +1,7 @@
 package fbhttp
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -212,6 +213,52 @@ func loginHandler(policy tokenPolicy) handleFunc {
 			return http.StatusTooManyRequests, nil
 		case errors.Is(err, fbAuth.ErrMFARequired):
 			return renderMFAChallenge(w, err)
+		case errors.Is(err, os.ErrPermission):
+			return http.StatusForbidden, nil
+		case err != nil:
+			return http.StatusInternalServerError, err
+		}
+
+		return createAndReturnToken(w, d, user, policy, time.Now())
+	}
+}
+
+// handoffHandler exchanges a single-use code minted by the job platform for a
+// session, so the embedded (iframed) app can authenticate on the strength of
+// the user's live platform session instead of a second login. Only the hook
+// auth method can vouch for a code, so the route plays dead everywhere else.
+func handoffHandler(policy tokenPolicy) handleFunc {
+	return func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxAuthBodySize)
+		}
+
+		ip := clientIP(r, d.server.TrustedProxyNets)
+		if checkLoginRateLimit(ip) {
+			log.Printf("login rate limit exceeded for IP %s", ip)
+			w.Header().Set("Retry-After", "60")
+			return http.StatusTooManyRequests, nil
+		}
+
+		auther, err := d.store.Auth.Get(d.settings.AuthMethod)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+
+		hookAuther, ok := auther.(*fbAuth.HookAuth)
+		if !ok {
+			return http.StatusNotFound, nil
+		}
+
+		var req struct {
+			Code string `json:"code"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Code == "" {
+			return http.StatusForbidden, nil
+		}
+
+		user, err := hookAuther.AuthHandoff(r.Context(), req.Code, d.store.Users, d.settings, d.server)
+		switch {
 		case errors.Is(err, os.ErrPermission):
 			return http.StatusForbidden, nil
 		case err != nil:

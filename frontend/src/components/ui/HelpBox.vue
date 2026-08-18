@@ -16,7 +16,7 @@
 
       <a
         :href="href"
-        target="_blank"
+        :target="embedded ? '_top' : '_blank'"
         rel="noopener noreferrer"
         class="inline-block font-medium text-blue-700 dark:text-teal hover:underline"
       >
@@ -31,6 +31,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { domain } from "@/utils/constants";
+import { embedded } from "@/utils/embedded";
 
 const props = withDefaults(defineProps<{ path?: string }>(), {
   path: "admin_guides/file_system_administration.html",

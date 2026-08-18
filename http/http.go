@@ -57,6 +57,7 @@ func NewHandler(
 		maxLifetime: server.GetSessionMaxLifetime(settings.DefaultSessionMaxLifetime),
 	}
 	api.Handle("/login", monkey(loginHandler(policy), ""))
+	api.Handle("/handoff", monkey(handoffHandler(policy), "")).Methods("POST")
 	api.Handle("/renew", monkey(renewHandler(policy), ""))
 	api.Handle("/logout", monkey(logoutHandler, ""))
 	api.Handle("/me", monkey(meHandler, ""))
@@ -109,15 +110,19 @@ func NewHandler(
 	public.PathPrefix("/dl").Handler(monkey(publicDlHandler, "/api/public/dl/")).Methods("GET")
 	public.PathPrefix("/share").Handler(monkey(publicShareHandler, "/api/public/share/")).Methods("GET")
 
-	return securityHeaders(stripPrefix(server.BaseURL, r)), nil
+	return securityHeaders(server, stripPrefix(server.BaseURL, r)), nil
 }
 
 type cspNonceKey struct{}
 
-func contentSecurityPolicy(nonce string) string {
+func contentSecurityPolicy(nonce, frameAncestors string) string {
 	script := "'self' https://www.google.com https://www.gstatic.com"
 	if nonce != "" {
 		script += " 'nonce-" + nonce + "'"
+	}
+
+	if frameAncestors == "" {
+		frameAncestors = "'none'"
 	}
 
 	return `default-src 'self'; ` +
@@ -130,7 +135,7 @@ func contentSecurityPolicy(nonce string) string {
 		`manifest-src 'self' blob:; ` +
 		`worker-src 'self' blob:; ` +
 		`base-uri 'self'; ` +
-		`frame-ancestors 'none';`
+		`frame-ancestors ` + frameAncestors + `;`
 }
 
 func newCSPNonce() (string, error) {
@@ -147,7 +152,7 @@ func cspNonce(r *http.Request) string {
 	return nonce
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+func securityHeaders(server *settings.Server, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nonce, err := newCSPNonce()
 		if err != nil {
@@ -156,7 +161,7 @@ func securityHeaders(next http.Handler) http.Handler {
 			return
 		}
 
-		w.Header().Set("Content-Security-Policy", contentSecurityPolicy(nonce))
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy(nonce, server.FrameAncestors))
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), cspNonceKey{}, nonce)))

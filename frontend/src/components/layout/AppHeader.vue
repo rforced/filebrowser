@@ -4,6 +4,7 @@
     class="sticky top-0 flex gap-3 md:gap-4 items-center justify-between bg-gray-200 dark:bg-gray-900 border-b border-transparent dark:border-gray-700 p-3 md:px-6 z-50"
   >
     <router-link
+      v-if="!embedded"
       to="/files"
       class="outline-hidden focus:ring-3 ring-offset-4 ring-offset-gray-200 dark:ring-offset-gray-900 rounded-xs shrink-0"
       :aria-label="name"
@@ -35,6 +36,7 @@
         </button>
 
         <button
+          v-if="!embedded"
           v-tooltip="t('sidebar.logout')"
           type="button"
           class="btn btn-flex btn-gray h-10"
@@ -70,6 +72,7 @@ import { storeToRefs } from "pinia";
 import { useAuthStore } from "@/stores/auth";
 import * as auth from "@/utils/auth";
 import { hideLoginButton, name } from "@/utils/constants";
+import { embedded } from "@/utils/embedded";
 import Search from "@/components/Search.vue";
 
 withDefaults(defineProps<{ showSearch?: boolean }>(), { showSearch: true });

@@ -68,6 +68,10 @@ type Server struct {
 	TeamID                string `json:"teamId"`
 	FilesystemID          string `json:"filesystemId"`
 
+	// FrameAncestors is the CSP frame-ancestors source list naming the origins
+	// allowed to embed the app in a frame. Empty means no one may.
+	FrameAncestors string `json:"frameAncestors"`
+
 	// TrustedProxies lists, as IP addresses or CIDR blocks, the reverse proxies
 	// allowed to tell us who the client is. Requests arriving from anywhere else
 	// have their X-Forwarded-For and X-Real-Ip headers ignored, because a client

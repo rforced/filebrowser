@@ -8,7 +8,7 @@
           <a
             v-if="entry.id === 'create-job'"
             :href="jobUrl"
-            target="_blank"
+            :target="linkTarget"
             rel="noopener noreferrer"
             class="btn btn-menu btn-white btn-soft min-w-0"
             :class="entry.span === 2 ? 'col-span-2' : ''"
@@ -62,7 +62,7 @@
       <a
         v-if="jobUrl"
         :href="jobUrl"
-        target="_blank"
+        :target="linkTarget"
         rel="noopener noreferrer"
         class="btn btn-flex btn-white btn-soft whitespace-nowrap"
       >
@@ -81,6 +81,7 @@ import { useRoute } from "vue-router";
 import { useFileActions, type FileAction } from "@/composables/useFileActions";
 import { buttonIcon } from "@/utils/buttons";
 import { domain, teamId, filesystemId } from "@/utils/constants";
+import { embedded } from "@/utils/embedded";
 
 withDefaults(defineProps<{ variant?: "stack" | "rail" }>(), {
   variant: "stack",
@@ -89,6 +90,10 @@ withDefaults(defineProps<{ variant?: "stack" | "rail" }>(), {
 const { t } = useI18n();
 const route = useRoute();
 const { actions } = useFileActions();
+
+// Inside the platform's iframe the deep link should carry the whole page over
+// to the platform rather than spawn a tab from within the frame.
+const linkTarget = embedded ? "_top" : "_blank";
 
 const STACK_LAYOUT: string[][][] = [
   [

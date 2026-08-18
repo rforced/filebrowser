@@ -2,7 +2,14 @@
   <div
     class="min-h-screen flex flex-col items-center justify-center gap-6 bg-gray-50 dark:bg-gray-900 p-4"
   >
-    <Card class="w-full max-w-sm">
+    <div
+      v-if="attemptingHandoff"
+      class="flex flex-col items-center gap-3 text-gray-500 dark:text-gray-400"
+    >
+      <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+    </div>
+
+    <Card v-else class="w-full max-w-sm">
       <form class="flex flex-col gap-4 p-6 sm:p-8" @submit="submit">
         <div class="flex flex-col items-center gap-3">
           <h1
@@ -122,6 +129,7 @@
 <script setup lang="ts">
 import { StatusError } from "@/api/utils";
 import * as auth from "@/utils/auth";
+import { framed, embeddedHandoff } from "@/utils/embedded";
 import {
   cspNonce,
   name,
@@ -144,6 +152,7 @@ const mfaCode = ref<string>("");
 const mfaVisible = ref<boolean>(false);
 const mfaNotice = ref<string>("");
 const mfaInput = ref<HTMLInputElement | null>(null);
+const attemptingHandoff = ref<boolean>(framed);
 
 const route = useRoute();
 const router = useRouter();
@@ -156,6 +165,18 @@ const reason = route.query["logout-reason"] ?? null;
 
 // Dynamically load reCAPTCHA Enterprise script only on the login page
 let recaptchaScript: HTMLScriptElement | null = null;
+
+// When framed, first try to exchange a handoff code with the embedding
+// platform page; the login form is only for the case where that fails.
+onMounted(async () => {
+  if (framed) {
+    if (await embeddedHandoff()) {
+      router.push({ path: (route.query.redirect || "/files/") as string });
+      return;
+    }
+    attemptingHandoff.value = false;
+  }
+});
 
 onMounted(() => {
   if (recaptcha && recaptchaKey) {

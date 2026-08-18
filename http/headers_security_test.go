@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/rforced/filebrowser/v2/settings"
 )
 
 func TestSecurityHeadersOnEveryRoute(t *testing.T) {
@@ -17,7 +19,7 @@ func TestSecurityHeadersOnEveryRoute(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	handler := securityHeaders(inner)
+	handler := securityHeaders(&settings.Server{}, inner)
 
 	paths := []string{
 		"/",              // SPA index — previously uncovered
@@ -89,7 +91,7 @@ func TestSecurityHeadersIssueAFreshNoncePerResponse(t *testing.T) {
 		})
 
 		rec := httptest.NewRecorder()
-		securityHeaders(inner).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		securityHeaders(&settings.Server{}, inner).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 		if fromContext == "" {
 			t.Fatal("no nonce published to the request context")
@@ -117,7 +119,7 @@ func TestSecurityHeadersIssueAFreshNoncePerResponse(t *testing.T) {
 func TestContentSecurityPolicyAdmitsWhatTheAppLoads(t *testing.T) {
 	t.Parallel()
 
-	csp := contentSecurityPolicy("n0nce")
+	csp := contentSecurityPolicy("n0nce", "")
 
 	for directive, wants := range map[string][]string{
 		"default-src":  {"'self'"},
@@ -151,8 +153,8 @@ func TestContentSecurityPolicyAdmitsWhatTheAppLoads(t *testing.T) {
 		t.Errorf("policy names a concrete origin, which breaks IP access: %s", csp)
 	}
 
-	if strings.Contains(contentSecurityPolicy(""), "nonce-") {
-		t.Errorf("empty nonce leaked into the policy: %s", contentSecurityPolicy(""))
+	if strings.Contains(contentSecurityPolicy("", ""), "nonce-") {
+		t.Errorf("empty nonce leaked into the policy: %s", contentSecurityPolicy("", ""))
 	}
 }
 
@@ -197,6 +199,35 @@ func TestIndexTemplateNoncesEveryInlineScript(t *testing.T) {
 	}
 }
 
+// The frame-ancestors directive follows the server configuration so a deploy
+// can name the one platform origin allowed to embed the app, while a server
+// that configures nothing stays unframeable.
+func TestFrameAncestorsFollowsConfiguration(t *testing.T) {
+	t.Parallel()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	serve := func(server *settings.Server) string {
+		rec := httptest.NewRecorder()
+		securityHeaders(server, inner).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		return rec.Header().Get("Content-Security-Policy")
+	}
+
+	if csp := serve(&settings.Server{}); !strings.Contains(csp, "frame-ancestors 'none';") {
+		t.Errorf("an unconfigured server must stay unframeable: %s", csp)
+	}
+
+	configured := serve(&settings.Server{FrameAncestors: "https://horizon.example"})
+	if !strings.Contains(configured, "frame-ancestors https://horizon.example;") {
+		t.Errorf("the configured origin is missing from frame-ancestors: %s", configured)
+	}
+	if strings.Contains(configured, "'none'") {
+		t.Errorf("'none' survived alongside the configured origin, which forbids framing entirely: %s", configured)
+	}
+}
+
 func TestSecurityHeadersComposeWithHandlerPolicy(t *testing.T) {
 	t.Parallel()
 
@@ -206,7 +237,7 @@ func TestSecurityHeadersComposeWithHandlerPolicy(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	securityHeaders(inner).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/raw/x", nil))
+	securityHeaders(&settings.Server{}, inner).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/raw/x", nil))
 
 	policies := rec.Header().Values("Content-Security-Policy")
 	if len(policies) != 2 {

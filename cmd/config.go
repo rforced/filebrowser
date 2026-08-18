@@ -351,6 +351,7 @@ func logRunningConfig(ser *settings.Server, set *settings.Settings, auther auth.
 	fmt.Fprintf(w, "\tDomain:\t%s\n", ser.Domain)
 	fmt.Fprintf(w, "\tTeam ID:\t%s\n", ser.TeamID)
 	fmt.Fprintf(w, "\tFilesystem ID:\t%s\n", ser.FilesystemID)
+	fmt.Fprintf(w, "\tFrame Ancestors:\t%s\n", ser.FrameAncestors)
 
 	fmt.Fprintln(w, "\nTUS:")
 	fmt.Fprintf(w, "\tChunk size:\t%d\n", set.Tus.ChunkSize)
@@ -434,6 +435,8 @@ func getSettings(flags *pflag.FlagSet, set *settings.Settings, ser *settings.Ser
 			ser.TeamID, err = flags.GetString(flag.Name)
 		case "filesystemId":
 			ser.FilesystemID, err = flags.GetString(flag.Name)
+		case "frameAncestors":
+			ser.FrameAncestors, err = flags.GetString(flag.Name)
 
 		// Settings flags from [addConfigFlags]
 		case "hideLoginButton":

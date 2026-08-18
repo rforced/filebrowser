@@ -118,6 +118,10 @@ func (a *HookAuth) Auth(r *http.Request, usr users.Store, stg *settings.Settings
 }
 
 func (a *HookAuth) RunCommand(ctx context.Context) (string, error) {
+	return a.runCommand(ctx, nil, a.Cred.Password+"\x00"+a.Cred.MFACode+"\x00")
+}
+
+func (a *HookAuth) runCommand(ctx context.Context, extraArgs []string, stdin string) (string, error) {
 	name, args, err := splitCommand(a.Command)
 	if err != nil {
 		return "", err
@@ -126,10 +130,10 @@ func (a *HookAuth) RunCommand(ctx context.Context) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, hookTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := exec.CommandContext(ctx, name, append(args, extraArgs...)...)
 	cmd.WaitDelay = hookWaitDelay
 	cmd.Env = append(os.Environ(), fmt.Sprintf("USERNAME=%s", a.Cred.Username))
-	cmd.Stdin = strings.NewReader(a.Cred.Password + "\x00" + a.Cred.MFACode + "\x00")
+	cmd.Stdin = strings.NewReader(stdin)
 
 	out, err := cmd.Output()
 	if err != nil {
@@ -142,6 +146,38 @@ func (a *HookAuth) RunCommand(ctx context.Context) (string, error) {
 	a.GetValues(string(out))
 
 	return a.Fields.Values["hook.action"], nil
+}
+
+// AuthHandoff exchanges a single-use handoff code minted by the job platform
+// for the user the platform vouches for. The hook command runs with a
+// "handoff" argument and the code on stdin, and must answer hook.action=auth
+// together with hook.user=<username> for the exchange to succeed.
+func (a *HookAuth) AuthHandoff(ctx context.Context, code string, usr users.Store, stg *settings.Settings, srv *settings.Server) (*users.User, error) {
+	a.Users = usr
+	a.Settings = stg
+	a.Server = srv
+	a.Cred = hookCred{}
+
+	action, err := a.runCommand(ctx, []string{"handoff"}, code+"\x00")
+	if err != nil {
+		return nil, err
+	}
+
+	username := a.Fields.GetString("hook.user", "")
+	if action != "auth" || username == "" {
+		return nil, os.ErrPermission
+	}
+
+	// The placeholder password is never a usable credential: hook users are
+	// LockPassword'd and every interactive login is revalidated by the hook.
+	password, err := GenerateToken()
+	if err != nil {
+		return nil, err
+	}
+
+	a.Cred = hookCred{Username: username, Password: password}
+
+	return a.SaveUser()
 }
 
 func splitCommand(command string) (name string, args []string, err error) {
@@ -320,6 +356,7 @@ var validHookFields = []string{
 	"hook.action",
 	"hook.mfa.method",
 	"hook.mfa.error",
+	"hook.user",
 	"user.scope",
 	"user.locale",
 	"user.viewMode",

@@ -119,6 +119,7 @@ func addServerFlags(flags *pflag.FlagSet) {
 	flags.String("domain", "", "Job platform domain (e.g. app.job.io)")
 	flags.String("teamId", "", "Job platform team ID")
 	flags.String("filesystemId", "", "Job platform filesystem ID")
+	flags.String("frameAncestors", "", "CSP frame-ancestors source list of origins allowed to embed the app (empty means none)")
 }
 
 // splitList turns a comma-separated flag value into the slice it stands for,
@@ -422,6 +423,10 @@ func getServerSettings(v *viper.Viper, st *storage.Storage) (*settings.Server, e
 		server.FilesystemID = v.GetString("filesystemId")
 	}
 
+	if v.IsSet("frameAncestors") {
+		server.FrameAncestors = v.GetString("frameAncestors")
+	}
+
 	if isAddrSet && isSocketSet {
 		return nil, errors.New("--socket flag cannot be used with --address, --port, --key nor --cert")
 	}
@@ -534,6 +539,7 @@ func quickSetup(v *viper.Viper, s *storage.Storage) error {
 		EnableThumbnails:      !v.GetBool("disableThumbnails"),
 		ResizePreview:         !v.GetBool("disablePreviewResize"),
 		TypeDetectionByHeader: !v.GetBool("disableTypeDetectionByHeader"),
+		FrameAncestors:        v.GetString("frameAncestors"),
 	}
 
 	err = s.Settings.SaveServer(ser)

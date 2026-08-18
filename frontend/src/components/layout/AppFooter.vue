@@ -1,5 +1,6 @@
 <template>
   <footer
+    v-if="!embedded"
     data-component="footer"
     class="flex gap-4 md:gap-8 flex-wrap sm:flex-nowrap items-center justify-center bg-gray-100 dark:bg-gray-900 border-t dark:border-gray-700 px-3 md:px-6 py-3 z-30"
   >
@@ -35,6 +36,7 @@
 import { useI18n } from "vue-i18n";
 import { useLayoutStore } from "@/stores/layout";
 import { version } from "@/utils/constants";
+import { embedded } from "@/utils/embedded";
 import ThemeSwitch from "@/components/ui/ThemeSwitch.vue";
 
 const { t } = useI18n();

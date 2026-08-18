@@ -291,6 +291,128 @@ func TestRunCommandTimesOut(t *testing.T) {
 	}
 }
 
+func TestAuthHandoffExchangesTheCodeForTheVouchedUser(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+
+	script := writeBashHookScript(t, `IFS= read -r -d '' CODE
+if [ "${1:-}" = handoff ] && [ "$CODE" = one-time-code ]; then
+  echo hook.action=auth
+  echo hook.user=alice@example.com
+  echo user.perm.create=true
+else
+  echo hook.action=block
+fi
+`)
+
+	a := &HookAuth{Command: script}
+
+	u, err := a.AuthHandoff(context.Background(), "one-time-code", newProvisionStore(), &settings.Settings{
+		Key:      []byte("key"),
+		Defaults: settings.UserDefaults{Scope: "."},
+	}, &settings.Server{Root: t.TempDir()})
+	if err != nil {
+		t.Fatalf("AuthHandoff error: %v", err)
+	}
+	if u.Username != "alice@example.com" {
+		t.Errorf("username = %q, want the hook.user the platform vouched for", u.Username)
+	}
+	if !u.Perm.Create || u.Perm.Admin {
+		t.Errorf("permissions did not follow the hook response: %+v", u.Perm)
+	}
+	if !u.LockPassword {
+		t.Error("a handoff-provisioned user must not manage its own password")
+	}
+}
+
+// A replayed interactive-login response — hook.action=auth with no hook.user —
+// must not authenticate as anyone: with no typed username there is no one the
+// exchange could legitimately become.
+func TestAuthHandoffRefusesAuthWithoutAVouchedUser(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+
+	script := writeHookScript(t, "echo hook.action=auth\n")
+
+	a := &HookAuth{Command: script}
+
+	u, err := a.AuthHandoff(context.Background(), "any", newProvisionStore(), &settings.Settings{}, &settings.Server{})
+	if u != nil {
+		t.Fatal("an unvouched exchange must not authenticate")
+	}
+	if !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("expected os.ErrPermission, got %v", err)
+	}
+}
+
+func TestAuthHandoffRefusesABlockedCode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+
+	script := writeHookScript(t, "echo hook.action=block\n")
+
+	a := &HookAuth{Command: script}
+
+	if _, err := a.AuthHandoff(context.Background(), "spent", newProvisionStore(), &settings.Settings{}, &settings.Server{}); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("expected os.ErrPermission, got %v", err)
+	}
+}
+
+// The code travels on stdin like the credentials do: nothing secret may reach
+// the hook through its argument list or environment, where other processes on
+// the node could read it.
+func TestAuthHandoffKeepsTheCodeOffTheCommandLineAndEnvironment(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+
+	dir := t.TempDir()
+	argsOut := filepath.Join(dir, "args.txt")
+	envOut := filepath.Join(dir, "env.txt")
+	codeOut := filepath.Join(dir, "code.txt")
+
+	script := writeBashHookScript(t, `printf '%s' "$*" > `+argsOut+`
+env > `+envOut+`
+IFS= read -r -d '' CODE
+printf '%s' "$CODE" > `+codeOut+`
+echo hook.action=block
+`)
+
+	const code = "uniq-handoff-code-do-not-leak"
+	a := &HookAuth{Command: script}
+
+	if _, err := a.AuthHandoff(context.Background(), code, newProvisionStore(), &settings.Settings{}, &settings.Server{}); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("expected os.ErrPermission, got %v", err)
+	}
+
+	args, err := os.ReadFile(argsOut)
+	if err != nil {
+		t.Fatalf("failed to read captured args: %v", err)
+	}
+	if string(args) != "handoff" {
+		t.Errorf("hook args = %q, want just the handoff marker", args)
+	}
+
+	env, err := os.ReadFile(envOut)
+	if err != nil {
+		t.Fatalf("failed to read captured environment: %v", err)
+	}
+	if strings.Contains(string(env), code) {
+		t.Error("VULNERABLE: the handoff code was passed in the hook's environment")
+	}
+
+	got, err := os.ReadFile(codeOut)
+	if err != nil {
+		t.Fatalf("failed to read captured code: %v", err)
+	}
+	if string(got) != code {
+		t.Errorf("hook received code %q on stdin, want %q", got, code)
+	}
+}
+
 func TestSplitCommand(t *testing.T) {
 	t.Parallel()
 

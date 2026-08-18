@@ -27,11 +27,22 @@ export const resolveTheme = (preference: ThemePreference): ResolvedTheme => {
 export const getTheme = (): ResolvedTheme =>
   document.documentElement.classList.contains("dark") ? "dark" : "light";
 
-export const applyThemePreference = (preference: ThemePreference): void => {
-  const resolved = resolveTheme(preference);
+const applyResolvedTheme = (resolved: ResolvedTheme): void => {
   document.documentElement.classList.toggle("dark", resolved === "dark");
   localStorage.setItem(RESOLVED_KEY, resolved);
   window.dispatchEvent(new CustomEvent("theme-changed"));
+};
+
+export const applyThemePreference = (preference: ThemePreference): void => {
+  applyResolvedTheme(resolveTheme(preference));
+};
+
+/**
+ * Apply a theme pushed by the embedding platform, bypassing the local
+ * preference so the standalone app keeps its own choice.
+ */
+export const applyEmbeddedTheme = (resolved: ResolvedTheme): void => {
+  applyResolvedTheme(resolved);
 };
 
 export const setThemePreference = (preference: ThemePreference): void => {

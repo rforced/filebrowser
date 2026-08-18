@@ -14,6 +14,7 @@ import {
   getThemePreference,
   watchSystemTheme,
 } from "./utils/theme";
+import { framed, syncEmbeddedTheme } from "./utils/embedded";
 import { name } from "./utils/constants";
 
 const { locale } = useI18n();
@@ -22,7 +23,14 @@ let unwatchTheme: (() => void) | undefined;
 
 onMounted(() => {
   applyThemePreference(getThemePreference());
-  unwatchTheme = watchSystemTheme();
+
+  // Framed, the platform's theme wins over the local preference and the OS
+  // scheme; standalone, the usual preference + system watcher apply.
+  if (framed) {
+    syncEmbeddedTheme();
+  } else {
+    unwatchTheme = watchSystemTheme();
+  }
 
   setHtmlLocale(locale.value);
 

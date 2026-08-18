@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -96,6 +98,123 @@ func createTestToken(t *testing.T, env *httpTestEnv, userID uint, expiry time.Du
 		t.Fatalf("failed to save token: %v", err)
 	}
 	return tokenStr
+}
+
+// switchToHookAuth reconfigures the test storage onto the hook auth method
+// with the given hook script body, as a node deployment would be.
+func switchToHookAuth(t *testing.T, env *httpTestEnv, hookBody string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX shell")
+	}
+
+	script := filepath.Join(t.TempDir(), "hook.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\n"+hookBody), 0o700); err != nil {
+		t.Fatalf("failed to write hook script: %v", err)
+	}
+
+	if err := env.storage.Settings.Save(&settings.Settings{
+		AuthMethod: auth.MethodHookAuth,
+		Key:        []byte("testkey"),
+		Defaults: settings.UserDefaults{
+			Scope: ".",
+			Perm:  users.Permissions{Admin: false},
+		},
+	}); err != nil {
+		t.Fatalf("failed to save settings: %v", err)
+	}
+	if err := env.storage.Auth.Save(&auth.HookAuth{Command: script}); err != nil {
+		t.Fatalf("failed to save auth: %v", err)
+	}
+}
+
+func TestHandoffHandler(t *testing.T) {
+	t.Parallel()
+	env := setupTestStorage(t)
+	switchToHookAuth(t, env, "echo hook.action=auth\necho hook.user=embedded@example.com\n")
+
+	handler := handle(handoffHandler(testTokenPolicy), "", env.storage, env.server)
+
+	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(`{"code":"one-time-code"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.RemoteAddr = "192.0.2.60:1234"
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, r)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	tokenStr := recorder.Body.String()
+	if len(tokenStr) != 64 {
+		t.Errorf("expected 64-char token, got %d chars", len(tokenStr))
+	}
+
+	tok, err := env.storage.Tokens.Get(tokenStr)
+	if err != nil {
+		t.Fatalf("token not found in store: %v", err)
+	}
+
+	vouched, err := env.storage.Users.Get(env.server.Root, "embedded@example.com")
+	if err != nil {
+		t.Fatalf("the vouched user was not provisioned: %v", err)
+	}
+	if tok.UserID != vouched.ID {
+		t.Errorf("token userID = %d, want the vouched user %d", tok.UserID, vouched.ID)
+	}
+}
+
+func TestHandoffHandler_RefusedCode(t *testing.T) {
+	t.Parallel()
+	env := setupTestStorage(t)
+	switchToHookAuth(t, env, "echo hook.action=block\n")
+
+	handler := handle(handoffHandler(testTokenPolicy), "", env.storage, env.server)
+
+	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(`{"code":"spent"}`))
+	r.RemoteAddr = "192.0.2.61:1234"
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, r)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+// Handoff exists only where an external platform can vouch for a code. Under
+// any other auth method the route must play dead rather than become an
+// unauthenticated door.
+func TestHandoffHandler_RequiresHookAuth(t *testing.T) {
+	t.Parallel()
+	env := setupTestStorage(t)
+
+	handler := handle(handoffHandler(testTokenPolicy), "", env.storage, env.server)
+
+	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(`{"code":"anything"}`))
+	r.RemoteAddr = "192.0.2.62:1234"
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, r)
+
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", recorder.Code, http.StatusNotFound)
+	}
+}
+
+func TestHandoffHandler_EmptyCode(t *testing.T) {
+	t.Parallel()
+	env := setupTestStorage(t)
+	switchToHookAuth(t, env, "echo hook.action=auth\necho hook.user=embedded@example.com\n")
+
+	handler := handle(handoffHandler(testTokenPolicy), "", env.storage, env.server)
+
+	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(`{}`))
+	r.RemoteAddr = "192.0.2.63:1234"
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, r)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	}
 }
 
 func TestExtractToken(t *testing.T) {
