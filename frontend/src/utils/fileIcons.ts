@@ -18,12 +18,18 @@ const TEAL = "text-teal-700 dark:text-teal-400";
 
 const MODEL: FileIcon = { icon: "fa-solid fa-cube", color: TEAL };
 
+const FIELD: FileIcon = { icon: "fa-solid fa-cubes", color: VIOLET };
+const RESTART: FileIcon = { icon: "fa-solid fa-rotate-right", color: YELLOW };
+const MAPPED: FileIcon = { icon: "fa-solid fa-right-left", color: GREEN };
+const LOOKUP: FileIcon = { icon: "fa-solid fa-table-cells", color: GREEN };
+const DATASET: FileIcon = { icon: "fa-solid fa-database", color: VIOLET };
+
 const BY_EXTENSION: Record<string, FileIcon> = {
   ".in": { icon: "fa-solid fa-file-pen", color: GREEN },
   ".echo": { icon: "fa-solid fa-file-lines", color: GRAY },
-  ".rst": { icon: "fa-solid fa-file-zipper", color: YELLOW },
-  ".h5": { icon: "fa-solid fa-database", color: VIOLET },
-  ".cgns": { icon: "fa-solid fa-database", color: VIOLET },
+  ".rst": RESTART,
+  ".h5": DATASET,
+  ".cgns": FIELD,
   ".out": { icon: "fa-solid fa-file-lines", color: GRAY },
   ".stl": MODEL,
   ".obj": MODEL,
@@ -143,6 +149,13 @@ const BY_TYPE: Record<string, FileIcon> = {
   invalid_link: { icon: "fa-solid fa-link-slash", color: RED },
 };
 
+/** Name rules, tried before the extension map, lowest-cardinality first. */
+const BY_NAME: [RegExp, FileIcon][] = [
+  [/^post.*\.h5$/, FIELD],
+  [/^map.*\.h5$/, MAPPED],
+  [/table.*\.h5$/, LOOKUP],
+];
+
 const DIRECTORY: FileIcon = { icon: "fa-solid fa-folder", color: BLUE };
 const FALLBACK: FileIcon = { icon: "fa-solid fa-file", color: GRAY };
 
@@ -157,7 +170,13 @@ export interface IconSubject {
 export const fileIcon = (item: IconSubject): FileIcon => {
   if (item.isDir) return DIRECTORY;
 
-  if (item.name && isSurfaceDatName(item.name)) return MODEL;
+  const name = item.name?.toLowerCase();
+  if (name) {
+    if (isSurfaceDatName(name)) return MODEL;
+    for (const [pattern, icon] of BY_NAME) {
+      if (pattern.test(name)) return icon;
+    }
+  }
 
   const ext = item.extension?.toLowerCase();
   if (ext && BY_EXTENSION[ext]) return BY_EXTENSION[ext];
