@@ -1,6 +1,7 @@
 package fbhttp
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"maps"
@@ -418,4 +419,67 @@ func TestEarClipDegenerateInput(t *testing.T) {
 			}
 		}
 	})
+}
+
+// A viewer that navigates away mid-extraction has to stop the work, not merely
+// stop reading its result: a surface is the most expensive thing this server
+// builds, and a prefetching client can queue many at once.
+func TestH5SurfaceStopsWhenTheClientHasGone(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet,
+		"/api/h5/post.h5?surface=STREAM_00", http.NoBody)
+	req.Header.Set("X-Auth", token)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Body.Len() != 0 {
+		t.Errorf("wrote %d bytes for a client that had already gone", rec.Body.Len())
+	}
+}
+
+// The handler's own checks sit between the expensive steps; this covers the
+// poll inside the face walk, which is where a large case spends its time.
+func TestH5ExtractSurfaceHonoursCancellation(t *testing.T) {
+	// Big enough to reach a poll, which is deliberately periodic rather than
+	// per face.
+	const faces = 8192
+
+	in := h5SurfaceInput{
+		Offsets:      make([]int64, faces+1),
+		PolyToVertex: make([]int64, 3*faces),
+		Connected:    make([]int64, 2*faces),
+		X:            make([]float64, 3*faces),
+		Y:            make([]float64, 3*faces),
+		Z:            make([]float64, 3*faces),
+		IDs:          []int64{1},
+		ByBoundary:   map[int64][]int32{1: make([]int32, faces)},
+		Stride:       1,
+	}
+	for i := 0; i < faces; i++ {
+		in.Offsets[i] = int64(3 * i)
+		in.ByBoundary[1][i] = int32(i)
+		in.Connected[2*i] = -2 // boundary 1 owns the face
+		for k := 0; k < 3; k++ {
+			v := 3*i + k
+			in.PolyToVertex[v] = int64(v)
+		}
+		in.X[3*i], in.Y[3*i] = float64(i), 0
+		in.X[3*i+1], in.Y[3*i+1] = float64(i)+1, 0
+		in.X[3*i+2], in.Y[3*i+2] = float64(i), 1
+	}
+	in.Offsets[faces] = int64(3 * faces)
+
+	if _, err := h5ExtractSurface(context.Background(), in); err != nil {
+		t.Fatalf("uncancelled extraction failed: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := h5ExtractSurface(ctx, in); err == nil {
+		t.Error("extraction ran to completion for a cancelled request")
+	}
 }

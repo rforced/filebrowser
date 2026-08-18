@@ -342,17 +342,93 @@
           </div>
         </div>
 
+        <!-- Playback over the sibling post files of this run: the same
+             transport as the Catalyst image player, but every frame is a
+             fresh surface (AMR remeshes between outputs). -->
+        <div
+          v-if="frames.length > 1"
+          class="flex items-center gap-2 px-3 md:px-6 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
+        >
+          <button
+            v-tooltip="t('h5View.prevFrame')"
+            type="button"
+            class="action disabled:opacity-40"
+            :aria-label="t('h5View.prevFrame')"
+            :disabled="frameIndex === 0"
+            @click="stepFrame(-1)"
+          >
+            <i class="fa-solid fa-backward-step"></i>
+          </button>
+          <button
+            type="button"
+            class="action"
+            :aria-label="playing ? t('buttons.pause') : t('buttons.play')"
+            @click="togglePlay"
+          >
+            <i class="fa-solid" :class="playing ? 'fa-pause' : 'fa-play'"></i>
+          </button>
+          <button
+            v-tooltip="t('h5View.nextFrame')"
+            type="button"
+            class="action disabled:opacity-40"
+            :aria-label="t('h5View.nextFrame')"
+            :disabled="frameIndex >= frames.length - 1"
+            @click="stepFrame(1)"
+          >
+            <i class="fa-solid fa-forward-step"></i>
+          </button>
+
+          <input
+            type="range"
+            class="flex-1 min-w-24 accent-blue-500"
+            :min="0"
+            :max="frames.length - 1"
+            :value="frameIndex"
+            :aria-label="t('h5View.frame')"
+            @input="onScrub"
+          />
+
+          <span
+            class="text-xs tabular-nums text-gray-600 dark:text-gray-300 shrink-0"
+          >
+            {{ frameCaption }}
+          </span>
+
+          <select
+            v-model.number="fps"
+            class="form-control py-0.5 text-xs w-auto"
+            :aria-label="t('h5View.playbackSpeed')"
+          >
+            <option v-for="rate in [2, 5, 10]" :key="rate" :value="rate">
+              {{ t("sequence.speed", { fps: rate }) }}
+            </option>
+          </select>
+
+          <button
+            v-if="surfaceScalar && lockedRange"
+            v-tooltip="t('h5View.rescale')"
+            type="button"
+            class="action"
+            :aria-label="t('h5View.rescale')"
+            @click="rescaleRange"
+          >
+            <i class="fa-solid fa-arrows-left-right"></i>
+          </button>
+        </div>
+
         <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
           <!-- Mounted on first use and kept: the surface is megabytes of
                geometry, so opening any post file must not fetch it. -->
           <BoundarySurface
             v-if="surfaceOpened && surfaceStream"
             ref="surfaceView"
-            :path="path"
+            :path="surfacePath"
             :stream="surfaceStream"
             :scalar="surfaceScalar || undefined"
             :representation="surfaceRepresentation"
+            :range="lockedRange"
             @boundaries="onSurfaceBoundaries"
+            @loaded="onSurfaceLoaded"
           />
         </div>
       </section>
@@ -454,8 +530,11 @@ import {
   formatCount,
   formatSimTime,
   formatValue,
+  outputProfile,
+  type OutputPoint,
 } from "@/utils/convergeH5";
 import type { SurfaceBoundaryInfo } from "@/utils/convergeSurface";
+import { clearSurfaceCache, prefetchSurface } from "@/utils/surfaceCache";
 import url from "@/utils/url";
 
 const authStore = useAuthStore();
@@ -483,9 +562,25 @@ const surfaceBoundaries = ref<SurfaceBoundaryInfo[]>([]);
 const hiddenBoundaries = ref<Set<number>>(new Set());
 const surfaceView = ref<InstanceType<typeof BoundarySurface> | null>(null);
 
+const frames = ref<OutputPoint[]>([]);
+const frameIndex = ref(0);
+// Resource path of the frame the surface view is showing; empty until the
+// player first moves, after which it drives the viewer instead of the route.
+const shownFrame = ref("");
+const playing = ref(false);
+const fps = ref(5);
+const lockedRange = ref<[number, number] | null>(null);
+let lastRange: [number, number] | null = null;
+let playTimer = 0;
+let scrubTimer = 0;
+let frameShownAt = 0;
+let framesDir = "";
+
 let controller: AbortController | null = null;
 
 const path = computed(() => fileStore.req?.path ?? "");
+
+const surfacePath = computed(() => shownFrame.value || path.value);
 
 const downloadUrl = computed(() =>
   fileStore.req ? api.files.getDownloadURL(fileStore.req, false) : ""
@@ -638,7 +733,162 @@ const statsFor = (v: h5.H5Variable) => stats.value.get(v.path);
 
 const onSurfaceBoundaries = (info: SurfaceBoundaryInfo[]) => {
   surfaceBoundaries.value = info;
-  hiddenBoundaries.value = new Set();
+  // Chip choices survive frame swaps: boundary ids are stable across AMR, and
+  // unhiding everything on every frame would make the player useless for
+  // looking inside a chamber.
+  const kept = new Set(
+    [...hiddenBoundaries.value].filter((id) => info.some((b) => b.id === id))
+  );
+  hiddenBoundaries.value = kept;
+  for (const id of kept) {
+    surfaceView.value?.setBoundaryVisible(id, false);
+  }
+};
+
+const frameResourcePath = (name: string) =>
+  url.removeLastDir(fileStore.req?.path ?? "") + "/" + name;
+
+const surfaceRequest = () => ({
+  stream: surfaceStream.value,
+  scalar: surfaceScalar.value || undefined,
+  edges: surfaceRepresentation.value === "edges",
+});
+
+const frameCaption = computed(() => {
+  const frame = frames.value[frameIndex.value];
+  if (!frame || frame.time === null) return "";
+  return `${formatSimTime(frame.time, summary.value?.time?.unit)} · ${
+    frameIndex.value + 1
+  }/${frames.value.length}`;
+});
+
+// The sibling post files of this run, ordered by write index so a restart
+// that revisits a crank angle doesn't fold the sequence back on itself.
+const loadFrames = async () => {
+  if (summary.value?.kind !== "post") {
+    frames.value = [];
+    return;
+  }
+  const dir = url.removeLastDir(route.path) + "/";
+  if (framesDir !== dir) {
+    framesDir = dir;
+    frames.value = [];
+    try {
+      const listing = await api.files.fetch(dir);
+      if (framesDir !== dir) return;
+      frames.value = outputProfile(
+        (listing.items ?? []).filter((item) => !item.isDir)
+      );
+    } catch {
+      framesDir = "";
+    }
+  }
+  syncFrameIndex();
+};
+
+const syncFrameIndex = () => {
+  const name = shownFrame.value
+    ? shownFrame.value.split("/").pop()
+    : fileStore.req?.name;
+  const index = frames.value.findIndex((f) => f.name === name);
+  if (index >= 0) frameIndex.value = index;
+};
+
+const showFrame = (index: number) => {
+  const clamped = Math.max(0, Math.min(index, frames.value.length - 1));
+  const frame = frames.value[clamped];
+  if (!frame) return;
+  // Lock the ramp to the range in effect when the sequence starts moving, so
+  // the colours keep one meaning instead of re-normalising every frame.
+  if (surfaceScalar.value && !lockedRange.value && lastRange) {
+    lockedRange.value = lastRange;
+  }
+  frameIndex.value = clamped;
+  shownFrame.value = frameResourcePath(frame.name);
+  frameShownAt = performance.now();
+};
+
+const advance = () => {
+  if (!playing.value || frames.value.length < 2) return;
+  showFrame((frameIndex.value + 1) % frames.value.length);
+};
+
+const play = () => {
+  if (frames.value.length < 2) return;
+  playing.value = true;
+  frameShownAt = performance.now();
+  window.clearTimeout(playTimer);
+  playTimer = window.setTimeout(advance, 1000 / fps.value);
+};
+
+const stopPlayback = () => {
+  playing.value = false;
+  window.clearTimeout(playTimer);
+};
+
+const syncFrameRoute = () => {
+  const frame = frames.value[frameIndex.value];
+  if (!frame || !shownFrame.value || frame.name === fileStore.req?.name) {
+    return;
+  }
+  router.replace({
+    path: url.removeLastDir(route.path) + "/" + encodeURIComponent(frame.name),
+    query: route.query,
+  });
+};
+
+const pause = () => {
+  stopPlayback();
+  syncFrameRoute();
+};
+
+const togglePlay = () => (playing.value ? pause() : play());
+
+const stepFrame = (delta: number) => {
+  stopPlayback();
+  showFrame(frameIndex.value + delta);
+};
+
+const onScrub = (event: Event) => {
+  stopPlayback();
+  frameIndex.value = Number((event.target as HTMLInputElement).value);
+  // Committing every tick of a drag would fire a fetch per notch; the label
+  // tracks the thumb and the frame follows once it settles.
+  window.clearTimeout(scrubTimer);
+  scrubTimer = window.setTimeout(() => showFrame(frameIndex.value), 150);
+};
+
+const rescaleRange = () => {
+  if (lastRange) lockedRange.value = [lastRange[0], lastRange[1]];
+};
+
+// Paces playback: the next frame is scheduled only once the current one is on
+// screen, so the fps setting is a ceiling and a slow network simply plays
+// slower instead of piling up requests.
+const onSurfaceLoaded = (range: [number, number] | null) => {
+  lastRange = range;
+  if (range === null) {
+    stopPlayback();
+    return;
+  }
+
+  if (shownFrame.value && frames.value.length > 1) {
+    const next = frames.value[(frameIndex.value + 1) % frames.value.length];
+    if (next) prefetchSurface(frameResourcePath(next.name), surfaceRequest());
+  }
+
+  if (playing.value) {
+    const wait = Math.max(
+      0,
+      1000 / fps.value - (performance.now() - frameShownAt)
+    );
+    window.clearTimeout(playTimer);
+    playTimer = window.setTimeout(advance, wait);
+  } else {
+    // A step or scrub landed: let the rest of the viewer (facts, variables,
+    // deep link) catch up with what the surface is showing.
+    syncFrameRoute();
+  }
 };
 
 const toggleBoundary = (id: number) => {
@@ -735,20 +985,44 @@ const load = async () => {
   controller?.abort();
   controller = new AbortController();
 
-  loading.value = true;
+  // Moving between sibling frames of one playback sequence is a soft reload:
+  // the 3D view stays mounted (tearing it down would refetch megabytes and
+  // reset the camera) and only the file-level panels refresh.
+  const soft =
+    summary.value !== null &&
+    framesDir === url.removeLastDir(route.path) + "/" &&
+    frames.value.some((f) => f.name === fileStore.req?.name);
+
+  if (soft) {
+    stopPlayback();
+    if (shownFrame.value) {
+      // Keeps the surface honest against the route (browser back included);
+      // when they already agree the string is unchanged and nothing reloads.
+      shownFrame.value = frameResourcePath(fileStore.req?.name ?? "");
+    }
+  } else {
+    loading.value = true;
+    surfaceBoundaries.value = [];
+    hiddenBoundaries.value = new Set();
+    stopPlayback();
+    shownFrame.value = "";
+    frames.value = [];
+    framesDir = "";
+    lockedRange.value = null;
+    lastRange = null;
+  }
   error.value = "";
   statsError.value = "";
   statsPending.value = false;
   stats.value = new Map();
   selected.value = new Set();
-  surfaceBoundaries.value = [];
-  hiddenBoundaries.value = new Set();
 
   try {
     summary.value = await h5.summary(path.value, controller.signal);
     const first = parcelGroups.value.find((g) => g.hasCoords && g.count > 0);
     parcelGroup.value = first?.path ?? "";
     parcelScalar.value = parcelScalars.value.includes("TEMP") ? "TEMP" : "";
+    if (surfaceOpened.value) loadFrames();
   } catch (e: any) {
     if (e?.name === "AbortError") return;
     error.value =
@@ -763,7 +1037,28 @@ const close = () => {
 };
 
 const keyEvent = (event: KeyboardEvent) => {
-  if (event.code === "Escape") close();
+  if (event.code === "Escape") {
+    close();
+    return;
+  }
+  if (activeTab.value !== "surface" || frames.value.length < 2) return;
+  const target = event.target as HTMLElement | null;
+  if (
+    target &&
+    ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(target.tagName)
+  ) {
+    return;
+  }
+  if (event.code === "Space") {
+    event.preventDefault();
+    togglePlay();
+  } else if (event.code === "ArrowRight") {
+    event.preventDefault();
+    stepFrame(1);
+  } else if (event.code === "ArrowLeft") {
+    event.preventDefault();
+    stepFrame(-1);
+  }
 };
 
 watch(path, () => load());
@@ -771,7 +1066,16 @@ watch(path, () => load());
 // The surface is fetched only once someone asks for it, and stays mounted
 // afterwards so returning to the tab is free.
 watch(activeTab, (tab) => {
-  if (tab === "surface") surfaceOpened.value = true;
+  if (tab === "surface") {
+    surfaceOpened.value = true;
+    loadFrames();
+  }
+});
+
+// A different field has a different range; carrying the old lock over would
+// colour it with another quantity's scale.
+watch(surfaceScalar, () => {
+  lockedRange.value = null;
 });
 
 // A field the new file does not carry would be a 404 where the wall should be.
@@ -809,5 +1113,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", keyEvent);
   controller?.abort();
+  stopPlayback();
+  window.clearTimeout(scrubTimer);
+  // The frames a session cached are only worth their memory while the viewer
+  // that fetched them is on screen.
+  clearSurfaceCache();
 });
 </script>

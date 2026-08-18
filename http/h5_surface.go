@@ -1,14 +1,18 @@
 package fbhttp
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/marusama/semaphore/v2"
 
 	"github.com/rforced/filebrowser/v2/hdf5"
 )
@@ -38,6 +42,21 @@ const h5MaxConnectivity = 64 << 20
 // be ~26MB of text and several seconds of parsing, so it goes over the wire in
 // the layout the GPU wants.
 const h5SurfaceMagic = "FBSURF01"
+
+// h5SurfaceSem bounds concurrent extractions. One surface reads a post file's
+// whole connectivity — hundreds of megabytes, decompressed by ZFS on the way
+// in — before a single triangle is cut, so a viewer prefetching frames will
+// otherwise put as many of those in flight as the browser opens sockets and
+// saturate the box. Half the cores leaves the rest of the server responsive.
+var h5SurfaceSem = semaphore.New(max(1, runtime.GOMAXPROCS(0)/2))
+
+// h5Abandoned answers a request whose client has already gone away: no body,
+// no status, no log line. A viewer scrubbing or stepping through frames
+// cancels constantly, and each cancellation is the client behaving correctly
+// rather than a fault worth recording.
+func h5Abandoned() (int, error) {
+	return 0, nil
+}
 
 type h5SurfaceBoundary struct {
 	ID   int64  `json:"id"`
@@ -81,7 +100,15 @@ type h5SurfaceHeader struct {
 // sending it per-face would mean unshared vertices and roughly triple the
 // payload. The averaging is visible only as a gradient across the width of one
 // cell, which is the same interpolation a post-processor shows for point data.
-func h5SurfaceResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, query map[string][]string) (int, error) {
+func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, query map[string][]string) (int, error) {
+	// Queueing here rather than at the door means a request whose client left
+	// while it waited never starts: Acquire gives up as soon as ctx is done.
+	ctx := r.Context()
+	if err := h5SurfaceSem.Acquire(ctx, 1); err != nil {
+		return h5Abandoned()
+	}
+	defer h5SurfaceSem.Release(1)
+
 	stream := strings.Trim(firstValue(query, "surface"), "/")
 	if stream == "" || stream == "1" || stream == "true" {
 		stream = "STREAM_00"
@@ -106,10 +133,16 @@ func h5SurfaceResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, que
 		return http.StatusRequestEntityTooLarge,
 			fmt.Errorf("mesh too large to extract: %d faces, %d face vertices", len(offsets)-1, len(polyToVertex))
 	}
+	if ctx.Err() != nil {
+		return h5Abandoned()
+	}
 
 	xs, ys, zs, err := h5VertexCoords(f, stream)
 	if err != nil {
 		return http.StatusNotFound, err
+	}
+	if ctx.Err() != nil {
+		return h5Abandoned()
 	}
 
 	faceCount := len(offsets) - 1
@@ -180,7 +213,7 @@ func h5SurfaceResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, que
 	}
 
 	edges := firstValue(query, "edges")
-	surface := h5ExtractSurface(h5SurfaceInput{
+	surface, err := h5ExtractSurface(ctx, h5SurfaceInput{
 		Offsets:      offsets,
 		PolyToVertex: polyToVertex,
 		Connected:    connected,
@@ -191,6 +224,9 @@ func h5SurfaceResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, que
 		Stride:     stride,
 		WithEdges:  edges == "1" || edges == "true",
 	})
+	if err != nil {
+		return h5Abandoned()
+	}
 
 	names := map[int64]string{}
 	for _, b := range h5ReadBoundaries(f) {
@@ -209,6 +245,11 @@ func h5SurfaceResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, que
 	header.Edges = len(surface.Edges)
 	header.Boundaries = surface.Boundaries
 
+	// Framing the response copies every array into one contiguous buffer, which
+	// is worth skipping outright when there is no longer anyone to send it to.
+	if ctx.Err() != nil {
+		return h5Abandoned()
+	}
 	return h5WriteSurface(w, header, surface.Positions, surface.Indices, surface.Values, surface.Edges)
 }
 
@@ -235,7 +276,12 @@ type h5SurfaceResult struct {
 
 // h5ExtractSurface walks the selected faces and builds the drawable mesh. It
 // is separated from the HTTP layer so the geometry can be tested directly.
-func h5ExtractSurface(in h5SurfaceInput) h5SurfaceResult {
+//
+// It gives up when ctx is cancelled: this is the long pole of a surface
+// request — hundreds of thousands of faces, each triangulated — and running it
+// out for a client that has already navigated away is the difference between
+// an idle box and a saturated one.
+func h5ExtractSurface(ctx context.Context, in h5SurfaceInput) (h5SurfaceResult, error) {
 	nverts := min(len(in.X), min(len(in.Y), len(in.Z)))
 	// Vertices are shared between faces, so the mesh is emitted indexed over a
 	// compacted vertex list: only the vertices the boundary actually touches
@@ -261,6 +307,7 @@ func h5ExtractSurface(in h5SurfaceInput) h5SurfaceResult {
 	}
 
 	var seenEdges map[uint64]struct{}
+	walked := 0
 	for _, id := range in.IDs {
 		entry := h5SurfaceBoundary{
 			ID:          id,
@@ -272,6 +319,12 @@ func h5ExtractSurface(in h5SurfaceInput) h5SurfaceResult {
 		}
 
 		for k, face := range in.ByBoundary[id] {
+			// Polled rather than tested per face: the check is cheap, but so is
+			// a strided iteration, and this loop runs into the millions.
+			walked++
+			if walked%4096 == 0 && ctx.Err() != nil {
+				return h5SurfaceResult{}, ctx.Err()
+			}
 			if in.Stride > 1 && k%in.Stride != 0 {
 				continue
 			}
@@ -419,7 +472,7 @@ func h5ExtractSurface(in h5SurfaceInput) h5SurfaceResult {
 		Bounds:    bounds,
 		Range:     valueRange,
 	}
-	return out
+	return out, nil
 }
 
 // earClip triangulates one simple planar polygon, returning corner indices

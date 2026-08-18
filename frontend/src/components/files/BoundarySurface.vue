@@ -2,9 +2,11 @@
   <div class="relative w-full h-full" @wheel.stop @touchmove.stop>
     <canvas ref="canvasEl" class="w-full h-full block"></canvas>
 
-    <!-- Light-on-dark in both themes: the stage behind the canvas is dark. -->
+    <!-- Light-on-dark in both themes: the stage behind the canvas is dark.
+         During playback the previous frame stays up while the next loads, so
+         the spinner only shows before there is anything to look at. -->
     <div
-      v-if="loading"
+      v-if="loading && !surface"
       class="absolute inset-0 flex items-center justify-center text-gray-400"
     >
       <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
@@ -53,9 +55,7 @@
             :style="{ background: `linear-gradient(to right, ${rampCss})` }"
           ></span>
           <span class="tabular-nums">
-            {{ formatValue(surface.range[0]) }}–{{
-              formatValue(surface.range[1])
-            }}
+            {{ formatValue(shownRange[0]) }}–{{ formatValue(shownRange[1]) }}
           </span>
         </div>
       </div>
@@ -88,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   BufferAttribute,
@@ -102,6 +102,7 @@ import {
   LineBasicMaterial,
   LineSegments,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PerspectiveCamera,
   Scene,
@@ -118,22 +119,24 @@ import {
   boundaryColorCss,
   type SurfaceBoundaryInfo,
 } from "@/utils/convergeSurface";
+import { fetchSurface } from "@/utils/surfaceCache";
 import { pngFilename, saveViewPng } from "@/utils/viewCapture";
-
-// What one response may carry. The largest post file measured yields 787k
-// triangles; past this the server strides the surface down and says so, which
-// the legend then reports rather than presenting a partial wall as the whole.
-const TRIANGLE_LIMIT = 2000000;
 
 const props = defineProps<{
   path: string;
   stream: string;
   scalar?: string;
   representation?: "surface" | "edges" | "wireframe";
+  // Pins the colour ramp to a fixed range — playback locks it so the colours
+  // keep one meaning across frames instead of re-normalising every step.
+  range?: [number, number] | null;
 }>();
 
 const emit = defineEmits<{
   boundaries: [boundaries: SurfaceBoundaryInfo[]];
+  // The frame's own value range, or null when the load failed. Playback paces
+  // itself on this signal.
+  loaded: [range: [number, number] | null];
 }>();
 
 const { t } = useI18n({});
@@ -154,9 +157,16 @@ let observer: ResizeObserver | null = null;
 let frameId = 0;
 let invalidated = true;
 let loadToken = 0;
-let controller: AbortController | null = null;
 let radius = 1;
 let center: [number, number, number] = [0, 0, 0];
+let colorAttr: Float32BufferAttribute | null = null;
+// The camera frames the model once; after that it belongs to the user, so a
+// frame swap or a scalar change must not yank it back.
+let hasView = false;
+
+const shownRange = computed(
+  () => props.range ?? surface.value?.range ?? [0, 0]
+);
 
 // One material serves every boundary's outline; near-black reads as a mesh
 // line over any boundary colour or ramp.
@@ -170,10 +180,12 @@ const disposeModel = () => {
       (lines as LineSegments).geometry.dispose();
     }
     mesh.geometry.dispose();
-    (mesh.material as MeshStandardMaterial).dispose();
+    (mesh.userData.fill as MeshStandardMaterial).dispose();
+    (mesh.userData.wire as MeshBasicMaterial).dispose();
   }
   scene?.remove(model);
   model = null;
+  colorAttr = null;
 };
 
 const build = (data: h5.H5Surface) => {
@@ -187,7 +199,7 @@ const build = (data: h5.H5Surface) => {
 
   let colors: Float32BufferAttribute | null = null;
   if (data.values) {
-    const [lo, hi] = data.range;
+    const [lo, hi] = props.range ?? data.range;
     const rgb = new Float32Array(data.values.length * 3);
     for (let i = 0; i < data.values.length; i++) {
       const [r, g, b] = rampAt(normalize(data.values[i], lo, hi));
@@ -197,6 +209,7 @@ const build = (data: h5.H5Surface) => {
     }
     colors = new Float32BufferAttribute(rgb, 3);
   }
+  colorAttr = colors;
 
   const group = new Group();
   const legend: SurfaceBoundaryInfo[] = [];
@@ -216,29 +229,39 @@ const build = (data: h5.H5Surface) => {
     );
 
     const { h, s, l } = boundaryColor(slot);
-    const mesh = new Mesh(
-      geometry,
-      new MeshStandardMaterial({
-        // Cut-cell faces are the geometry here, so they are shaded as facets
-        // rather than smoothed across. It also sidesteps vertex normals
-        // entirely: the faces of a boundary do not share a winding
-        // convention, and averaging opposed normals at a shared corner would
-        // cancel them into black patches.
-        flatShading: true,
-        side: DoubleSide,
-        vertexColors: colors !== null,
-        color: colors ? 0xffffff : new Color().setHSL(h / 360, s, l),
-        metalness: 0.1,
-        roughness: 0.75,
-        wireframe: rep() === "wireframe",
-        // The fill sits a hair behind its depth so the edge lines cannot
-        // z-fight it.
-        polygonOffset: true,
-        polygonOffsetFactor: 1,
-        polygonOffsetUnits: 1,
-      })
-    );
+    const color = colors ? 0xffffff : new Color().setHSL(h / 360, s, l);
+    const fill = new MeshStandardMaterial({
+      // Cut-cell faces are the geometry here, so they are shaded as facets
+      // rather than smoothed across. It also sidesteps vertex normals
+      // entirely: the faces of a boundary do not share a winding
+      // convention, and averaging opposed normals at a shared corner would
+      // cancel them into black patches.
+      flatShading: true,
+      side: DoubleSide,
+      vertexColors: colors !== null,
+      color,
+      metalness: 0.1,
+      roughness: 0.75,
+      // The fill sits a hair behind its depth so the edge lines cannot
+      // z-fight it.
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
+    });
+    // Wireframe is a separate unlit material: with no normal attribute, flat
+    // shading derives normals from triangle derivatives, which do not exist
+    // on line primitives — a lit wireframe shades as garbage, black on most
+    // GPUs.
+    const wire = new MeshBasicMaterial({
+      wireframe: true,
+      vertexColors: colors !== null,
+      color,
+    });
+
+    const mesh = new Mesh(geometry, rep() === "wireframe" ? wire : fill);
     mesh.userData.boundaryId = boundary.id;
+    mesh.userData.fill = fill;
+    mesh.userData.wire = wire;
     group.add(mesh);
 
     if (data.edgeIndices && boundary.edgeCount) {
@@ -275,7 +298,28 @@ const build = (data: h5.H5Surface) => {
   center = [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
   const extent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
   radius = (Number.isFinite(extent) && extent > 0 ? extent : 1e-3) / 2;
-  resetView();
+  if (!hasView) {
+    resetView();
+    hasView = true;
+  } else {
+    invalidated = true;
+  }
+};
+
+// A range change is a recolour of what is already on the GPU, never a refetch.
+const recolor = () => {
+  const data = surface.value;
+  if (!data?.values || !colorAttr) return;
+  const [lo, hi] = props.range ?? data.range;
+  const rgb = colorAttr.array as Float32Array;
+  for (let i = 0; i < data.values.length; i++) {
+    const [r, g, b] = rampAt(normalize(data.values[i], lo, hi));
+    rgb[i * 3] = r;
+    rgb[i * 3 + 1] = g;
+    rgb[i * 3 + 2] = b;
+  }
+  colorAttr.needsUpdate = true;
+  invalidated = true;
 };
 
 const resetView = () => {
@@ -304,9 +348,10 @@ const applyRepresentation = () => {
       child.visible = mode === "edges";
       return;
     }
-    const material = (child as Mesh).material as MeshStandardMaterial;
-    if (material && "wireframe" in material) {
-      material.wireframe = mode === "wireframe";
+    const mesh = child as Mesh;
+    if (mesh.userData.fill) {
+      mesh.material =
+        mode === "wireframe" ? mesh.userData.wire : mesh.userData.fill;
     }
   });
   invalidated = true;
@@ -343,34 +388,32 @@ const animate = () => {
 };
 
 const load = async () => {
+  if (!props.path) return;
   const token = ++loadToken;
-  controller?.abort();
-  controller = new AbortController();
 
   loading.value = true;
   error.value = "";
 
   const withEdges = rep() === "edges";
   try {
-    const data = await h5.surface(
-      props.path,
-      {
-        stream: props.stream,
-        scalar: props.scalar,
-        limit: TRIANGLE_LIMIT,
-        edges: withEdges,
-      },
-      controller.signal
-    );
+    // The cache owns the request, so a frame revisited while scrubbing — or
+    // reloaded by the route sync on pause — never hits the network twice.
+    const data = await fetchSurface(props.path, {
+      stream: props.stream,
+      scalar: props.scalar,
+      edges: withEdges,
+    });
     if (token !== loadToken) return;
 
     surface.value = data;
     if (data.triangles === 0) {
       error.value = t("h5View.noBoundaryFaces");
+      emit("loaded", null);
       return;
     }
     build(data);
     resize();
+    emit("loaded", [data.range[0], data.range[1]]);
 
     // The representation moved to edges while this request was in flight
     // without them; go straight back for the same surface with its outline.
@@ -382,6 +425,7 @@ const load = async () => {
       return;
     }
     error.value = e?.message ?? String(e);
+    emit("loaded", null);
   } finally {
     if (token === loadToken) loading.value = false;
   }
@@ -444,9 +488,10 @@ watch(
   }
 );
 
+watch(() => props.range, recolor);
+
 onBeforeUnmount(() => {
   loadToken++;
-  controller?.abort();
   cancelAnimationFrame(frameId);
   observer?.disconnect();
   observer = null;
