@@ -65,6 +65,16 @@ interface ConflictingResource {
   isSmallerOnServer?: boolean;
 }
 
+/*
+ * The search endpoint streams its own minimal shape — `dir`, not the `isDir`
+ * every other resource response uses — so it does not extend ResourceBase.
+ */
+interface SearchItem {
+  dir: boolean;
+  path: string;
+  url: string;
+}
+
 interface RecursiveEntry {
   path: string;
   name: string;

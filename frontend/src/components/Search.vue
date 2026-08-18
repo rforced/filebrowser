@@ -44,14 +44,22 @@
         >
           <router-link
             :to="result.url"
-            class="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-blue-500 hover:text-white transition"
+            class="group flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-blue-500 hover:text-white transition"
             @click="close"
           >
             <i
               class="fa-solid fa-fw shrink-0"
               :class="result.dir ? 'fa-folder' : 'fa-file'"
             ></i>
-            <span class="truncate">./{{ result.path }}</span>
+            <span class="flex items-baseline min-w-0">
+              <span
+                class="truncate min-w-0 text-gray-500 dark:text-gray-400 group-hover:text-white"
+                >{{ result.parent }}</span
+              >
+              <span class="shrink-0 max-w-full truncate">{{
+                result.name
+              }}</span>
+            </span>
           </router-link>
         </li>
 
@@ -142,14 +150,23 @@ const input = ref<HTMLInputElement | null>(null);
 const prompt = ref("");
 const active = ref(false);
 const ongoing = ref(false);
-const results = ref<any[]>([]);
+const results = ref<SearchItem[]>([]);
 const reload = ref(false);
 const resultsCount = ref(50);
 
 let controller = new AbortController();
 
+const splitPath = (path: string) => {
+  const index = path.lastIndexOf("/");
+  return index === -1
+    ? { parent: ".", name: "/" + path }
+    : { parent: "./" + path.slice(0, index), name: path.slice(index) };
+};
+
 const filteredResults = computed(() =>
-  results.value.slice(0, resultsCount.value)
+  results.value
+    .slice(0, resultsCount.value)
+    .map((result) => ({ ...result, ...splitPath(result.path) }))
 );
 
 const text = computed(() => {

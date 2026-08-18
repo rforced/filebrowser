@@ -1,29 +1,32 @@
 <template>
   <main class="flex flex-col gap-4 p-4">
-    <Banner :title="t('sidebar.settings')" :subtitle="activeLabel">
-      <router-link to="/files/" class="btn btn-flex btn-white btn-soft">
+    <!-- Tabs, after Horizon's components/tabs/*. -->
+    <div
+      class="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700"
+    >
+      <nav
+        class="flex-1 min-w-0 flex gap-2 pl-1 overflow-x-auto"
+        :aria-label="t('sidebar.settings')"
+      >
+        <router-link
+          v-for="tab in tabs"
+          :key="tab.to"
+          :to="tab.to"
+          :data-tab="tab.active ? 'active' : 'inactive'"
+          class="relative whitespace-nowrap py-3 px-6 text-sm font-semibold rounded-t-lg border border-transparent transition-all duration-200 ease-in-out data-[tab=active]:text-blue-600 dark:data-[tab=active]:text-gray-100 data-[tab=active]:bg-white dark:data-[tab=active]:bg-gray-800 data-[tab=active]:border-blue-200 dark:data-[tab=active]:border-blue-700 data-[tab=active]:shadow-xs data-[tab=inactive]:text-slate-600 dark:data-[tab=inactive]:text-slate-400 data-[tab=inactive]:bg-slate-50 dark:data-[tab=inactive]:bg-gray-700 data-[tab=inactive]:hover:text-slate-800 dark:data-[tab=inactive]:hover:text-slate-200 data-[tab=inactive]:hover:bg-white dark:data-[tab=inactive]:hover:bg-gray-800 data-[tab=inactive]:hover:shadow-xs before:absolute before:bottom-0 before:left-1/2 before:h-0.5 before:w-0 before:bg-blue-500 before:transition-all before:duration-200 before:-translate-x-1/2 data-[tab=active]:before:w-full"
+        >
+          {{ tab.label }}
+        </router-link>
+      </nav>
+
+      <router-link
+        to="/files/"
+        class="btn btn-flex btn-white btn-soft shrink-0 mb-1"
+      >
         <i class="fa-solid fa-folder-open"></i>
         <span>{{ t("sidebar.myFiles") }}</span>
       </router-link>
-    </Banner>
-
-    <hr class="border-gray-200 dark:border-gray-700" />
-
-    <!-- Tabs, after Horizon's components/tabs/*. -->
-    <nav
-      class="flex gap-2 border-b border-gray-200 dark:border-gray-700 pl-1 overflow-x-auto"
-      :aria-label="t('sidebar.settings')"
-    >
-      <router-link
-        v-for="tab in tabs"
-        :key="tab.to"
-        :to="tab.to"
-        :data-tab="tab.active ? 'active' : 'inactive'"
-        class="relative whitespace-nowrap py-3 px-6 text-sm font-semibold rounded-t-lg border border-transparent transition-all duration-200 ease-in-out data-[tab=active]:text-blue-600 dark:data-[tab=active]:text-gray-100 data-[tab=active]:bg-white dark:data-[tab=active]:bg-gray-800 data-[tab=active]:border-blue-200 dark:data-[tab=active]:border-blue-700 data-[tab=active]:shadow-xs data-[tab=inactive]:text-slate-600 dark:data-[tab=inactive]:text-slate-400 data-[tab=inactive]:bg-slate-50 dark:data-[tab=inactive]:bg-gray-700 data-[tab=inactive]:hover:text-slate-800 dark:data-[tab=inactive]:hover:text-slate-200 data-[tab=inactive]:hover:bg-white dark:data-[tab=inactive]:hover:bg-gray-800 data-[tab=inactive]:hover:shadow-xs before:absolute before:bottom-0 before:left-1/2 before:h-0.5 before:w-0 before:bg-blue-500 before:transition-all before:duration-200 before:-translate-x-1/2 data-[tab=active]:before:w-full"
-      >
-        {{ tab.label }}
-      </router-link>
-    </nav>
+    </div>
 
     <Card v-if="loading" class="p-10">
       <div
@@ -47,7 +50,6 @@ import { useRoute } from "vue-router";
 
 import { useAuthStore } from "@/stores/auth";
 import { useLayoutStore } from "@/stores/layout";
-import Banner from "@/components/ui/Banner.vue";
 import Card from "@/components/ui/Card.vue";
 
 const { t } = useI18n();
@@ -89,6 +91,4 @@ const tabs = computed(() =>
     },
   ].filter((tab) => tab.shown)
 );
-
-const activeLabel = computed(() => tabs.value.find((tab) => tab.active)?.label);
 </script>

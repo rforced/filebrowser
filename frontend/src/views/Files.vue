@@ -2,26 +2,6 @@
   <component :is="currentView" v-if="isFullBleed" />
 
   <main v-else class="flex flex-col gap-4 p-4">
-    <Banner :title="title" :subtitle="subtitle">
-      <div class="flex gap-2 items-center">
-        <IconAction
-          v-tooltip="t('buttons.switchView')"
-          :icon="viewIcon"
-          :title="t('buttons.switchView')"
-          size="lg"
-          @action="switchView"
-        />
-        <IconAction
-          :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
-          :title="t('buttons.selectMultiple')"
-          size="lg"
-          @action="toggleMultipleSelection"
-        />
-      </div>
-    </Banner>
-
-    <hr class="border-gray-200 dark:border-gray-700" />
-
     <errors v-if="error" :errorCode="error.status" />
 
     <template v-else>
@@ -29,7 +9,22 @@
 
       <two-columns v-if="showSidebar">
         <template #main>
-          <breadcrumbs base="/files" />
+          <breadcrumbs base="/files">
+            <template #actions>
+              <IconAction
+                :icon="viewIcon"
+                :title="t('buttons.switchView')"
+                @action="switchView"
+              />
+              <IconAction
+                :icon="
+                  fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'
+                "
+                :title="t('buttons.selectMultiple')"
+                @action="toggleMultipleSelection"
+              />
+            </template>
+          </breadcrumbs>
           <component :is="currentView" v-if="currentView" />
           <Card v-else class="p-10">
             <div
@@ -49,7 +44,20 @@
       </two-columns>
 
       <template v-else>
-        <breadcrumbs base="/files" />
+        <breadcrumbs base="/files">
+          <template #actions>
+            <IconAction
+              :icon="viewIcon"
+              :title="t('buttons.switchView')"
+              @action="switchView"
+            />
+            <IconAction
+              :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
+              :title="t('buttons.selectMultiple')"
+              @action="toggleMultipleSelection"
+            />
+          </template>
+        </breadcrumbs>
         <Card class="p-10">
           <div
             class="flex flex-col items-center gap-3 text-gray-600 dark:text-gray-300"
@@ -94,7 +102,6 @@ import FileListing from "@/views/files/FileListing.vue";
 import TwoColumns from "@/components/layout/TwoColumns.vue";
 import FileActions from "@/components/files/FileActions.vue";
 import StorageCard from "@/components/files/StorageCard.vue";
-import Banner from "@/components/ui/Banner.vue";
 import Card from "@/components/ui/Card.vue";
 import HelpBox from "@/components/ui/HelpBox.vue";
 import IconAction from "@/components/ui/IconAction.vue";
@@ -186,21 +193,6 @@ const isFullBleed = computed(
 const showSidebar = computed(
   () => !error.value && fileStore.req?.isDir !== false
 );
-
-const title = computed(() => fileStore.req?.name || t("sidebar.myFiles"));
-
-const subtitle = computed(() => {
-  if (!fileStore.req?.isDir) return undefined;
-
-  const dirs = fileStore.req.numDirs;
-  const files = fileStore.req.numFiles;
-  const parts: string[] = [];
-
-  if (dirs) parts.push(`${dirs} ${t("files.folders").toLowerCase()}`);
-  if (files) parts.push(`${files} ${t("files.files").toLowerCase()}`);
-
-  return parts.length ? parts.join(" · ") : t("files.lonely");
-});
 
 const toggleMultipleSelection = () => {
   fileStore.toggleMultiple();

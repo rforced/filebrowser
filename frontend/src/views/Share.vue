@@ -1,49 +1,5 @@
 <template>
   <main class="flex flex-col gap-4 p-4">
-    <Banner
-      :title="req?.name || t('buttons.share')"
-      :subtitle="
-        req
-          ? req.isDir
-            ? t('download.downloadFolder')
-            : t('download.downloadFile')
-          : undefined
-      "
-    >
-      <div v-if="req" class="flex gap-2 items-center">
-        <IconAction
-          v-if="isSingleFile()"
-          icon="fa-paste"
-          :title="t('buttons.copyDownloadLinkToClipboard')"
-          size="lg"
-          @action="copyToClipboard(linkSelected())"
-        />
-        <IconAction
-          v-if="req.isDir"
-          :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
-          :title="t('buttons.selectMultiple')"
-          size="lg"
-          @action="toggleMultipleSelection"
-        />
-        <button
-          v-if="fileStore.selectedCount"
-          type="button"
-          class="btn btn-flex btn-blue btn-soft"
-          @click="download"
-        >
-          <i class="fa-solid fa-download"></i>
-          <span>
-            {{ t("buttons.download") }}
-            <template v-if="fileStore.selectedCount > 1"
-              >({{ fileStore.selectedCount }})</template
-            >
-          </span>
-        </button>
-      </div>
-    </Banner>
-
-    <hr class="border-gray-200 dark:border-gray-700" />
-
     <Card v-if="layoutStore.loading" class="p-10">
       <div
         class="flex flex-col items-center gap-3 text-gray-600 dark:text-gray-300"
@@ -94,7 +50,36 @@
     </template>
 
     <template v-else-if="req !== null">
-      <breadcrumbs :base="'/share/' + hash" />
+      <breadcrumbs :base="'/share/' + hash">
+        <template #actions>
+          <IconAction
+            v-if="isSingleFile()"
+            icon="fa-paste"
+            :title="t('buttons.copyDownloadLinkToClipboard')"
+            @action="copyToClipboard(linkSelected())"
+          />
+          <IconAction
+            v-if="req.isDir"
+            :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
+            :title="t('buttons.selectMultiple')"
+            @action="toggleMultipleSelection"
+          />
+          <button
+            v-if="fileStore.selectedCount"
+            type="button"
+            class="btn btn-flex btn-blue btn-soft"
+            @click="download"
+          >
+            <i class="fa-solid fa-download"></i>
+            <span>
+              {{ t("buttons.download") }}
+              <template v-if="fileStore.selectedCount > 1"
+                >({{ fileStore.selectedCount }})</template
+              >
+            </span>
+          </button>
+        </template>
+      </breadcrumbs>
 
       <two-columns>
         <template #main>
@@ -249,7 +234,6 @@ import { pub as api } from "@/api";
 import { base64url, filesize } from "@/utils";
 import dayjs from "dayjs";
 import Breadcrumbs from "@/components/Breadcrumbs.vue";
-import Banner from "@/components/ui/Banner.vue";
 import Card from "@/components/ui/Card.vue";
 import IconAction from "@/components/ui/IconAction.vue";
 import TwoColumns from "@/components/layout/TwoColumns.vue";

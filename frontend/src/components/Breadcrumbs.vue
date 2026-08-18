@@ -37,6 +37,10 @@
         >{{ link.name }}</component
       >
     </template>
+
+    <div v-if="$slots.actions" class="ms-auto flex items-center gap-2 shrink-0">
+      <slot name="actions" />
+    </div>
   </nav>
 </template>
 
