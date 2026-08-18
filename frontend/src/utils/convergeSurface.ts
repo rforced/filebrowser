@@ -51,9 +51,11 @@ export function sniffSurfaceDat(text: string): boolean {
   return Number(match[1]) > 0 && Number(match[3]) > 0;
 }
 
-// isSurfaceDatFile is the routing gate. Text-typed files are sniffed via the
-// content the resource response already carries; oversized blob-typed files
-// have no content to sniff, so only the canonical name opens the viewer.
+export function isSurfaceDatName(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.startsWith("surface") && lower.endsWith(".dat");
+}
+
 export function isSurfaceDatFile(
   name: string,
   type: string,

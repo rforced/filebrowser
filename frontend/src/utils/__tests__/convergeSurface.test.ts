@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isSurfaceDatFile,
+  isSurfaceDatName,
   parseBoundaryNames,
   parseSurfaceDat,
   sniffSurfaceDat,
@@ -57,6 +58,20 @@ describe("sniffSurfaceDat", () => {
     expect(sniffSurfaceDat("1 2\n")).toBe(false);
     expect(sniffSurfaceDat("0 0 0\n")).toBe(false);
     expect(sniffSurfaceDat("1.5 2 3\n")).toBe(false);
+  });
+});
+
+describe("isSurfaceDatName", () => {
+  it("matches the canonical name and time-stamped copies", () => {
+    expect(isSurfaceDatName("surface.dat")).toBe(true);
+    expect(isSurfaceDatName("Surface.DAT")).toBe(true);
+    expect(isSurfaceDatName("surface_1234.5.dat")).toBe(true);
+  });
+
+  it("rejects other decks", () => {
+    expect(isSurfaceDatName("therm.dat")).toBe(false);
+    expect(isSurfaceDatName("surface.out")).toBe(false);
+    expect(isSurfaceDatName("surface")).toBe(false);
   });
 });
 

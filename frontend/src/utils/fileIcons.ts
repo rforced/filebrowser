@@ -1,3 +1,5 @@
+import { isSurfaceDatName } from "@/utils/convergeSurface";
+
 export interface FileIcon {
   /** Font Awesome classes, e.g. `fa-solid fa-file-lines`. */
   icon: string;
@@ -14,6 +16,8 @@ const VIOLET = "text-purple-500 dark:text-purple-400";
 const GRAY = "text-gray-500 dark:text-gray-400";
 const TEAL = "text-teal-700 dark:text-teal-400";
 
+const MODEL: FileIcon = { icon: "fa-solid fa-cube", color: TEAL };
+
 const BY_EXTENSION: Record<string, FileIcon> = {
   ".in": { icon: "fa-solid fa-file-pen", color: GREEN },
   ".echo": { icon: "fa-solid fa-file-lines", color: GRAY },
@@ -21,9 +25,9 @@ const BY_EXTENSION: Record<string, FileIcon> = {
   ".h5": { icon: "fa-solid fa-database", color: VIOLET },
   ".cgns": { icon: "fa-solid fa-database", color: VIOLET },
   ".out": { icon: "fa-solid fa-file-lines", color: GRAY },
-  ".stl": { icon: "fa-solid fa-cube", color: TEAL },
-  ".obj": { icon: "fa-solid fa-cube", color: TEAL },
-  ".3mf": { icon: "fa-solid fa-cube", color: TEAL },
+  ".stl": MODEL,
+  ".obj": MODEL,
+  ".3mf": MODEL,
 
   // Image
   ".ai": { icon: "fa-solid fa-image", color: RED },
@@ -132,7 +136,7 @@ const BY_TYPE: Record<string, FileIcon> = {
   audio: { icon: "fa-solid fa-volume-high", color: YELLOW },
   blob: { icon: "fa-solid fa-file", color: GRAY },
   image: { icon: "fa-solid fa-image", color: ORANGE },
-  model: { icon: "fa-solid fa-cube", color: TEAL },
+  model: MODEL,
   pdf: { icon: "fa-solid fa-file-pdf", color: RED },
   text: { icon: "fa-solid fa-file-lines", color: GRAY },
   video: { icon: "fa-solid fa-film", color: VIOLET },
@@ -152,6 +156,8 @@ export interface IconSubject {
 /** Resolve the icon and colour for a listing item. */
 export const fileIcon = (item: IconSubject): FileIcon => {
   if (item.isDir) return DIRECTORY;
+
+  if (item.name && isSurfaceDatName(item.name)) return MODEL;
 
   const ext = item.extension?.toLowerCase();
   if (ext && BY_EXTENSION[ext]) return BY_EXTENSION[ext];
