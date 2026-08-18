@@ -172,7 +172,10 @@ const currentView = computed(() => {
     return OutViewer;
   } else if (
     isLogFileName(fileStore.req.name) &&
-    (route.query.view === "follow" || fileStore.req.type === "blob")
+    (fileStore.req.type === "blob" ||
+      ((fileStore.req.type === "text" ||
+        fileStore.req.type === "textImmutable") &&
+        route.query.view !== "text"))
   ) {
     return LogViewer;
   } else if (

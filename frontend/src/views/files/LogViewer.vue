@@ -94,7 +94,7 @@
     >
       <pre
         class="px-3 md:px-6 py-3 font-mono text-xs leading-5 whitespace-pre-wrap break-all text-gray-800 dark:text-gray-200"
-        >{{ text }}</pre>
+      ><span v-for="(segment, i) in segments" :key="i" :class="segment.class">{{ segment.text }}</span></pre>
     </div>
   </div>
 </template>
@@ -115,6 +115,12 @@ import {
   parseUnsatisfiedRange,
   trimToLine,
 } from "@/utils/logTail";
+import {
+  createAnsiState,
+  pushAnsiSegments,
+  trimAnsiSegments,
+  type AnsiSegment,
+} from "@/utils/ansi";
 
 const TAIL_BYTES = 64 * 1024;
 const BUFFER_CAP = 2 * 1024 * 1024;
@@ -127,6 +133,7 @@ const router = useRouter();
 const { t } = useI18n();
 
 const text = ref("");
+const segments = ref<AnsiSegment[]>([]);
 const total = ref(0);
 const truncatedHead = ref(false);
 const following = ref(true);
@@ -141,7 +148,30 @@ let timer: number | null = null;
 // One streaming decoder across appends, so a UTF-8 sequence split between two
 // polls still decodes whole.
 let decoder = new TextDecoder("utf-8");
+// The same problem one layer up: colour set by one poll applies to the next,
+// and an escape sequence can straddle the boundary between them.
+let ansi = createAnsiState();
 let atBottom = true;
+
+// text mirrors what the segments render, so the head of both can be dropped
+// together when the buffer is capped.
+const setText = (value: string) => {
+  ansi = createAnsiState();
+  segments.value = [];
+  text.value = pushAnsiSegments(segments.value, ansi, value);
+};
+
+const appendText = (chunk: string) => {
+  text.value += pushAnsiSegments(segments.value, ansi, chunk);
+};
+
+const capText = () => {
+  const capped = capBuffer(text.value, BUFFER_CAP);
+  if (capped.length === text.value.length) return;
+  trimAnsiSegments(segments.value, text.value.length - capped.length);
+  text.value = capped;
+  truncatedHead.value = true;
+};
 
 const downloadUrl = computed(() =>
   fileStore.req ? api.getDownloadURL(fileStore.req, false) : ""
@@ -191,7 +221,7 @@ const loadTail = async () => {
     truncatedHead.value = false;
   }
 
-  text.value = tail;
+  setText(tail);
   gone.value = false;
   stickToBottom();
 };
@@ -228,14 +258,11 @@ const poll = async () => {
       const buf = await res.arrayBuffer();
       if (buf.byteLength === 0) return;
 
-      text.value += decoder.decode(buf, { stream: true });
+      appendText(decoder.decode(buf, { stream: true }));
       offset += buf.byteLength;
       if (range) total.value = range.total;
 
-      if (text.value.length > BUFFER_CAP) {
-        text.value = capBuffer(text.value, BUFFER_CAP);
-        truncatedHead.value = true;
-      }
+      if (text.value.length > BUFFER_CAP) capText();
       stickToBottom();
       return;
     }
@@ -308,7 +335,7 @@ onBeforeUnmount(() => {
 });
 
 const openAsText = () => {
-  router.replace({ query: { ...route.query, view: undefined } });
+  router.replace({ query: { ...route.query, view: "text" } });
 };
 
 const close = () => {

@@ -95,7 +95,7 @@
         </button>
 
         <button
-          v-if="authStore.user?.perm.modify"
+          v-if="authStore.user?.perm.modify && !isReadOnly"
           id="save-button"
           type="button"
           class="btn btn-flex btn-blue btn-soft"
@@ -197,6 +197,7 @@ import { useLayoutStore } from "@/stores/layout";
 import { isOutFileName } from "@/utils/convergeOut";
 import { isSurfaceDatFile } from "@/utils/convergeSurface";
 import { isLogFileName } from "@/utils/logTail";
+import { stripAnsi } from "@/utils/ansi";
 import { getEditorTheme } from "@/utils/theme";
 import { marked } from "marked";
 import { inject, onBeforeUnmount, onMounted, ref, watchEffect } from "vue";
@@ -231,6 +232,10 @@ const isSurfaceFile = isSurfaceDatFile(
   fileStore.req?.content
 );
 const isSelectionEmpty = ref(true);
+// Escape codes are stripped out of a log so it reads as text, which makes the
+// buffer a lossy copy — saving it back would rewrite a file the solver may
+// still be appending to.
+const isReadOnly = fileStore.req?.type === "textImmutable" || isLogFile;
 
 const viewAsGraph = () => {
   router.replace({ query: { ...route.query, view: "plot" } });
@@ -241,7 +246,7 @@ const view3d = () => {
 };
 
 const followLog = () => {
-  router.replace({ query: { ...route.query, view: "follow" } });
+  router.replace({ query: { ...route.query, view: undefined } });
 };
 
 const executeEditorCommand = (name: string) => {
@@ -275,7 +280,8 @@ onMounted(() => {
   window.addEventListener("keydown", keyEvent);
   window.addEventListener("beforeunload", handlePageChange);
 
-  const fileContent = fileStore.req?.content || "";
+  const raw = fileStore.req?.content || "";
+  const fileContent = isLogFile ? stripAnsi(raw) : raw;
 
   watchEffect(async () => {
     if (isMarkdownFile && isPreview.value) {
@@ -336,7 +342,7 @@ const initEditor = (fileContent: string) => {
   editor.value = ace.edit("editor", {
     value: fileContent,
     showPrintMargin: false,
-    readOnly: fileStore.req?.type === "textImmutable",
+    readOnly: isReadOnly,
     theme: getEditorTheme(),
     mode: clampMode(modelist.getModeForPath(fileStore.req!.name).mode),
     useWorker: false,
@@ -382,6 +388,8 @@ const handlePageChange = (event: BeforeUnloadEvent) => {
 };
 
 const save = async (throwError?: boolean) => {
+  if (isReadOnly) return;
+
   const button = "save";
   buttons.loading("save");
 
