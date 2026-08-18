@@ -130,6 +130,7 @@
           :src="previewUrl"
           :extension="fileStore.req.extension"
           :size="fileStore.req.size"
+          :name="fileStore.req.name"
         />
         <img
           v-else-if="fileStore.req?.type == 'image' && playerOverlay"

@@ -59,10 +59,13 @@
         </div>
       </div>
 
+      <!-- Styled like the legend chip opposite: the canvas is transparent
+           over the page, so a fixed white-on-translucent-white treatment
+           disappears entirely in the light theme. -->
       <div class="absolute right-2 bottom-2 flex gap-2">
         <button
           type="button"
-          class="surface-button"
+          class="flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-colors backdrop-blur-sm bg-white/85 text-gray-700 hover:bg-white dark:bg-gray-900/85 dark:text-gray-200 dark:hover:bg-gray-800"
           :aria-label="t('buttons.resetView')"
           :title="t('buttons.resetView')"
           @click="resetView"
@@ -71,13 +74,26 @@
         </button>
         <button
           type="button"
-          class="surface-button"
-          :class="{ 'surface-button--active': wireframe }"
+          class="flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-colors backdrop-blur-sm"
+          :class="
+            wireframe
+              ? 'bg-blue-500 text-white hover:bg-blue-600'
+              : 'bg-white/85 text-gray-700 hover:bg-white dark:bg-gray-900/85 dark:text-gray-200 dark:hover:bg-gray-800'
+          "
           :aria-label="t('buttons.wireframe')"
           :title="t('buttons.wireframe')"
           @click="toggleWireframe"
         >
           <i class="fa-solid fa-border-all"></i>
+        </button>
+        <button
+          type="button"
+          class="flex items-center justify-center w-9 h-9 rounded-full cursor-pointer transition-colors backdrop-blur-sm bg-white/85 text-gray-700 hover:bg-white dark:bg-gray-900/85 dark:text-gray-200 dark:hover:bg-gray-800"
+          :aria-label="t('buttons.savePng')"
+          :title="t('buttons.savePng')"
+          @click="savePng"
+        >
+          <i class="fa-solid fa-camera"></i>
         </button>
       </div>
     </template>
@@ -113,6 +129,7 @@ import {
   boundaryColorCss,
   type SurfaceBoundaryInfo,
 } from "@/utils/convergeSurface";
+import { pngFilename, saveViewPng } from "@/utils/viewCapture";
 
 // What one response may carry. The largest post file measured yields 787k
 // triangles; past this the server strides the surface down and says so, which
@@ -252,6 +269,12 @@ const resetView = () => {
   camera.updateProjectionMatrix();
   controls.update();
   invalidated = true;
+};
+
+const savePng = () => {
+  if (!renderer || !scene || !camera) return;
+  const base = props.path.split("/").pop() || "surface";
+  saveViewPng(renderer, scene, camera, pngFilename(base, props.scalar));
 };
 
 const toggleWireframe = () => {
@@ -396,26 +419,3 @@ onBeforeUnmount(() => {
   camera = null;
 });
 </script>
-
-<style scoped>
-.surface-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25em;
-  height: 2.25em;
-  border: 0;
-  border-radius: 50%;
-  cursor: pointer;
-  color: #fff;
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.surface-button:hover {
-  background-color: rgba(255, 255, 255, 0.35);
-}
-
-.surface-button--active {
-  background-color: var(--blue, rgba(255, 255, 255, 0.5));
-}
-</style>

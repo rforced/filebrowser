@@ -35,6 +35,14 @@
       >
         <i class="fa-solid fa-border-all"></i>
       </button>
+      <button
+        class="model-button"
+        :aria-label="t('buttons.savePng')"
+        :title="t('buttons.savePng')"
+        @click="savePng"
+      >
+        <i class="fa-solid fa-camera"></i>
+      </button>
     </div>
   </div>
 </template>
@@ -72,6 +80,7 @@ import {
   parseSurfaceDat,
   type SurfaceBoundaryInfo,
 } from "@/utils/convergeSurface";
+import { pngFilename, saveViewPng } from "@/utils/viewCapture";
 
 // Models are parsed entirely in the browser, so refuse anything large enough to
 // risk exhausting memory rather than hanging the tab.
@@ -84,6 +93,8 @@ interface Props {
   // Already-fetched file text (surfaces ride along on the resource response);
   // saves refetching the raw file.
   content?: string;
+  // Display name of the file, used to name saved captures.
+  name?: string;
 }
 
 const props = defineProps<Props>();
@@ -245,6 +256,13 @@ const resetView = () => {
   controls.target.set(0, 0, 0);
   controls.update();
   invalidated = true;
+};
+
+const savePng = () => {
+  if (!renderer || !scene || !camera) {
+    return;
+  }
+  saveViewPng(renderer, scene, camera, pngFilename(props.name ?? "model"));
 };
 
 const toggleWireframe = () => {

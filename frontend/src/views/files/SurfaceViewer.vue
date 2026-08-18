@@ -92,6 +92,7 @@
         extension=".dat"
         :size="fileStore.req.size"
         :content="fileStore.req.content"
+        :name="fileStore.req.name"
         @boundaries="onBoundaries"
         @failed="onFailed"
       />
