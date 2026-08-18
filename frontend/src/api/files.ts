@@ -3,6 +3,7 @@ import { useLayoutStore } from "@/stores/layout";
 import { baseURL } from "@/utils/constants";
 import { upload as postTus, useTus } from "./tus";
 import { createURL, fetchURL, removePrefix, StatusError } from "./utils";
+import { encodePath } from "@/utils/url";
 
 export async function fetch(url: string, signal?: AbortSignal) {
   url = removePrefix(url);
@@ -199,15 +200,24 @@ export async function checksum(url: string, algo: ChecksumAlg) {
   return (await data.json()).checksums[algo];
 }
 
-export interface DirSizeInfo {
-  size: number;
-  numFiles: number;
-  numDirs: number;
-}
-
-export async function dirSize(url: string): Promise<DirSizeInfo> {
-  const data = await resourceAction(`${url}?dirsize=true`, "GET");
-  return (await data.json()) as DirSizeInfo;
+/*
+ * Takes a resource path as the server reports it (FileInfo.path), NOT a
+ * /files/... router URL.
+ *
+ * removePrefix() is deliberately not used here. It strips the first two
+ * segments on the assumption of a router URL, so a resource path silently
+ * loses its first directory — /cases/foo becomes /foo — and a two-segment path
+ * collapses to the root, taking the query string down with the segment it
+ * drops and turning this into a plain listing request.
+ */
+export async function dirSize(
+  path: string,
+  signal?: AbortSignal
+): Promise<DirSizeInfo> {
+  const res = await fetchURL(`/api/resources${encodePath(path)}?dirsize=true`, {
+    signal,
+  });
+  return (await res.json()) as DirSizeInfo;
 }
 
 export function getDownloadURL(file: ResourceItem, inline: any) {
@@ -451,6 +461,28 @@ export async function convergeClean(
     }),
   });
   return (await res.json()) as ConvergeCleanResult;
+}
+
+/*
+ * Per-child usage for one directory, biggest first. One walk on the server
+ * answers the whole view, so the du page, the storage card's top consumers and
+ * the listing's folder sizes all come from a single request rather than one
+ * per row. `kinds=true` additionally rolls the tree up by CONVERGE output
+ * family, which cuts across the directory rows.
+ *
+ * Takes a resource path, not a router URL — see dirSize for why removePrefix
+ * must not be used on one.
+ */
+export async function usageBreakdown(
+  path: string,
+  { kinds = false, signal }: { kinds?: boolean; signal?: AbortSignal } = {}
+): Promise<UsageBreakdown> {
+  const res = await fetchURL(
+    `/api/usage/breakdown${encodePath(path)}${kinds ? "?kinds=true" : ""}`,
+    { signal }
+  );
+
+  return (await res.json()) as UsageBreakdown;
 }
 
 export async function usage(url: string, signal: AbortSignal) {

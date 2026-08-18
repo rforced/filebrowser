@@ -109,6 +109,9 @@ const LogViewer = defineAsyncComponent(
 const SurfaceViewer = defineAsyncComponent(
   () => import("@/views/files/SurfaceViewer.vue")
 );
+const DiskUsage = defineAsyncComponent(
+  () => import("@/views/files/DiskUsage.vue")
+);
 
 const layoutStore = useLayoutStore();
 const fileStore = useFileStore();
@@ -130,7 +133,8 @@ const currentView = computed(() => {
   }
 
   if (fileStore.req.isDir) {
-    return FileListing;
+    // A directory has one other view: where its space went.
+    return route.query.view === "usage" ? DiskUsage : FileListing;
   } else if (
     isOutFileName(fileStore.req.name) &&
     (fileStore.req.type === "blob" ||

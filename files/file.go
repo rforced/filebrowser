@@ -1,6 +1,7 @@
 package files
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
@@ -179,35 +180,96 @@ func (i *FileInfo) Checksum(algo string) error {
 	return nil
 }
 
+// dirSizeCancelInterval bounds how often a walk polls for cancellation.
+// ctx.Err() takes a lock, so calling it per entry measurably slows a walk over
+// a large tree, while a few hundred entries is still prompt enough for someone
+// navigating away mid-scan.
+const dirSizeCancelInterval = 512
+
 type DirSizeInfo struct {
-	Size     int64 `json:"size"`
-	NumFiles int64 `json:"numFiles"`
-	NumDirs  int64 `json:"numDirs"`
+	// Size is what the tree actually occupies, summed from the allocated block
+	// count of every entry, and so what deleting it would reclaim. It includes
+	// the blocks of the directories themselves (~9KB each on ZFS) because du
+	// counts them and this is meant to agree with du.
+	Size int64 `json:"size"`
+	// LogicalSize is the sum of the *files'* lengths — what an ls reports and
+	// what a recursive download would transfer. Directories contribute nothing
+	// here: ZFS reports an entry-count-ish st_size for them that means nothing
+	// to a caller. Kept alongside Size so the UI can show the compression ratio
+	// rather than leaving the two irreconcilable.
+	LogicalSize int64 `json:"logicalSize"`
+	NumFiles    int64 `json:"numFiles"`
+	NumDirs     int64 `json:"numDirs"`
 }
 
-func (i *FileInfo) DirSize() (*DirSizeInfo, error) {
+// AllocatedSize reports what an entry occupies on disk, falling back to its
+// logical length where the platform or filesystem cannot say. Anything
+// answering "what is filling this disk" or "what would deleting this reclaim"
+// wants this rather than info.Size(); see physicalSize for why the two are far
+// apart on Horizon's compressed datasets.
+func AllocatedSize(info os.FileInfo) int64 {
+	if size, ok := physicalSize(info); ok {
+		return size
+	}
+	return info.Size()
+}
+
+// addEntry folds one walked entry into the totals.
+func (d *DirSizeInfo) addEntry(info os.FileInfo) {
+	d.Size += AllocatedSize(info)
+	if !info.IsDir() {
+		d.LogicalSize += info.Size()
+	}
+}
+
+// DirSize walks the tree rooted at i and totals what it occupies. ctx cancels
+// the walk: on a filesystem holding hundreds of thousands of solver outputs
+// this is a long stat storm, and without it a user navigating away would leave
+// it running to completion.
+func (i *FileInfo) DirSize(ctx context.Context) (*DirSizeInfo, error) {
+	result := &DirSizeInfo{}
+
 	if !i.IsDir {
-		return &DirSizeInfo{Size: i.Size, NumFiles: 1, NumDirs: 0}, nil
+		info, err := i.Fs.Stat(i.Path)
+		if err != nil {
+			return nil, err
+		}
+		result.addEntry(info)
+		result.NumFiles = 1
+		return result, nil
 	}
 
-	var result DirSizeInfo
+	seen := 0
 	err := afero.Walk(i.Fs, i.Path, func(walkPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		if walkPath == i.Path {
-			return nil
+
+		seen++
+		if seen%dirSizeCancelInterval == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 		}
-		if info.IsDir() {
-			result.NumDirs++
-		} else {
-			result.NumFiles++
+
+		// The root's own blocks count toward the total, matching du, but the
+		// root is not one of the entries the counts are describing.
+		if walkPath != i.Path {
+			if info.IsDir() {
+				result.NumDirs++
+			} else {
+				result.NumFiles++
+			}
 		}
-		result.Size += info.Size()
+
+		result.addEntry(info)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return &result, err
+	return result, nil
 }
 
 func (i *FileInfo) RealPath() string {

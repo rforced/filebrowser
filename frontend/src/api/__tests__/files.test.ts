@@ -36,7 +36,7 @@ vi.mock("@/utils/auth", () => ({
   logout: vi.fn(),
 }));
 
-import { dirSize, checksum } from "../files";
+import { dirSize, usageBreakdown, checksum } from "../files";
 
 function mockFetchResponse(body: any, status = 200) {
   return vi.fn().mockResolvedValue({
@@ -56,75 +56,109 @@ describe("files API", () => {
   });
 
   describe("dirSize", () => {
-    it("calls the correct endpoint with dirsize=true", async () => {
-      const dirInfo = { size: 1024, numFiles: 5, numDirs: 2 };
-      globalThis.fetch = mockFetchResponse(dirInfo);
+    /*
+     * dirSize takes a RESOURCE path, the form the server reports in
+     * FileInfo.path — not a /files/... router URL. It must not go through
+     * removePrefix(), which drops the first two segments and would rewrite
+     * /cases/foo to /foo and collapse /cases to the root, taking the query
+     * string with the segment it drops.
+     */
+    it("addresses the resource path directly", async () => {
+      globalThis.fetch = mockFetchResponse({});
 
-      await dirSize("/files/documents/");
+      await dirSize("/cases/george_v4_catalyst");
 
-      expect(globalThis.fetch).toHaveBeenCalledOnce();
       const callUrl = (globalThis.fetch as any).mock.calls[0][0];
-      expect(callUrl).toContain("/api/resources/documents/");
+      expect(callUrl).toContain("/api/resources/cases/george_v4_catalyst");
       expect(callUrl).toContain("dirsize=true");
     });
 
-    it("returns DirSizeInfo with size, numFiles, and numDirs", async () => {
-      const dirInfo = { size: 4096, numFiles: 10, numDirs: 3 };
+    // A single-segment path is the case that hid the bug: it is the only shape
+    // removePrefix mangles into something that still resolves.
+    it("keeps a top-level directory addressable", async () => {
+      globalThis.fetch = mockFetchResponse({});
+
+      await dirSize("/cases");
+
+      const callUrl = (globalThis.fetch as any).mock.calls[0][0];
+      expect(callUrl).toContain("/api/resources/cases?dirsize=true");
+    });
+
+    it("encodes names that are not URL-safe", async () => {
+      globalThis.fetch = mockFetchResponse({});
+
+      await dirSize("/cases/A Big Archive");
+
+      const callUrl = (globalThis.fetch as any).mock.calls[0][0];
+      expect(callUrl).toContain("/api/resources/cases/A%20Big%20Archive");
+      expect(callUrl).not.toContain("A Big Archive");
+    });
+
+    it("returns both the allocated and the logical size", async () => {
+      const dirInfo = {
+        size: 4096,
+        logicalSize: 12000,
+        numFiles: 10,
+        numDirs: 3,
+      };
       globalThis.fetch = mockFetchResponse(dirInfo);
 
-      const result = await dirSize("/files/my-folder/");
+      const result = await dirSize("/my-folder");
 
       expect(result).toEqual(dirInfo);
       expect(result.size).toBe(4096);
-      expect(result.numFiles).toBe(10);
-      expect(result.numDirs).toBe(3);
+      expect(result.logicalSize).toBe(12000);
     });
 
     it("handles an empty directory response", async () => {
-      const dirInfo = { size: 0, numFiles: 0, numDirs: 0 };
+      const dirInfo = { size: 0, logicalSize: 0, numFiles: 0, numDirs: 0 };
       globalThis.fetch = mockFetchResponse(dirInfo);
 
-      const result = await dirSize("/files/empty/");
-
-      expect(result).toEqual({ size: 0, numFiles: 0, numDirs: 0 });
-    });
-
-    it("handles large directories with many files", async () => {
-      const dirInfo = { size: 10737418240, numFiles: 50000, numDirs: 1200 };
-      globalThis.fetch = mockFetchResponse(dirInfo);
-
-      const result = await dirSize("/files/large-dir/");
-
-      expect(result.size).toBe(10737418240);
-      expect(result.numFiles).toBe(50000);
-      expect(result.numDirs).toBe(1200);
+      expect(await dirSize("/empty")).toEqual(dirInfo);
     });
 
     it("sends a GET request", async () => {
-      globalThis.fetch = mockFetchResponse({
-        size: 0,
-        numFiles: 0,
-        numDirs: 0,
-      });
+      globalThis.fetch = mockFetchResponse({});
 
-      await dirSize("/files/test/");
+      await dirSize("/test");
 
       const callOpts = (globalThis.fetch as any).mock.calls[0][1];
-      expect(callOpts.method).toBe("GET");
+      expect(callOpts.method ?? "GET").toBe("GET");
     });
+  });
 
-    it("strips the /files prefix from the URL", async () => {
-      globalThis.fetch = mockFetchResponse({
-        size: 100,
-        numFiles: 1,
-        numDirs: 0,
-      });
+  describe("usageBreakdown", () => {
+    it("addresses the resource path directly", async () => {
+      globalThis.fetch = mockFetchResponse({ children: [] });
 
-      await dirSize("/files/path/to/folder/");
+      await usageBreakdown("/cases");
 
       const callUrl = (globalThis.fetch as any).mock.calls[0][0];
-      expect(callUrl).toContain("/api/resources/path/to/folder/");
-      expect(callUrl).not.toContain("/files/");
+      expect(callUrl).toContain("/api/usage/breakdown/cases");
+      // The bug this guards: /cases collapsing to the root, so descending into
+      // a directory kept showing its parent's children.
+      expect(callUrl).not.toMatch(/breakdown\/?$/);
+    });
+
+    it("encodes names that are not URL-safe", async () => {
+      globalThis.fetch = mockFetchResponse({ children: [] });
+
+      await usageBreakdown("/cases/A Big Archive");
+
+      const callUrl = (globalThis.fetch as any).mock.calls[0][0];
+      expect(callUrl).toContain("/api/usage/breakdown/cases/A%20Big%20Archive");
+    });
+
+    it("asks for the kind rollup only when wanted", async () => {
+      globalThis.fetch = mockFetchResponse({ children: [] });
+      await usageBreakdown("/cases");
+      expect((globalThis.fetch as any).mock.calls[0][0]).not.toContain("kinds");
+
+      globalThis.fetch = mockFetchResponse({ children: [] });
+      await usageBreakdown("/cases", { kinds: true });
+      expect((globalThis.fetch as any).mock.calls[0][0]).toContain(
+        "kinds=true"
+      );
     });
   });
 

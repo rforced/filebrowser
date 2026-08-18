@@ -46,12 +46,14 @@ import { files as api } from "@/api";
 import buttons from "@/utils/buttons";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
+import { useUsageStore } from "@/stores/usage";
 import PromptTargets from "@/components/prompts/PromptTargets.vue";
 
 const $showError = inject<IToastError>("$showError")!;
 
 const fileStore = useFileStore();
 const layoutStore = useLayoutStore();
+const usageStore = useUsageStore();
 const route = useRoute();
 const { t } = useI18n();
 
@@ -69,6 +71,10 @@ const targets = computed(() => {
 
 const submit = async () => {
   buttons.loading("delete");
+
+  // Any measured folder size upstream of what goes is now wrong, and a size the
+  // user just changed is exactly the one they will be looking at.
+  usageStore.invalidate();
 
   try {
     if (!fileStore.isListing) {

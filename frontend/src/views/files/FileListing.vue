@@ -231,6 +231,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useClipboardStore } from "@/stores/clipboard";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
+import { useUsageStore } from "@/stores/usage";
 
 import { users, files as api } from "@/api";
 import * as upload from "@/utils/upload";
@@ -257,6 +258,7 @@ const clipboardStore = useClipboardStore();
 const authStore = useAuthStore();
 const fileStore = useFileStore();
 const layoutStore = useLayoutStore();
+const usageStore = useUsageStore();
 
 const { req } = storeToRefs(fileStore);
 
@@ -318,6 +320,28 @@ const items = computed(() => {
       files.push(item);
     }
   });
+
+  /*
+   * Sorting is done by the server, which pushes every directory to one end
+   * because a directory's own st_size says nothing about the tree under it. A
+   * size the user has since calculated lives only in the client, so the sort
+   * would ignore it. Reordering the folders here is safe precisely because
+   * they render as their own section: the server's ordering of the files is
+   * untouched. Folders with no size yet keep their existing order, after the
+   * measured ones.
+   */
+  if (sizeSorted.value && dirs.some((d) => usageStore.sizes.has(d.path))) {
+    const measured = (item: any) => usageStore.sizes.get(item.path)?.size;
+
+    dirs.sort((a, b) => {
+      const sa = measured(a);
+      const sb = measured(b);
+      if (sa === undefined && sb === undefined) return 0;
+      if (sa === undefined) return 1;
+      if (sb === undefined) return -1;
+      return ascOrdered.value ? sa - sb : sb - sa;
+    });
+  }
 
   return { dirs, files };
 });

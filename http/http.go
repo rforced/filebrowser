@@ -80,6 +80,8 @@ func NewHandler(
 	api.PathPrefix("/tus").Handler(monkey(tusPatchHandler(uploadCache), "/api/tus")).Methods("PATCH")
 	api.PathPrefix("/tus").Handler(monkey(tusDeleteHandler(uploadCache), "/api/tus")).Methods("DELETE")
 
+	// Registered before /usage: gorilla takes the first matching prefix.
+	api.PathPrefix("/usage/breakdown").Handler(monkey(usageBreakdownHandler, "/api/usage/breakdown")).Methods("GET")
 	api.PathPrefix("/usage").Handler(monkey(diskUsage, "/api/usage")).Methods("GET")
 
 	api.Handle("/shares", monkey(shareListHandler, "")).Methods("GET")

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rforced/filebrowser/v2/files"
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/storage"
 	"github.com/rforced/filebrowser/v2/users"
@@ -156,6 +157,26 @@ func convergeCase(t *testing.T, dir string) int {
 	return 10 + 2
 }
 
+// allocatedOf sums what the named files occupy on disk. The scan reports
+// allocated rather than logical size, so a fixture's expected total depends on
+// the host filesystem's block size and has to be measured rather than written
+// down — a one-byte file costs a whole block on ext4 and nothing at all on a
+// filesystem that inlines small extents. Enumerating the paths independently
+// still catches both a miscount and a regression to info.Size().
+func allocatedOf(t *testing.T, dir string, rel ...string) int64 {
+	t.Helper()
+
+	var total int64
+	for _, r := range rel {
+		info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(r)))
+		if err != nil {
+			t.Fatalf("stat %s: %v", r, err)
+		}
+		total += files.AllocatedSize(info)
+	}
+	return total
+}
+
 func convergeHandlers(t *testing.T, st *storage.Storage) (scan, clean http.Handler, token string) {
 	t.Helper()
 
@@ -219,10 +240,17 @@ func TestConvergeScanCountsThroughOutputDirs(t *testing.T) {
 		}
 	}
 
-	// The outputs row is the directories as units, priced whole: 5 files of
-	// one byte across both trees, the unmatched notes.txt included.
-	if g := gotGroups["outputs"]; g.Count != 2 || g.Size != 5 {
-		t.Errorf("outputs group = %+v, want 2 dirs of 5 bytes", g)
+	// The outputs row is the directories as units, priced whole: all 5 files
+	// across both trees, the unmatched notes.txt included.
+	wantOutputs := allocatedOf(t, caseDir,
+		"outputs_original/post00200.h5",
+		"outputs_original/thermo.out",
+		"outputs_original/notes.txt",
+		"outputs_original/nested/post00300.h5",
+		"outputs_restart0100/restart0200.rst",
+	)
+	if g := gotGroups["outputs"]; g.Count != 2 || g.Size != wantOutputs {
+		t.Errorf("outputs group = %+v, want 2 dirs totalling %d bytes", g, wantOutputs)
 	}
 
 	// Both restarts are offered to the keep-newest picker, the nested one too.
@@ -628,7 +656,9 @@ func TestConvergeSummaryClassifiesRunTrees(t *testing.T) {
 		t.Errorf("markers were tallied as output: %+v", got.Groups)
 	}
 
-	if len(got.Restarts) != 1 || got.Restarts[0].Name != "restart0001.rst" || got.Restarts[0].Size != 5 {
+	wantRestart := allocatedOf(t, caseDir, "outputs_original/restart0001.rst")
+	if len(got.Restarts) != 1 || got.Restarts[0].Name != "restart0001.rst" ||
+		got.Restarts[0].Size != wantRestart {
 		t.Errorf("restarts = %+v, want the one restart file", got.Restarts)
 	}
 	if got.LogPath != "/case/outputs_original/converge.log" {

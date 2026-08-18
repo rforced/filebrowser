@@ -174,46 +174,17 @@ import type {
 import buttons from "@/utils/buttons";
 import { filesize } from "@/utils";
 import { cachedConvergeSummary } from "@/utils/convergeSummaryCache";
+import { allConvergeKinds, convergeKinds } from "@/utils/convergeKinds";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
-
-// Every family the server can report, so each tally it sends has a slot to land
-// in whether or not the prompt lists it.
-const allConvergeKinds: ConvergeKind[] = [
-  "echo",
-  "restart",
-  "map",
-  "out",
-  "post",
-  "log",
-  "run",
-  "nfs",
-  "outputs",
-];
-
-// The rows the prompt shows, in the order the server reports them. The globs are
-// the patterns themselves, so they stay verbatim in every locale — only the
-// description beside them is translated.
-//
-// "nfs" is missing on purpose: the .nfs* stubs are an NFS implementation detail,
-// and naming them here raises more questions than it answers. They ride along
-// with any sweep, and are counted in the total below.
-const convergeKinds: { key: ConvergeKind; glob: string }[] = [
-  { key: "echo", glob: "*.echo" },
-  { key: "restart", glob: "restart*.rst" },
-  { key: "map", glob: "map_*.h5" },
-  { key: "out", glob: "*.out" },
-  { key: "post", glob: "post*.h5, post*.cgns" },
-  { key: "log", glob: "*.log" },
-  { key: "run", glob: "horizon.json, hosts" },
-  { key: "outputs", glob: "outputs_*/" },
-];
+import { useUsageStore } from "@/stores/usage";
 
 const $showError = inject<IToastError>("$showError")!;
 const $showSuccess = inject<IToastSuccess>("$showSuccess")!;
 
 const fileStore = useFileStore();
 const layoutStore = useLayoutStore();
+const usageStore = useUsageStore();
 const route = useRoute();
 const { t } = useI18n();
 
@@ -233,11 +204,25 @@ const emptyCounts = (): Record<ConvergeKind, number> =>
     number
   >;
 const emptySizes = emptyCounts;
-const allChecked = (): Record<ConvergeKind, boolean> =>
-  Object.fromEntries(allConvergeKinds.map((k) => [k, true])) as Record<
-    ConvergeKind,
-    boolean
-  >;
+
+/*
+ * Everything is selected by default, which is what a "clean this case" gesture
+ * means. Arriving from a disk-usage chip is a narrower intent — that one family
+ * is what the user just picked out as expensive — so the prompt opens with only
+ * it ticked rather than quietly widening the sweep they asked for.
+ *
+ * Read on each call rather than captured once: the prompt sits in a keep-alive
+ * and is reused across opens, so a kind from a previous visit would stick.
+ * scan() calls allChecked() on every activation, which is what applies this.
+ */
+const allChecked = (): Record<ConvergeKind, boolean> => {
+  const only = layoutStore.currentPrompt?.props?.kind as
+    ConvergeKind | undefined;
+
+  return Object.fromEntries(
+    allConvergeKinds.map((k) => [k, !only || k === only])
+  ) as Record<ConvergeKind, boolean>;
+};
 
 const counts = ref<Record<ConvergeKind, number>>(emptyCounts());
 const sizes = ref<Record<ConvergeKind, number>>(emptySizes());
@@ -446,6 +431,10 @@ const submit = async () => {
       keepRestarts: keptRestarts.value,
       keepRuns: keptRuns.value,
     });
+
+    // A sweep reaches through the whole case, so every measured size at or
+    // above it is stale — including a partial one, where some files stayed.
+    usageStore.invalidate();
 
     if (result.failed > 0) {
       // A partial sweep is reported as one: the files that stayed behind are

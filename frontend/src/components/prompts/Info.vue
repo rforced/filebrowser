@@ -36,6 +36,18 @@
           </a>
           <span v-else>{{ folderSize }}</span>
         </p>
+        <!--
+          A folder's size is what it occupies, which on these compressed
+          filesystems is well below the length of the files inside it. Showing
+          the content size next to it stops the two from looking contradictory.
+        -->
+        <p v-if="folderSizeCalculated && folderLogicalSize">
+          <strong>{{ t("prompts.contentSize") }}:</strong>
+          {{ folderLogicalSize }}
+          <span v-if="folderRatio" class="text-gray-500">
+            ({{ t("files.usageRatio", { ratio: folderRatio }) }})
+          </span>
+        </p>
         <p v-if="folderSizeCalculated">
           <strong>{{ t("prompts.numberFiles") }}:</strong> {{ folderNumFiles }}
         </p>
@@ -97,6 +109,7 @@ import { useI18n } from "vue-i18n";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { filesize } from "@/utils";
+import { compressionRatio } from "@/utils/usage";
 import dayjs from "dayjs";
 import { files as api } from "@/api";
 
@@ -108,6 +121,8 @@ const route = useRoute();
 const { t } = useI18n();
 
 const folderSize = ref("");
+const folderLogicalSize = ref("");
+const folderRatio = ref<string | null>(null);
 const folderNumFiles = ref(0);
 const folderNumDirs = ref(0);
 const folderSizeCalculated = ref(false);
@@ -164,16 +179,20 @@ const calculateDirSize = async () => {
   if (calculatingSize.value) return;
   calculatingSize.value = true;
 
+  // A resource path, not the router URL: dirSize addresses the API directly
+  // and would mangle a /files/... path.
   let link;
   if (fileStore.selectedCount) {
-    link = fileStore.req!.items[fileStore.selected[0]].url;
+    link = fileStore.req!.items[fileStore.selected[0]].path;
   } else {
-    link = route.path;
+    link = fileStore.req!.path;
   }
 
   try {
     const info = await api.dirSize(link);
     folderSize.value = filesize(info.size);
+    folderLogicalSize.value = filesize(info.logicalSize);
+    folderRatio.value = compressionRatio(info);
     folderNumFiles.value = info.numFiles;
     folderNumDirs.value = info.numDirs;
     folderSizeCalculated.value = true;

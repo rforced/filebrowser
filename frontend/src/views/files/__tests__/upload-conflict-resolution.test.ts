@@ -37,6 +37,9 @@ vi.mock("@/stores/layout", () => ({
 vi.mock("@/stores/upload", () => ({
   useUploadStore: () => ({ upload: harness.queueUpload }),
 }));
+vi.mock("@/stores/usage", () => ({
+  useUsageStore: () => ({ sizes: new Map() }),
+}));
 vi.mock("@/api", () => ({
   users: {},
   files: {},

@@ -38,8 +38,11 @@ var resourceGetHandler = withUser(func(w http.ResponseWriter, r *http.Request, d
 	}
 
 	if r.URL.Query().Get("dirsize") == "true" {
-		dirInfo, err := file.DirSize()
+		dirInfo, err := file.DirSize(r.Context())
 		if err != nil {
+			if r.Context().Err() != nil {
+				return 0, err
+			}
 			return http.StatusInternalServerError, err
 		}
 		return renderJSON(w, r, dirInfo)

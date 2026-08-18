@@ -164,6 +164,10 @@ type convergeScanResult struct {
 // symlinks and rule-denied entries included — because it prices removing the
 // directory whole, while the file list holds only what may be deleted
 // individually.
+//
+// Sizes here are allocated, not logical: these numbers are shown to someone
+// deciding what to delete, and on ZFS with compression the two differ by up to
+// 7x for exactly the kinds people clean most (*.out, *.log).
 func convergeScanOutputsTree(ctx context.Context, d *data, run *convergeOutputsRun) {
 	_ = afero.Walk(d.user.Fs, run.path, func(fPath string, info os.FileInfo, err error) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -173,7 +177,7 @@ func convergeScanOutputsTree(ctx context.Context, d *data, run *convergeOutputsR
 			return nil //nolint:nilerr // an unreadable entry just does not count
 		}
 
-		run.total += info.Size()
+		run.total += files.AllocatedSize(info)
 		run.files++
 		if info.ModTime().After(run.stamp) {
 			run.stamp = info.ModTime()
@@ -194,7 +198,7 @@ func convergeScanOutputsTree(ctx context.Context, d *data, run *convergeOutputsR
 		run.deep = append(run.deep, convergeMatch{
 			path:    fPath,
 			kind:    kind,
-			size:    info.Size(),
+			size:    files.AllocatedSize(info),
 			modTime: info.ModTime(),
 		})
 		return nil
@@ -256,7 +260,7 @@ func scanConvergeOutputs(ctx context.Context, d *data, dir string) (*convergeSca
 		res.root = append(res.root, convergeMatch{
 			path:    fPath,
 			kind:    kind,
-			size:    entry.Size(),
+			size:    files.AllocatedSize(entry),
 			modTime: entry.ModTime(),
 		})
 	}
@@ -592,7 +596,7 @@ func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, count
 
 	run := s.run(runDir)
 	run.count++
-	run.size += info.Size()
+	run.size += files.AllocatedSize(info)
 
 	switch name {
 	case convergeStartMarker:
@@ -612,19 +616,19 @@ func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, count
 	kind, ok := convergeOutputKind(path.Base(fPath))
 	if !ok {
 		if countOther {
-			s.tally("other", info.Size())
+			s.tally("other", files.AllocatedSize(info))
 		}
 		return
 	}
 
-	s.tally(kind, info.Size())
+	s.tally(kind, files.AllocatedSize(info))
 
 	switch kind {
 	case "restart":
 		s.restarts = append(s.restarts, convergeMatch{
 			path:    fPath,
 			kind:    kind,
-			size:    info.Size(),
+			size:    files.AllocatedSize(info),
 			modTime: info.ModTime(),
 		})
 	case "out", "log":

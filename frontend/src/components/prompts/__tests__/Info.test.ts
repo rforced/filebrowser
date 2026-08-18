@@ -148,7 +148,12 @@ function mountInfo(opts: MountOptions = {}) {
 describe("Info.vue", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    mockDirSize.mockResolvedValue({ size: 0, numFiles: 0, numDirs: 0 });
+    mockDirSize.mockResolvedValue({
+      size: 0,
+      logicalSize: 0,
+      numFiles: 0,
+      numDirs: 0,
+    });
   });
 
   describe("directory size calculation", () => {
@@ -166,7 +171,12 @@ describe("Info.vue", () => {
     });
 
     it("calls dirSize API when Calculate is clicked", async () => {
-      mockDirSize.mockResolvedValue({ size: 2048, numFiles: 3, numDirs: 1 });
+      mockDirSize.mockResolvedValue({
+        size: 2048,
+        logicalSize: 3072,
+        numFiles: 3,
+        numDirs: 1,
+      });
 
       const { wrapper } = mountInfo({
         storeSetup: (store) => {
@@ -185,6 +195,7 @@ describe("Info.vue", () => {
     it("displays calculated size after clicking Calculate", async () => {
       mockDirSize.mockResolvedValue({
         size: 1048576,
+        logicalSize: 2097152,
         numFiles: 10,
         numDirs: 2,
       });
@@ -210,7 +221,12 @@ describe("Info.vue", () => {
     });
 
     it("displays file and directory counts after calculation", async () => {
-      mockDirSize.mockResolvedValue({ size: 5120, numFiles: 15, numDirs: 4 });
+      mockDirSize.mockResolvedValue({
+        size: 5120,
+        logicalSize: 8192,
+        numFiles: 15,
+        numDirs: 4,
+      });
 
       const { wrapper } = mountInfo({
         storeSetup: (store) => {
@@ -268,8 +284,18 @@ describe("Info.vue", () => {
       expect(wrapper.text()).not.toContain("Calculating...");
     });
 
-    it("uses the route path when no item is selected", async () => {
-      mockDirSize.mockResolvedValue({ size: 0, numFiles: 0, numDirs: 0 });
+    /*
+     * dirSize takes a resource path, not the /files/... router URL: it
+     * addresses the API directly and a router URL would lose its first
+     * directory on the way.
+     */
+    it("uses the current directory's resource path when nothing is selected", async () => {
+      mockDirSize.mockResolvedValue({
+        size: 0,
+        logicalSize: 0,
+        numFiles: 0,
+        numDirs: 0,
+      });
 
       const { wrapper } = mountInfo({
         route: { path: "/files/my-folder/" },
@@ -283,11 +309,16 @@ describe("Info.vue", () => {
       await calcLink.trigger("click");
       await flushPromises();
 
-      expect(mockDirSize).toHaveBeenCalledWith("/files/my-folder/");
+      expect(mockDirSize).toHaveBeenCalledWith("/test-folder");
     });
 
-    it("uses the selected item URL when an item is selected", async () => {
-      mockDirSize.mockResolvedValue({ size: 512, numFiles: 2, numDirs: 1 });
+    it("uses the selected item's resource path when one is selected", async () => {
+      mockDirSize.mockResolvedValue({
+        size: 512,
+        logicalSize: 700,
+        numFiles: 2,
+        numDirs: 1,
+      });
 
       const { wrapper } = mountInfo({
         storeSetup: (store) => {
@@ -296,6 +327,7 @@ describe("Info.vue", () => {
               {
                 name: "subfolder",
                 isDir: true,
+                path: "/test-folder/subfolder",
                 url: "/files/test-folder/subfolder/",
                 size: 0,
                 modified: new Date().toISOString(),
@@ -315,7 +347,7 @@ describe("Info.vue", () => {
       await calcLink.trigger("click");
       await flushPromises();
 
-      expect(mockDirSize).toHaveBeenCalledWith("/files/test-folder/subfolder/");
+      expect(mockDirSize).toHaveBeenCalledWith("/test-folder/subfolder");
     });
 
     it("calls $showError when dirSize fails", async () => {

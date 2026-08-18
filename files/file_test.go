@@ -2,12 +2,16 @@ package files
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"image"
 	"image/png"
 	"mime"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -27,12 +31,15 @@ func TestDirSize_EmptyDirectory(t *testing.T) {
 		IsDir: true,
 	}
 
-	info, err := fi.DirSize()
+	info, err := fi.DirSize(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if info.Size != 0 {
-		t.Errorf("expected size 0, got %d", info.Size)
+	// Size counts the root directory's own blocks (du does too), so it is not
+	// asserted here — MemMapFs invents a fixed size for directories. What is
+	// meaningful is that no file content was found.
+	if info.LogicalSize != 0 {
+		t.Errorf("expected logical size 0, got %d", info.LogicalSize)
 	}
 	if info.NumFiles != 0 {
 		t.Errorf("expected 0 files, got %d", info.NumFiles)
@@ -67,7 +74,7 @@ func TestDirSize_WithFilesAndSubdirs(t *testing.T) {
 		IsDir: true,
 	}
 
-	info, err := fi.DirSize()
+	info, err := fi.DirSize(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,6 +83,10 @@ func TestDirSize_WithFilesAndSubdirs(t *testing.T) {
 	fileContentSize := int64(5 + 6 + 11) // "hello" + "world!" + "foo bar baz"
 	if info.Size < fileContentSize {
 		t.Errorf("expected size >= %d (file content), got %d", fileContentSize, info.Size)
+	}
+	// LogicalSize counts only the files, so it is exactly the content written.
+	if info.LogicalSize != fileContentSize {
+		t.Errorf("expected logical size %d, got %d", fileContentSize, info.LogicalSize)
 	}
 	if info.NumFiles != 3 {
 		t.Errorf("expected 3 files, got %d", info.NumFiles)
@@ -100,12 +111,15 @@ func TestDirSize_RegularFile(t *testing.T) {
 		Size:  7,
 	}
 
-	info, err := fi.DirSize()
+	info, err := fi.DirSize(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if info.Size != 7 {
 		t.Errorf("expected size 7, got %d", info.Size)
+	}
+	if info.LogicalSize != 7 {
+		t.Errorf("expected logical size 7, got %d", info.LogicalSize)
 	}
 	if info.NumFiles != 1 {
 		t.Errorf("expected 1 file, got %d", info.NumFiles)
@@ -128,7 +142,7 @@ func TestDirSize_OnlySubdirectories(t *testing.T) {
 		IsDir: true,
 	}
 
-	info, err := fi.DirSize()
+	info, err := fi.DirSize(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -136,12 +150,164 @@ func TestDirSize_OnlySubdirectories(t *testing.T) {
 	if info.Size < 0 {
 		t.Errorf("expected size >= 0, got %d", info.Size)
 	}
+	// Directories never contribute to LogicalSize: ZFS reports an entry count
+	// as their st_size, which would be nonsense to sum.
+	if info.LogicalSize != 0 {
+		t.Errorf("expected logical size 0, got %d", info.LogicalSize)
+	}
 	if info.NumFiles != 0 {
 		t.Errorf("expected 0 files, got %d", info.NumFiles)
 	}
 	// a, a/b, a/b/c = 3 dirs
 	if info.NumDirs != 3 {
 		t.Errorf("expected 3 dirs, got %d", info.NumDirs)
+	}
+}
+
+// The point of the whole exercise: on the ZFS datasets Horizon provisions the
+// allocated size and the logical size are different numbers, so DirSize has to
+// report both and must not conflate them.
+func TestDirSize_PhysicalDiffersFromLogical(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const content = "ten bytes!"
+	if err := os.WriteFile(filepath.Join(dir, "small.txt"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fi := &FileInfo{
+		Fs:    afero.NewOsFs(),
+		Path:  dir,
+		IsDir: true,
+	}
+
+	info, err := fi.DirSize(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if info.LogicalSize != int64(len(content)) {
+		t.Errorf("expected logical size %d, got %d", len(content), info.LogicalSize)
+	}
+	// Allocated space is reported in 512-byte units, so whatever the backing
+	// filesystem does with a 10-byte file, the total lands on a multiple of it.
+	if info.Size%statBlockSize != 0 {
+		t.Errorf("expected allocated size to be a multiple of %d, got %d",
+			statBlockSize, info.Size)
+	}
+	if info.NumFiles != 1 {
+		t.Errorf("expected 1 file, got %d", info.NumFiles)
+	}
+}
+
+func TestPhysicalSize_FallsBackWhenStatUnavailable(t *testing.T) {
+	t.Parallel()
+
+	memFs := afero.NewMemMapFs()
+	if err := afero.WriteFile(memFs, "/f.txt", []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	memInfo, err := memFs.Stat("/f.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := physicalSize(memInfo); ok {
+		t.Error("expected MemMapFs to report no allocated size, got ok")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.txt")
+	if err := os.WriteFile(path, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	osInfo, err := afero.NewOsFs().Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := physicalSize(osInfo); !ok {
+		t.Error("expected OsFs to report an allocated size")
+	}
+}
+
+/*
+ * The number this reports is one an engineer can check against du over SSH, so
+ * agreeing with du is the actual requirement rather than an implementation
+ * detail. Tree shaped to exercise the parts that usually cause a mismatch:
+ * nested directories (which have blocks of their own), a file whose length is
+ * not a multiple of the block size, an empty file, and an empty directory.
+ */
+func TestDirSize_MatchesDu(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS != "linux" {
+		t.Skip("needs GNU du")
+	}
+	if _, err := exec.LookPath("du"); err != nil {
+		t.Skip("du unavailable")
+	}
+
+	root := t.TempDir()
+	for _, f := range []struct {
+		rel  string
+		size int
+	}{
+		{"top.bin", 100_000},
+		{"empty.bin", 0},
+		{filepath.Join("nested", "a.bin"), 4097},
+		{filepath.Join("nested", "deep", "b.bin"), 12345},
+	} {
+		path := filepath.Join(root, f.rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, make([]byte, f.size), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(root, "hollow"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := exec.Command("du", "-s", "--block-size=1", root).Output()
+	if err != nil {
+		t.Skipf("du failed: %v", err)
+	}
+	want, err := strconv.ParseInt(strings.Fields(string(out))[0], 10, 64)
+	if err != nil {
+		t.Fatalf("could not parse du output %q: %v", out, err)
+	}
+
+	fi := &FileInfo{Fs: afero.NewOsFs(), Path: root, IsDir: true}
+	got, err := fi.DirSize(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got.Size != want {
+		t.Errorf("DirSize = %d, du = %d", got.Size, want)
+	}
+	if got.LogicalSize != 100_000+0+4097+12345 {
+		t.Errorf("logical size = %d, want the file lengths only", got.LogicalSize)
+	}
+}
+
+func TestDirSize_HonoursContextCancellation(t *testing.T) {
+	t.Parallel()
+	fs := afero.NewMemMapFs()
+	// Comfortably past dirSizeCancelInterval so the poll is reached.
+	for i := range dirSizeCancelInterval * 3 {
+		name := "/big/f" + strconv.Itoa(i)
+		if err := afero.WriteFile(fs, name, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	fi := &FileInfo{Fs: fs, Path: "/big", IsDir: true}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := fi.DirSize(ctx); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }
 

@@ -77,3 +77,38 @@ interface RecursiveListing {
   items: RecursiveEntry[];
   truncated: boolean;
 }
+
+/*
+ * Storage sizes come in two flavours and the difference is not cosmetic here:
+ * Horizon's filesystems are ZFS with zstd compression, so a directory of ASCII
+ * solver output occupies a fraction of its length while a directory of
+ * already-compressed Catalyst PNGs occupies slightly more.
+ *
+ * `size` is always the allocated size — what the disk actually gives up, and
+ * what deleting the thing reclaims. `logicalSize` is the sum of the files'
+ * lengths, which is what a download transfers and what `ls -l` reports.
+ */
+interface UsageSizes {
+  size: number;
+  logicalSize: number;
+}
+
+interface DirSizeInfo extends UsageSizes {
+  numFiles: number;
+  numDirs: number;
+}
+
+interface UsageEntry extends DirSizeInfo {
+  name: string;
+  isDir: boolean;
+}
+
+interface UsageKind extends UsageSizes {
+  kind: string;
+  count: number;
+}
+
+interface UsageBreakdown extends DirSizeInfo {
+  children: UsageEntry[];
+  kinds?: UsageKind[];
+}

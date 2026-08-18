@@ -58,15 +58,42 @@
         v-if="isDir"
         class="size text-sm tabular-nums"
         :class="[sizeClass, secondaryClass]"
-        data-order="-1"
       >
-        &mdash;
+        <!--
+          A folder's size is a full recursive walk, so it is never computed for
+          a whole listing up front. The column offers it per row instead, and
+          the answer lands in the shared usage store where the usage view and
+          the storage card can reuse it.
+        -->
+        <span v-if="dirUsage" :title="dirUsageTitle">
+          {{ filesize(dirUsage.size) }}
+        </span>
+        <i
+          v-else-if="usageStore.pending.has(path ?? '')"
+          class="fa-solid fa-spinner fa-spin opacity-60"
+          :title="t('prompts.calculating')"
+        ></i>
+        <button
+          v-else
+          type="button"
+          class="opacity-40 group-hover:opacity-100 transition cursor-pointer"
+          :class="usageStore.failed.has(path ?? '') ? 'text-red-500' : ''"
+          :aria-label="t('prompts.calculateSize')"
+          :title="
+            usageStore.failed.has(path ?? '')
+              ? t('files.usageFailed')
+              : t('prompts.calculateSize')
+          "
+          @click.stop="measureDir"
+          @mousedown.stop
+        >
+          <i class="fa-solid fa-calculator"></i>
+        </button>
       </p>
       <p
         v-else
         class="size text-sm tabular-nums"
         :class="[sizeClass, secondaryClass]"
-        :data-order="humanSize()"
       >
         {{ humanSize() }}
       </p>
@@ -81,11 +108,14 @@
 <script setup lang="ts">
 import { computed, inject, ref } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import dayjs from "dayjs";
 
 import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
+import { useUsageStore } from "@/stores/usage";
+import { compressionRatio } from "@/utils/usage";
 
 import { enableThumbs } from "@/utils/constants";
 import { filesize } from "@/utils";
@@ -129,6 +159,43 @@ const props = defineProps<{
 const authStore = useAuthStore();
 const fileStore = useFileStore();
 const layoutStore = useLayoutStore();
+const usageStore = useUsageStore();
+const { t } = useI18n();
+
+// --- folder size --------------------------------------------------------
+
+const dirUsage = computed(() =>
+  props.path ? usageStore.sizes.get(props.path) : undefined
+);
+
+/*
+ * The tooltip carries the logical size too. Without it the column looks broken
+ * on a compressed filesystem: a folder reads 3.9 GB while the files inside it
+ * visibly add up to 11.6 GB, and there is nothing on screen to explain why.
+ */
+const dirUsageTitle = computed(() => {
+  const usage = dirUsage.value;
+  if (!usage) return "";
+
+  const parts = [
+    t("files.usageOnDisk", { size: filesize(usage.size) }),
+    t("files.usageLogical", { size: filesize(usage.logicalSize) }),
+  ];
+
+  const ratio = compressionRatio(usage);
+  if (ratio) parts.push(t("files.usageRatio", { ratio }));
+
+  parts.push(
+    t("prompts.numberFiles") + " " + usage.numFiles,
+    t("prompts.numberDirs") + " " + usage.numDirs
+  );
+
+  return parts.join("\n");
+});
+
+const measureDir = () => {
+  if (props.path) usageStore.measure(props.path);
+};
 
 // --- presentation -------------------------------------------------------
 
