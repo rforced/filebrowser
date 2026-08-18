@@ -17,11 +17,16 @@ export interface SurfaceMesh {
   boundaries: SurfaceBoundary[];
 }
 
-// SurfaceBoundaryInfo is what the model viewer reports upward for the legend.
+// SurfaceBoundaryInfo is what a 3D view reports upward for the legend.
 export interface SurfaceBoundaryInfo {
   id: number;
   triangleCount: number;
   color: string;
+  // Set when the source names its boundaries. A post file does, through
+  // BOUNDARIES/BOUNDARY_NAMES; surface.dat carries only numeric ids, and the
+  // viewer resolves those against the case's boundary.in instead.
+  name?: string;
+  faceCount?: number;
 }
 
 const HEADER_RE = /^(\d+)\s+(\d+)\s+(\d+)$/;

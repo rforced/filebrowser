@@ -62,6 +62,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 import * as h5 from "@/api/h5";
 import { formatCount, formatValue } from "@/utils/convergeH5";
+import { NO_VALUE, normalize, rampAt, rampCss } from "@/utils/colorRamp";
 
 // A parcel cloud needs no mesh or connectivity, so the browser cost is just
 // the point count. Beyond this the server strides the cloud down rather than
@@ -91,39 +92,6 @@ let frameId = 0;
 let invalidated = true;
 let loadToken = 0;
 let controller: AbortController | null = null;
-
-// Blue through red: a perceptually ordered ramp for a scalar with no inherent
-// zero, which is what parcel temperature and radius are.
-const RAMP: [number, number, number][] = [
-  [0.19, 0.31, 0.75],
-  [0.27, 0.65, 0.87],
-  [0.55, 0.83, 0.62],
-  [0.95, 0.79, 0.32],
-  [0.84, 0.28, 0.22],
-];
-
-const rampCss = RAMP.map(
-  ([r, g, b]) => `rgb(${r * 255} ${g * 255} ${b * 255})`
-).join(", ");
-
-// What a parcel with no usable value is drawn as: outside the ramp, so it
-// cannot be mistaken for a reading at either end of it.
-const NO_VALUE: [number, number, number] = [0.55, 0.55, 0.58];
-
-const rampAt = (t: number): [number, number, number] => {
-  if (!Number.isFinite(t)) return NO_VALUE;
-  const clamped = Math.min(1, Math.max(0, t));
-  const scaled = clamped * (RAMP.length - 1);
-  const i = Math.min(RAMP.length - 2, Math.floor(scaled));
-  const f = scaled - i;
-  const a = RAMP[i];
-  const b = RAMP[i + 1];
-  return [
-    a[0] + (b[0] - a[0]) * f,
-    a[1] + (b[1] - a[1]) * f,
-    a[2] + (b[2] - a[2]) * f,
-  ];
-};
 
 const disposePoints = () => {
   if (!points) return;
@@ -175,12 +143,10 @@ const build = (data: h5.H5ParcelCloud) => {
 
   if (coloured && data.values) {
     const [lo, hi] = data.range;
-    const span = hi - lo;
     const colors = new Float32Array(data.values.length * 3);
     for (let i = 0; i < data.values.length; i++) {
       const v = data.values[i];
-      const [r, g, b] =
-        v === null ? NO_VALUE : rampAt(span === 0 ? 0.5 : (v - lo) / span);
+      const [r, g, b] = v === null ? NO_VALUE : rampAt(normalize(v, lo, hi));
       colors[i * 3] = r;
       colors[i * 3 + 1] = g;
       colors[i * 3 + 2] = b;

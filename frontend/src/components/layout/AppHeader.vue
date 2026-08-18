@@ -25,14 +25,16 @@
 
       <template v-if="isLoggedIn">
         <button
-          v-tooltip="t('sidebar.settings')"
+          v-tooltip="navAction.label"
           type="button"
           class="btn btn-flex btn-gray h-10"
-          :aria-label="t('sidebar.settings')"
-          @click="toSettings"
+          :aria-label="navAction.label"
+          @click="router.push({ path: navAction.to })"
         >
-          <i class="fa-solid fa-user"></i>
-          <span class="hidden md:inline font-medium">{{ displayName }}</span>
+          <i class="fa-solid" :class="navAction.icon"></i>
+          <span class="hidden md:inline font-medium">{{
+            navAction.label
+          }}</span>
         </button>
 
         <button
@@ -66,7 +68,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 
 import { useAuthStore } from "@/stores/auth";
@@ -78,10 +80,17 @@ import Search from "@/components/Search.vue";
 withDefaults(defineProps<{ showSearch?: boolean }>(), { showSearch: true });
 
 const { t } = useI18n();
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
-const { user, isLoggedIn } = storeToRefs(authStore);
-const displayName = computed(() => user.value?.username?.split("@")[0] ?? "");
-const toSettings = () => router.push({ path: "/settings/profile" });
+const { isLoggedIn } = storeToRefs(authStore);
+
+// The button leads wherever you are not: out of settings, or into them.
+const navAction = computed(() =>
+  route.path.startsWith("/settings")
+    ? { label: t("sidebar.myFiles"), icon: "fa-folder-open", to: "/files/" }
+    : { label: t("sidebar.settings"), icon: "fa-gear", to: "/settings/profile" }
+);
+
 const logout = auth.logout;
 </script>

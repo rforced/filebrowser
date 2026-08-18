@@ -273,6 +273,74 @@
         </div>
       </section>
 
+      <!-- Surface: the wetted boundary, lifted out of the mesh itself. -->
+      <section
+        v-show="activeTab === 'surface'"
+        class="flex flex-col"
+        style="height: calc(100vh - 14rem)"
+      >
+        <div
+          class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+        >
+          <label class="text-sm text-gray-600 dark:text-gray-300">
+            {{ t("h5View.colourBy") }}
+          </label>
+          <select
+            v-model="surfaceScalar"
+            class="form-control py-1 text-sm w-auto"
+            :aria-label="t('h5View.colourBy')"
+          >
+            <option value="">{{ t("h5View.byBoundary") }}</option>
+            <option v-for="v in surfaceScalars" :key="v.path" :value="v.name">
+              {{ v.name }}
+            </option>
+          </select>
+
+          <div
+            v-if="surfaceBoundaries.length"
+            class="flex flex-wrap gap-1.5 items-center min-w-0 max-h-20 overflow-y-auto"
+          >
+            <button
+              v-for="b in surfaceBoundaries"
+              :key="b.id"
+              v-tooltip="
+                t('h5View.surfaceChip', {
+                  faces: formatCount(b.faceCount ?? 0),
+                  triangles: formatCount(b.triangleCount),
+                })
+              "
+              type="button"
+              class="px-2 py-0.5 rounded-full text-xs font-medium border transition"
+              :class="
+                hiddenBoundaries.has(b.id)
+                  ? 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 line-through'
+                  : 'border-transparent text-white'
+              "
+              :style="
+                hiddenBoundaries.has(b.id) ? {} : { backgroundColor: b.color }
+              "
+              :aria-pressed="!hiddenBoundaries.has(b.id)"
+              @click="toggleBoundary(b.id)"
+            >
+              {{ b.name || t("surfaceView.boundary", { id: b.id }) }}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 min-h-0">
+          <!-- Mounted on first use and kept: the surface is megabytes of
+               geometry, so opening any post file must not fetch it. -->
+          <BoundarySurface
+            v-if="surfaceOpened && surfaceStream"
+            ref="surfaceView"
+            :path="path"
+            :stream="surfaceStream"
+            :scalar="surfaceScalar || undefined"
+            @boundaries="onSurfaceBoundaries"
+          />
+        </div>
+      </section>
+
       <!-- Parcels: a spray cloud needs no mesh, so it renders directly. -->
       <section
         v-show="activeTab === 'parcels'"
@@ -363,6 +431,7 @@ import * as api from "@/api";
 import * as h5 from "@/api/h5";
 import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
+import BoundarySurface from "@/components/files/BoundarySurface.vue";
 import ParcelCloud from "@/components/files/ParcelCloud.vue";
 import {
   divergenceOf,
@@ -371,6 +440,7 @@ import {
   formatSimTime,
   formatValue,
 } from "@/utils/convergeH5";
+import type { SurfaceBoundaryInfo } from "@/utils/convergeSurface";
 import url from "@/utils/url";
 
 const authStore = useAuthStore();
@@ -391,6 +461,11 @@ const selected = ref<Set<string>>(new Set());
 const activeTab = ref("variables");
 const parcelGroup = ref("");
 const parcelScalar = ref("");
+const surfaceScalar = ref("");
+const surfaceOpened = ref(false);
+const surfaceBoundaries = ref<SurfaceBoundaryInfo[]>([]);
+const hiddenBoundaries = ref<Set<number>>(new Set());
+const surfaceView = ref<InstanceType<typeof BoundarySurface> | null>(null);
 
 let controller: AbortController | null = null;
 
@@ -427,10 +502,38 @@ const parcelScalars = computed(() => {
   );
 });
 
+// The boundary surface is recoverable from any stream that carries face
+// connectivity and names its boundaries — the faces whose owner is negative
+// are the wetted wall.
+const surfaceStream = computed(
+  () =>
+    (summary.value?.boundaries?.length
+      ? summary.value.streams.find((s) => (s.faces ?? 0) > 0)?.name
+      : undefined) ?? ""
+);
+
+// Any cell-centred field can colour the wall: its value at a boundary face is
+// taken from the cell on the fluid side. BOUND_HTC and BOUND_FLUX are the ones
+// worth looking at, but they are written only when the deck asks for them and
+// read all-zero in plenty of files, so nothing is chosen by default.
+const surfaceScalars = computed(() => {
+  const stream = summary.value?.streams.find(
+    (s) => s.name === surfaceStream.value
+  );
+  return (stream?.variables ?? []).filter((v) => !v.type.startsWith("string"));
+});
+
 const tabs = computed(() => {
   const out = [
     { id: "variables", icon: "fa-table-list", label: t("h5View.variables") },
   ];
+  if (surfaceStream.value) {
+    out.push({
+      id: "surface",
+      icon: "fa-draw-polygon",
+      label: t("h5View.surface"),
+    });
+  }
   if (parcelGroups.value.some((g) => g.hasCoords && g.count > 0)) {
     out.push({
       id: "parcels",
@@ -516,6 +619,22 @@ const subsetHref = computed(() =>
 );
 
 const statsFor = (v: h5.H5Variable) => stats.value.get(v.path);
+
+const onSurfaceBoundaries = (info: SurfaceBoundaryInfo[]) => {
+  surfaceBoundaries.value = info;
+  hiddenBoundaries.value = new Set();
+};
+
+const toggleBoundary = (id: number) => {
+  const next = new Set(hiddenBoundaries.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  hiddenBoundaries.value = next;
+  surfaceView.value?.setBoundaryVisible(id, !next.has(id));
+};
 
 const streamSubtitle = (stream: h5.H5Stream) => {
   const parts: string[] = [];
@@ -606,6 +725,8 @@ const load = async () => {
   statsPending.value = false;
   stats.value = new Map();
   selected.value = new Set();
+  surfaceBoundaries.value = [];
+  hiddenBoundaries.value = new Set();
 
   try {
     summary.value = await h5.summary(path.value, controller.signal);
@@ -630,6 +751,22 @@ const keyEvent = (event: KeyboardEvent) => {
 };
 
 watch(path, () => load());
+
+// The surface is fetched only once someone asks for it, and stays mounted
+// afterwards so returning to the tab is free.
+watch(activeTab, (tab) => {
+  if (tab === "surface") surfaceOpened.value = true;
+});
+
+// A field the new file does not carry would be a 404 where the wall should be.
+watch(surfaceScalars, (list) => {
+  if (
+    surfaceScalar.value !== "" &&
+    !list.some((v) => v.name === surfaceScalar.value)
+  ) {
+    surfaceScalar.value = "";
+  }
+});
 
 // A restart has no parcels to show, so switching to one from a post file
 // would otherwise leave the viewer on a tab that is no longer offered — and

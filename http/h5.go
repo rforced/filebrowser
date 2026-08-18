@@ -185,6 +185,8 @@ var h5Handler = withMediaUser(func(w http.ResponseWriter, r *http.Request, d *da
 		return h5StatsResponse(w, r, f, query.Get("stats"))
 	case query.Get("parcels") != "":
 		return h5ParcelResponse(w, r, f, query)
+	case query.Get("surface") != "":
+		return h5SurfaceResponse(w, r, f, query)
 	case query.Get("subset") != "":
 		return h5SubsetResponse(w, r, f, info.Name(), query)
 	}
