@@ -12,8 +12,15 @@
           <breadcrumbs base="/files">
             <template #actions>
               <IconAction
+                icon="fa-arrows-rotate"
+                :title="t('buttons.refresh')"
+                size="lg"
+                @action="refresh"
+              />
+              <IconAction
                 :icon="viewIcon"
                 :title="t('buttons.switchView')"
+                size="lg"
                 @action="switchView"
               />
               <IconAction
@@ -21,6 +28,7 @@
                   fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'
                 "
                 :title="t('buttons.selectMultiple')"
+                size="lg"
                 @action="toggleMultipleSelection"
               />
             </template>
@@ -47,13 +55,21 @@
         <breadcrumbs base="/files">
           <template #actions>
             <IconAction
+              icon="fa-arrows-rotate"
+              :title="t('buttons.refresh')"
+              size="lg"
+              @action="refresh"
+            />
+            <IconAction
               :icon="viewIcon"
               :title="t('buttons.switchView')"
+              size="lg"
               @action="switchView"
             />
             <IconAction
               :icon="fileStore.multiple ? 'fa-circle-check' : 'fa-square-check'"
               :title="t('buttons.selectMultiple')"
+              size="lg"
               @action="toggleMultipleSelection"
             />
           </template>
@@ -197,6 +213,10 @@ const showSidebar = computed(
 const toggleMultipleSelection = () => {
   fileStore.toggleMultiple();
   layoutStore.closeHovers();
+};
+
+const refresh = () => {
+  fileStore.reload = true;
 };
 
 onMounted(() => {

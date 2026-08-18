@@ -8,8 +8,8 @@
       v-tooltip="t('files.home')"
       :to="base || ''"
       :aria-label="t('files.home')"
-      class="flex items-center gap-1.5 min-h-9 px-2.5 py-1.5 rounded-md transition"
-      :class="interactive"
+      class="flex items-center justify-center min-w-11 px-2.5 py-1.5 rounded-md transition"
+      :class="[interactive, hitArea]"
     >
       <i class="fa-solid fa-hard-drive text-lg"></i>
       <span class="sr-only">{{ t("files.home") }}</span>
@@ -23,7 +23,8 @@
       <!-- The final crumb is the current location: emphasised, never a link. -->
       <span
         v-if="index === items.length - 1"
-        class="px-2.5 py-1.5 font-semibold text-gray-900 dark:text-gray-100 break-all"
+        class="inline-flex items-center px-2.5 py-1.5 font-semibold text-gray-900 dark:text-gray-100 break-all"
+        :class="hitArea"
         aria-current="page"
         >{{ link.name }}</span
       >
@@ -32,8 +33,8 @@
         :is="element"
         v-else
         :to="link.url"
-        class="px-2.5 py-1.5 rounded-md transition break-all"
-        :class="interactive"
+        class="inline-flex items-center px-2.5 py-1.5 rounded-md transition break-all"
+        :class="[interactive, hitArea]"
         >{{ link.name }}</component
       >
     </template>
@@ -102,4 +103,8 @@ const element = computed(() => (props.noLink ? "span" : "router-link"));
 const interactive = computed(() =>
   props.noLink ? "" : "hover:bg-gray-200 dark:hover:bg-gray-700"
 );
+
+// Uniform hit targets where the crumbs are actually clickable; the read-only
+// variant in the editor header stays compact.
+const hitArea = computed(() => (props.noLink ? "" : "min-h-11"));
 </script>
