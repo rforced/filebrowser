@@ -92,6 +92,9 @@ describe("fetchSurface", () => {
     expect(SURFACE_TRIANGLE_LIMITS.medium).toBeLessThan(
       SURFACE_TRIANGLE_LIMITS.high
     );
+    expect(SURFACE_TRIANGLE_LIMITS.high).toBeLessThan(
+      SURFACE_TRIANGLE_LIMITS.ultra
+    );
   });
 
   // A frame settles at full detail and playback buys frames with it; if these

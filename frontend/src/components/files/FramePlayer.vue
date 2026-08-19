@@ -53,7 +53,7 @@
       :aria-label="t('h5View.playbackSpeed')"
       @change="onFps"
     >
-      <option v-for="rate in [2, 5, 10]" :key="rate" :value="rate">
+      <option v-for="rate in [1, 2, 5]" :key="rate" :value="rate">
         {{ t("sequence.speed", { fps: rate }) }}
       </option>
     </select>

@@ -26,11 +26,13 @@ import (
 // boundary names attached. Verified exact across CONVERGE 4, 5 and 6 — the
 // negative count equals sum(BOUNDARIES/NUM_ELEMENTS) in every file measured.
 
-// h5DefaultSurfaceTriangles bounds one response. The largest post file
-// measured (CONVERGE 6, 225k cells) yields 787k triangles from 425k boundary
-// faces, so the default carries several times the biggest real case before a
-// surface has to be strided down.
-const h5DefaultSurfaceTriangles = 3_000_000
+// h5DefaultSurfaceTriangles bounds one response, and is also the ceiling on
+// what a client may ask for, so the viewer's top step has to stay at or below
+// it — above, the surface is strided down anyway and the raised setting buys
+// nothing. The largest post file measured (CONVERGE 6, 225k cells) yields 787k
+// triangles from 425k boundary faces; the room past that is for the very large
+// geometries the top step exists to draw whole.
+const h5DefaultSurfaceTriangles = 5_000_000
 
 // h5MaxConnectivity caps the connectivity arrays the extractor will decode.
 // Decoding widens the file's int32 storage to int64, so without a ceiling a

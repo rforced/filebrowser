@@ -491,6 +491,7 @@
     "resLow": "Niedrig",
     "resMedium": "Mittel",
     "resolution": "Detailgrad",
+    "resUltra": "Sehr hoch",
     "rpm": "U/min",
     "runProfile": "Ausgabegröße über den Lauf",
     "selectAll": "Alle auswählen",

@@ -491,6 +491,7 @@
     "resLow": "Low",
     "resMedium": "Medium",
     "resolution": "Detail",
+    "resUltra": "Ultra",
     "rpm": "RPM",
     "runProfile": "Output size across the run",
     "selectAll": "Select all",

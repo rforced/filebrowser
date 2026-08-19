@@ -276,7 +276,7 @@
           class="shrink-0 rounded-md bg-black/40 text-white text-xs px-1.5 py-1 border border-white/20"
           :aria-label="$t('sequence.speed', { fps })"
         >
-          <option v-for="rate in [2, 5, 10, 20]" :key="rate" :value="rate">
+          <option v-for="rate in [5, 10, 15]" :key="rate" :value="rate">
             {{ $t("sequence.speed", { fps: rate }) }}
           </option>
         </select>

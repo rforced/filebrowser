@@ -329,6 +329,7 @@
             <option value="low">{{ t("h5View.resLow") }}</option>
             <option value="medium">{{ t("h5View.resMedium") }}</option>
             <option value="high">{{ t("h5View.resHigh") }}</option>
+            <option value="ultra">{{ t("h5View.resUltra") }}</option>
           </select>
 
           <div
@@ -581,7 +582,7 @@ const frameIndex = ref(0);
 // player first moves, after which it drives the viewer instead of the route.
 const shownFrame = ref("");
 const playing = ref(false);
-const fps = ref(5);
+const fps = ref(1);
 const playbackCapped = ref(false);
 const lockedRange = ref<[number, number] | null>(null);
 const parcelLockedRange = ref<[number, number] | null>(null);
