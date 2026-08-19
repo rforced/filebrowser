@@ -105,6 +105,13 @@
     <div
       class="flex flex-wrap justify-end items-center gap-2 px-6 py-4 bg-gray-50 dark:bg-gray-900 rounded-b-lg"
     >
+      <span
+        v-if="version"
+        class="mr-auto text-[0.65rem] tabular-nums text-gray-400 dark:text-gray-500"
+      >
+        v{{ version }}
+      </span>
+
       <button
         id="focus-prompt"
         type="submit"
@@ -128,6 +135,7 @@ import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { filesize } from "@/utils";
 import { copy } from "@/utils/clipboard";
+import { version } from "@/utils/constants";
 import { compressionRatio } from "@/utils/usage";
 import dayjs from "dayjs";
 import { files as api } from "@/api";
