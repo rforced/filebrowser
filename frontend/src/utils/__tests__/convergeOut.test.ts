@@ -5,6 +5,7 @@ import {
   isMonotonic,
   isOutFileName,
   parseOutFile,
+  stitchOutTables,
 } from "@/utils/convergeOut";
 
 const DYNAMIC = `# CONVERGE 6.0.1/  Jul 27 2026       Run Date:Sat Aug 15 17:30:27 2026
@@ -150,5 +151,153 @@ describe("isMonotonic", () => {
     expect(isMonotonic([1, 2, 2, 3])).toBe(true);
     expect(isMonotonic([1, 2, 1.5])).toBe(false);
     expect(isMonotonic([])).toBe(true);
+  });
+});
+
+const CHAIN_HEADER = `# column        1                2
+#           Crank          Swirl
+#           (deg)           (none)
+`;
+
+const BARE_HEADER = `# column        1                2
+#           Crank          Swirl
+`;
+
+const TUMBLE_HEADER = `# column        1                2
+#           Crank         Tumble
+#           (deg)           (none)
+`;
+
+const chainLeg = (name: string, rows: number[][], header = CHAIN_HEADER) => ({
+  name,
+  path: `/case/${name}/stream0/dynamic.out`,
+  table: parseOutFile(
+    header + rows.map((r) => r.join("   ")).join("\n") + "\n"
+  ),
+});
+
+describe("stitchOutTables", () => {
+  it("stitches legs and silently drops the duplicated seam row", () => {
+    const stitch = stitchOutTables([
+      chainLeg("outputs_original", [
+        [0, 1],
+        [10, 2],
+        [20, 3],
+      ]),
+      chainLeg("outputs_restart1", [
+        [20, 3],
+        [30, 4],
+      ]),
+    ]);
+
+    expect(stitch).not.toBeNull();
+    expect(stitch!.table.rowCount).toBe(4);
+    expect(stitch!.table.values[0]).toEqual([0, 10, 20, 30]);
+    expect(stitch!.table.values[1]).toEqual([1, 2, 3, 4]);
+    expect(stitch!.trimmedRows).toBe(0);
+    expect(stitch!.segments.map((s) => s.startRow)).toEqual([0, 2]);
+    expect(stitch!.segments.map((s) => s.name)).toEqual([
+      "outputs_original",
+      "outputs_restart1",
+    ]);
+    expect(stitch!.droppedLegs).toEqual([]);
+    expect(stitch!.table.columns[0].unit).toBe("deg");
+  });
+
+  it("truncates rows superseded by a backtracking restart", () => {
+    const stitch = stitchOutTables([
+      chainLeg("outputs_original", [
+        [0, 1],
+        [10, 2],
+        [20, 3],
+        [30, 4],
+      ]),
+      chainLeg("outputs_restart1", [
+        [10, 5],
+        [40, 6],
+      ]),
+    ]);
+
+    expect(stitch!.table.values[0]).toEqual([0, 10, 40]);
+    expect(stitch!.table.values[1]).toEqual([1, 5, 6]);
+    expect(stitch!.trimmedRows).toBe(2);
+    expect(stitch!.segments.map((s) => s.startRow)).toEqual([0, 1]);
+    expect(isMonotonic(stitch!.table.values[0])).toBe(true);
+  });
+
+  it("drops a fully superseded leg", () => {
+    const stitch = stitchOutTables([
+      chainLeg("outputs_original", [
+        [10, 1],
+        [20, 2],
+      ]),
+      chainLeg("outputs_restart1", [
+        [5, 3],
+        [30, 4],
+      ]),
+    ]);
+
+    expect(stitch!.table.values[0]).toEqual([5, 30]);
+    expect(stitch!.trimmedRows).toBe(2);
+    expect(stitch!.segments).toHaveLength(1);
+    expect(stitch!.segments[0]).toMatchObject({
+      name: "outputs_restart1",
+      startRow: 0,
+    });
+    expect(stitch!.droppedLegs).toEqual(["outputs_original"]);
+  });
+
+  it("returns null when legs disagree on column names", () => {
+    const stitch = stitchOutTables([
+      chainLeg("outputs_original", [[0, 1]]),
+      chainLeg("outputs_restart1", [[10, 2]], TUMBLE_HEADER),
+    ]);
+
+    expect(stitch).toBeNull();
+  });
+
+  it("skips empty legs and backfills units from any leg that has them", () => {
+    const empty = {
+      name: "outputs_original",
+      path: "/case/outputs_original/stream0/dynamic.out",
+      table: parseOutFile(""),
+    };
+    const stitch = stitchOutTables([
+      empty,
+      chainLeg("outputs_restart1", [[0, 1]], BARE_HEADER),
+      chainLeg("outputs_restart2", [[10, 2]]),
+    ]);
+
+    expect(stitch!.table.values[0]).toEqual([0, 10]);
+    expect(stitch!.table.columns[0].unit).toBe("deg");
+    expect(stitch!.segments.map((s) => s.name)).toEqual([
+      "outputs_restart1",
+      "outputs_restart2",
+    ]);
+    expect(stitch!.droppedLegs).toEqual([]);
+  });
+
+  it("sums skipped rows across legs", () => {
+    const a = chainLeg("outputs_original", []);
+    a.table = parseOutFile(CHAIN_HEADER + "0 1\n5 bad\n10 2\n");
+    const b = chainLeg("outputs_restart1", []);
+    b.table = parseOutFile(CHAIN_HEADER + "10 2\n15 bad\n20 3\n");
+
+    const stitch = stitchOutTables([a, b]);
+
+    expect(stitch!.table.skippedRows).toBe(2);
+    expect(stitch!.table.values[0]).toEqual([0, 10, 20]);
+  });
+
+  it("returns null when no leg has rows", () => {
+    expect(
+      stitchOutTables([
+        {
+          name: "outputs_original",
+          path: "/case/outputs_original/stream0/dynamic.out",
+          table: parseOutFile(""),
+        },
+      ])
+    ).toBeNull();
   });
 });

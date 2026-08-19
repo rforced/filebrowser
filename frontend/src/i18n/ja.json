@@ -175,7 +175,16 @@
     "logHidden": "対数スケールでは 0 以下の値は表示されません。",
     "empty": "このファイルにはプロットできるデータがありません。",
     "tooLarge": "このファイルはブラウザーでプロットするには大きすぎます。",
-    "loadError": "ファイルを読み込めませんでした。"
+    "loadError": "ファイルを読み込めませんでした。",
+    "thisRun": "この実行",
+    "fullChain": "チェーン全体",
+    "chainRuns": "{count} 実行",
+    "chainPartial": "{total} 実行のうち新しい {shown} 実行を表示",
+    "chainTrimmed": "{count} 行は後の実行で置き換え",
+    "chainMismatch": "以前の実行は列構成が異なるため、この実行のみ表示しています。",
+    "chainFailed": "以前の実行を読み込めなかったため、この実行のみ表示しています。",
+    "newerRun": "より新しい実行が開始されました。",
+    "openNewerRun": "{name} を開く"
   },
   "surfaceView": {
     "boundaries": "境界",

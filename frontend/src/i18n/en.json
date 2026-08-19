@@ -175,7 +175,16 @@
     "logHidden": "Values ≤ 0 are hidden on a log scale.",
     "empty": "No plottable data was found in this file.",
     "tooLarge": "This file is too large to plot in the browser.",
-    "loadError": "The file could not be loaded."
+    "loadError": "The file could not be loaded.",
+    "thisRun": "This run",
+    "fullChain": "Full chain",
+    "chainRuns": "{count} runs",
+    "chainPartial": "showing the newest {shown} of {total} runs",
+    "chainTrimmed": "{count} rows superseded by a later run",
+    "chainMismatch": "Earlier runs use different columns; showing this run only.",
+    "chainFailed": "Earlier runs could not be loaded; showing this run only.",
+    "newerRun": "A newer run has started.",
+    "openNewerRun": "Open {name}"
   },
   "surfaceView": {
     "boundaries": "Boundaries",

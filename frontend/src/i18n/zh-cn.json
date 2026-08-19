@@ -175,7 +175,16 @@
     "logHidden": "对数刻度下将隐藏 ≤ 0 的值。",
     "empty": "此文件中未找到可绘制的数据。",
     "tooLarge": "此文件过大，无法在浏览器中绘图。",
-    "loadError": "无法加载该文件。"
+    "loadError": "无法加载该文件。",
+    "thisRun": "本次运行",
+    "fullChain": "完整运行链",
+    "chainRuns": "{count} 次运行",
+    "chainPartial": "共 {total} 次运行，显示最新的 {shown} 次",
+    "chainTrimmed": "{count} 行已被后续运行取代",
+    "chainMismatch": "较早的运行使用了不同的列，仅显示本次运行。",
+    "chainFailed": "无法加载较早的运行，仅显示本次运行。",
+    "newerRun": "已开始新的运行。",
+    "openNewerRun": "打开 {name}"
   },
   "surfaceView": {
     "boundaries": "边界",

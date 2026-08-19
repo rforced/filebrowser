@@ -175,7 +175,16 @@
     "logHidden": "Werte ≤ 0 werden bei logarithmischer Skala ausgeblendet.",
     "empty": "In dieser Datei wurden keine darstellbaren Daten gefunden.",
     "tooLarge": "Diese Datei ist zu groß, um sie im Browser darzustellen.",
-    "loadError": "Die Datei konnte nicht geladen werden."
+    "loadError": "Die Datei konnte nicht geladen werden.",
+    "thisRun": "Dieser Lauf",
+    "fullChain": "Gesamte Kette",
+    "chainRuns": "{count} Läufe",
+    "chainPartial": "zeigt die {shown} neuesten von {total} Läufen",
+    "chainTrimmed": "{count} Zeilen von einem späteren Lauf ersetzt",
+    "chainMismatch": "Frühere Läufe verwenden andere Spalten; es wird nur dieser Lauf angezeigt.",
+    "chainFailed": "Frühere Läufe konnten nicht geladen werden; es wird nur dieser Lauf angezeigt.",
+    "newerRun": "Ein neuerer Lauf wurde gestartet.",
+    "openNewerRun": "{name} öffnen"
   },
   "surfaceView": {
     "boundaries": "Ränder",

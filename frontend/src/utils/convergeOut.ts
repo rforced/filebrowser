@@ -140,6 +140,94 @@ export function appendOutRows(table: OutTable, lines: string[]): number {
   return added;
 }
 
+export interface OutSegment {
+  name: string;
+  path: string;
+  startRow: number;
+}
+
+export interface OutStitch {
+  table: OutTable;
+  segments: OutSegment[];
+  trimmedRows: number;
+  droppedLegs: string[];
+}
+
+// stitchOutTables concatenates the same .out file across run directories,
+// oldest leg first. Column 0 is the solver's own progression axis: a leg
+// restarted from an earlier checkpoint supersedes every accumulated row at or
+// past its first value. The row equal to it is the checkpoint row the new leg
+// rewrites verbatim and drops silently; strictly greater rows are counted in
+// trimmedRows. Legs left without rows land in droppedLegs. Returns null when
+// the legs do not agree on column names.
+export function stitchOutTables(
+  legs: { name: string; path: string; table: OutTable }[]
+): OutStitch | null {
+  const parts = legs.filter((leg) => leg.table.rowCount > 0);
+  if (parts.length === 0) return null;
+
+  const shape = parts[0].table.columns.map((c) => c.name).join("\n");
+  for (const part of parts) {
+    if (part.table.columns.map((c) => c.name).join("\n") !== shape) {
+      return null;
+    }
+  }
+
+  const columns = parts[0].table.columns.map((c) => ({ ...c }));
+  for (const part of parts) {
+    for (const column of columns) {
+      if (column.unit === "") {
+        column.unit = part.table.columns[column.index].unit;
+      }
+    }
+  }
+
+  const values: number[][] = columns.map(() => []);
+  const segments: OutSegment[] = [];
+  const droppedLegs: string[] = [];
+  let trimmedRows = 0;
+  let skippedRows = 0;
+
+  for (const part of parts) {
+    skippedRows += part.table.skippedRows;
+
+    const start = part.table.values[0][0];
+    let cut = values[0].length;
+    while (cut > 0 && values[0][cut - 1] >= start) {
+      if (values[0][cut - 1] > start) trimmedRows++;
+      cut--;
+    }
+    if (cut < values[0].length) {
+      for (const column of values) column.length = cut;
+      while (
+        segments.length > 0 &&
+        segments[segments.length - 1].startRow >= cut
+      ) {
+        droppedLegs.push(segments.pop()!.name);
+      }
+    }
+
+    segments.push({
+      name: part.name,
+      path: part.path,
+      startRow: values[0].length,
+    });
+    for (let c = 0; c < values.length; c++) {
+      const source = part.table.values[c];
+      for (let i = 0; i < source.length; i++) {
+        values[c].push(source[i]);
+      }
+    }
+  }
+
+  return {
+    table: { columns, values, rowCount: values[0].length, skippedRows },
+    segments,
+    trimmedRows,
+    droppedLegs,
+  };
+}
+
 export function columnLabel(column: OutColumn): string {
   return column.unit === "" ? column.name : `${column.name} (${column.unit})`;
 }

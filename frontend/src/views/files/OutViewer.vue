@@ -105,9 +105,44 @@
           <span>{{ t("outPlot.logScale") }}</span>
         </label>
 
+        <div
+          v-if="chainCtx"
+          role="group"
+          class="inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden text-sm"
+        >
+          <button
+            type="button"
+            class="px-2.5 py-1 transition"
+            :class="
+              !chainRequested
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+            "
+            :aria-pressed="!chainRequested"
+            @click="setMode(false)"
+          >
+            {{ t("outPlot.thisRun") }}
+          </button>
+          <button
+            type="button"
+            class="px-2.5 py-1 transition border-l border-gray-300 dark:border-gray-600"
+            :class="
+              chainRequested
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+            "
+            :aria-pressed="chainRequested"
+            @click="setMode(true)"
+          >
+            <i v-if="chainLoading" class="fa-solid fa-spinner fa-spin mr-1"></i>
+            {{ t("outPlot.fullChain") }}
+          </button>
+        </div>
+
         <button
           type="button"
-          class="btn btn-sm btn-flex btn-white btn-soft"
+          class="btn btn-sm btn-flex btn-white btn-soft disabled:opacity-40"
+          :disabled="chainRequested"
           :aria-label="following ? t('buttons.pause') : t('buttons.follow')"
           @click="toggleLive"
         >
@@ -127,6 +162,20 @@
 
         <span class="text-xs text-gray-500 dark:text-gray-400">
           {{ t("outPlot.rows", { count: table.rowCount }) }}
+          <template v-if="chainActive">
+            ·
+            {{
+              chainShown < chainTotal
+                ? t("outPlot.chainPartial", {
+                    shown: chainShown,
+                    total: chainTotal,
+                  })
+                : t("outPlot.chainRuns", { count: chainShown })
+            }}
+          </template>
+          <template v-if="chainActive && chainTrimmed > 0">
+            · {{ t("outPlot.chainTrimmed", { count: chainTrimmed }) }}
+          </template>
           <template v-if="decimated"> · {{ t("outPlot.decimated") }}</template>
           <template v-if="table.skippedRows > 0">
             · {{ t("outPlot.skippedRows", { count: table.skippedRows }) }}
@@ -186,6 +235,27 @@
         {{ t("outPlot.logHidden") }}
       </p>
 
+      <p
+        v-if="chainNote"
+        class="px-3 md:px-6 py-1.5 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 shrink-0"
+      >
+        {{ t(chainNote) }}
+      </p>
+
+      <p
+        v-if="newerRun && !chainActive"
+        class="px-3 md:px-6 py-1.5 text-xs text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 shrink-0"
+      >
+        {{ t("outPlot.newerRun") }}
+        <button
+          type="button"
+          class="underline font-medium ml-1"
+          @click="openNewerRun"
+        >
+          {{ t("outPlot.openNewerRun", { name: runLabel(newerRun.runName) }) }}
+        </button>
+      </p>
+
       <div class="relative flex-1 min-h-0 m-3 md:m-4">
         <canvas ref="canvas"></canvas>
       </div>
@@ -226,9 +296,18 @@ import {
   columnLabel,
   formatOutValue,
   isMonotonic,
+  isOutFileName,
   parseOutFile,
   type OutTable,
 } from "@/utils/convergeOut";
+import {
+  checkNewestRun,
+  discoverChain,
+  fetchChain,
+  type ChainContext,
+  type ChainFetch,
+  type NewestRunFile,
+} from "@/utils/outChain";
 import { parseContentRange, parseUnsatisfiedRange } from "@/utils/logTail";
 
 Chart.register(
@@ -296,12 +375,29 @@ const { t } = useI18n();
 
 const loading = ref(true);
 const failure = ref<string | null>(null);
-const table = ref<OutTable>({
+const baseTable = ref<OutTable>({
   columns: [],
   values: [],
   rowCount: 0,
   skippedRows: 0,
 });
+
+const chainCtx = shallowRef<ChainContext | null>(null);
+const chainData = shallowRef<ChainFetch | null>(null);
+const chainDiscovered = ref(false);
+const chainLoading = ref(false);
+const chainNote = ref<string | null>(null);
+const newerRun = ref<NewestRunFile | null>(null);
+
+const chainRequested = computed(() => route.query.runs === "chain");
+const chainActive = computed(
+  () => chainRequested.value && chainData.value !== null
+);
+const table = computed<OutTable>(() =>
+  chainRequested.value && chainData.value
+    ? chainData.value.stitch.table
+    : baseTable.value
+);
 const xIndex = ref(0);
 const selected = ref<number[]>([]);
 const logScale = ref(false);
@@ -340,6 +436,96 @@ const seriesColor = (columnIndex: number) => {
   const slot = selected.value.indexOf(columnIndex);
   const palette = isDark() ? SERIES_DARK : SERIES_LIGHT;
   return palette[Math.max(slot, 0) % palette.length];
+};
+
+const chainShown = computed(() => chainData.value?.stitch.segments.length ?? 0);
+const chainTotal = computed(() => chainData.value?.totalLegs ?? 0);
+const chainTrimmed = computed(() => chainData.value?.stitch.trimmedRows ?? 0);
+
+const segments = computed(() =>
+  chainActive.value && chainData.value ? chainData.value.stitch.segments : []
+);
+
+const segmentBoundaries = computed(() => {
+  const segs = segments.value;
+  if (segs.length < 2) return [];
+  const xs = table.value.values[xIndex.value] ?? [];
+  return segs.slice(1).map((seg) => ({ x: xs[seg.startRow], name: seg.name }));
+});
+
+const runLabel = (name: string) => name.replace(/^outputs_/i, "") || name;
+
+const segmentAt = (x: number): string | null => {
+  const segs = segments.value;
+  if (segs.length < 2 || !xMonotonic.value) return null;
+  const xs = table.value.values[xIndex.value] ?? [];
+  let name = segs[0].name;
+  for (let i = 1; i < segs.length; i++) {
+    if (x >= xs[segs[i].startRow]) name = segs[i].name;
+    else break;
+  }
+  return name;
+};
+
+let seamPointerX: number | null = null;
+
+const drawSeamLabel = (
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  top: number,
+  right: number,
+  text: string
+) => {
+  ctx.font = "11px system-ui, sans-serif";
+  const width = ctx.measureText(text).width + 10;
+  const x = px + 6 + width > right ? px - 6 - width : px + 6;
+  ctx.setLineDash([]);
+  ctx.fillStyle = isDark() ? "#1f2937" : "#ffffff";
+  ctx.beginPath();
+  ctx.rect(x, top + 4, width, 18);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = isDark() ? "#c3c2b7" : "#52514e";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x + 5, top + 13);
+};
+
+const chainSeams = {
+  id: "convergeChainSeams",
+  afterEvent(
+    _chart: Chart,
+    args: { event: { x: number | null }; changed?: boolean }
+  ) {
+    const x = args.event.x ?? null;
+    if (x === seamPointerX) return;
+    seamPointerX = x;
+    if (segmentBoundaries.value.length > 0) args.changed = true;
+  },
+  afterDraw(chart: Chart) {
+    const bounds = segmentBoundaries.value;
+    if (bounds.length === 0) return;
+
+    const { top, bottom, left, right } = chart.chartArea;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = isDark() ? "#4b5563" : "#c3c2b7";
+    let hovered: { px: number; name: string } | null = null;
+    for (const bound of bounds) {
+      const px = chart.scales.x.getPixelForValue(bound.x);
+      if (!Number.isFinite(px) || px < left || px > right) continue;
+      ctx.beginPath();
+      ctx.moveTo(px, top);
+      ctx.lineTo(px, bottom);
+      ctx.stroke();
+      if (seamPointerX !== null && Math.abs(seamPointerX - px) < 6) {
+        hovered = { px, name: runLabel(bound.name) };
+      }
+    }
+    if (hovered) drawSeamLabel(ctx, hovered.px, top, right, hovered.name);
+    ctx.restore();
+  },
 };
 
 const storageKey = () =>
@@ -398,6 +584,101 @@ const toggleSeries = (columnIndex: number) => {
   }
 };
 
+let discoverController: AbortController | null = null;
+let chainController: AbortController | null = null;
+
+const setMode = (chain: boolean) => {
+  router.replace({
+    query: { ...route.query, runs: chain ? "chain" : undefined },
+  });
+};
+
+const discoverForFile = async () => {
+  discoverController?.abort();
+  const controller = new AbortController();
+  discoverController = controller;
+  chainDiscovered.value = false;
+  chainCtx.value = null;
+  newerRun.value = null;
+
+  const req = fileStore.req;
+  if (req?.path && !req.isDir) {
+    try {
+      const ctx = await discoverChain(req.path, req.size, controller.signal);
+      if (controller.signal.aborted) return;
+      chainCtx.value = ctx;
+      if (ctx && ctx.newestHasFile) {
+        const currentLeg = ctx.legs.find((leg) => leg.current);
+        if (currentLeg && currentLeg.runPath !== ctx.newestRunPath) {
+          newerRun.value = {
+            runName: ctx.newestRunName,
+            runPath: ctx.newestRunPath,
+            filePath: ctx.newestRunPath + ctx.remainder,
+          };
+        }
+      }
+    } catch {
+      if (controller.signal.aborted) return;
+    }
+  }
+  chainDiscovered.value = true;
+};
+
+const ensureChain = async () => {
+  if (!chainRequested.value) {
+    chainController?.abort();
+    return;
+  }
+  if (!chainDiscovered.value) return;
+  if (chainCtx.value === null) {
+    setMode(false);
+    return;
+  }
+  if (chainData.value !== null || chainLoading.value) return;
+
+  stopLive();
+  chainNote.value = null;
+  const controller = new AbortController();
+  chainController?.abort();
+  chainController = controller;
+  chainLoading.value = true;
+  try {
+    const req = fileStore.req;
+    const result = await fetchChain(
+      chainCtx.value,
+      MAX_PLOT_BYTES,
+      req?.path ? { path: req.path, table: baseTable.value } : null,
+      controller.signal
+    );
+    if (chainController !== controller || controller.signal.aborted) return;
+    if (!chainRequested.value) return;
+    if ("error" in result) {
+      chainNote.value =
+        result.error === "mismatch"
+          ? "outPlot.chainMismatch"
+          : "outPlot.chainFailed";
+      setMode(false);
+    } else {
+      chainData.value = result;
+    }
+  } catch {
+    if (chainController === controller && !controller.signal.aborted) {
+      chainNote.value = "outPlot.chainFailed";
+      setMode(false);
+    }
+  } finally {
+    if (chainController === controller) chainLoading.value = false;
+  }
+};
+
+const openNewerRun = () => {
+  if (!newerRun.value) return;
+  router.push({
+    path: "/files" + newerRun.value.filePath,
+    query: route.query,
+  });
+};
+
 // --- Live refresh --------------------------------------------------------
 // The solver appends rows while a run is hot; polling asks the server for
 // bytes past what has been parsed (raw.go serves ranges) and feeds only the
@@ -440,8 +721,8 @@ const fetchFullForLive = async (): Promise<boolean> => {
     liveOffset = buf.byteLength;
     livePartial = "";
 
-    const sameShape = parsed.columns.length === table.value.columns.length;
-    table.value = parsed;
+    const sameShape = parsed.columns.length === baseTable.value.columns.length;
+    baseTable.value = parsed;
     if (!sameShape) {
       restoreSelection();
     } else {
@@ -500,7 +781,7 @@ const livePoll = async () => {
       livePartial = lines.pop() ?? "";
       liveOffset += buf.byteLength;
 
-      if (appendOutRows(table.value, lines) > 0) refreshChartData();
+      if (appendOutRows(baseTable.value, lines) > 0) refreshChartData();
       return;
     }
 
@@ -513,9 +794,23 @@ const livePoll = async () => {
   }
 };
 
+const NEWER_RUN_POLL_MS = 30 * 1000;
+let newerRunTimer: number | null = null;
+
+const checkNewer = async () => {
+  const req = fileStore.req;
+  if (!req?.path) return;
+  try {
+    newerRun.value = await checkNewestRun(req.path);
+  } catch {}
+};
+
 const startPolling = () => {
   if (liveTimer === null) {
     liveTimer = window.setInterval(livePoll, LIVE_POLL_MS);
+  }
+  if (newerRunTimer === null) {
+    newerRunTimer = window.setInterval(checkNewer, NEWER_RUN_POLL_MS);
   }
 };
 
@@ -525,15 +820,21 @@ const stopLive = () => {
     clearInterval(liveTimer);
     liveTimer = null;
   }
+  if (newerRunTimer !== null) {
+    clearInterval(newerRunTimer);
+    newerRunTimer = null;
+  }
 };
 
 const toggleLive = async () => {
+  if (chainRequested.value) return;
   if (following.value) {
     stopLive();
     return;
   }
   following.value = true;
   if (await fetchFullForLive()) {
+    chainData.value = null;
     refreshChartData();
     startPolling();
   } else {
@@ -546,6 +847,10 @@ const onVisibility = () => {
     if (liveTimer !== null) {
       clearInterval(liveTimer);
       liveTimer = null;
+    }
+    if (newerRunTimer !== null) {
+      clearInterval(newerRunTimer);
+      newerRunTimer = null;
     }
   } else if (following.value) {
     livePoll();
@@ -575,10 +880,11 @@ const load = async () => {
 
     // A file written to in the last few minutes is a run in flight: load it
     // through the live path so the plot keeps growing with the solver.
-    if (isFresh()) {
+    if (isFresh() && !chainRequested.value) {
       if (await fetchFullForLive()) {
         following.value = true;
         startPolling();
+        discoverForFile();
         return;
       }
     }
@@ -590,14 +896,15 @@ const load = async () => {
       text = await res.text();
     }
 
-    table.value = parseOutFile(text);
-    if (table.value.rowCount === 0 || table.value.columns.length < 2) {
+    baseTable.value = parseOutFile(text);
+    if (baseTable.value.rowCount === 0 || baseTable.value.columns.length < 2) {
       redirected = fallbackToText();
       if (!redirected) failure.value = "outPlot.empty";
       return;
     }
 
     restoreSelection();
+    discoverForFile();
   } catch {
     redirected = fallbackToText();
     if (!redirected) failure.value = "outPlot.loadError";
@@ -694,10 +1001,13 @@ const buildChart = () => {
         },
         tooltip: {
           callbacks: {
-            title: (items) =>
-              items.length > 0
-                ? `${xColumn?.name ?? "x"} ${formatOutValue(items[0].parsed.x ?? NaN)}`
-                : "",
+            title: (items) => {
+              if (items.length === 0) return "";
+              const x = items[0].parsed.x ?? NaN;
+              const base = `${xColumn?.name ?? "x"} ${formatOutValue(x)}`;
+              const segment = segmentAt(x);
+              return segment === null ? base : `${base} · ${runLabel(segment)}`;
+            },
             label: (item) => {
               const column =
                 table.value.columns[selected.value[item.datasetIndex]];
@@ -708,12 +1018,12 @@ const buildChart = () => {
         },
       },
     },
-    plugins: [crosshair],
+    plugins: [crosshair, chainSeams],
   });
 };
 
 watch(
-  [xIndex, selected, logScale],
+  [xIndex, selected, logScale, chainActive],
   () => {
     if (selected.value.includes(xIndex.value)) {
       selected.value = selected.value.filter((c) => c !== xIndex.value);
@@ -723,6 +1033,27 @@ watch(
     buildChart();
   },
   { deep: true }
+);
+
+watch([chainRequested, chainDiscovered, chainCtx], ensureChain);
+
+watch(
+  () => fileStore.req?.path,
+  (next, prev) => {
+    if (!next || next === prev) return;
+    const req = fileStore.req;
+    if (!req || req.isDir || !isOutFileName(req.name)) return;
+    stopLive();
+    chainController?.abort();
+    discoverController?.abort();
+    chainData.value = null;
+    chainCtx.value = null;
+    chainNote.value = null;
+    chainLoading.value = false;
+    chainDiscovered.value = false;
+    newerRun.value = null;
+    load();
+  }
 );
 
 watch([loading, failure, canvas], () => {
