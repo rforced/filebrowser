@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"sort"
@@ -31,6 +33,24 @@ type combineResponse struct {
 	Files int    `json:"files"`
 	Legs  int    `json:"legs"`
 	Bytes int64  `json:"bytes"`
+}
+
+// combineLegPreview is one leg as the confirmation prompt lists it.
+type combineLegPreview struct {
+	Name  string `json:"name"`
+	Files int    `json:"files"`
+	Bytes int64  `json:"bytes"`
+}
+
+// combinePreviewResponse describes the combine a POST to the same path would
+// perform, in the order the legs will be joined. Bytes is what the sources
+// hold, so it is an upper bound on the result: the seams only ever drop rows.
+type combinePreviewResponse struct {
+	Name   string              `json:"name"`
+	Legs   []combineLegPreview `json:"legs"`
+	Files  int                 `json:"files"`
+	Bytes  int64               `json:"bytes"`
+	Exists bool                `json:"exists"`
 }
 
 // combineLeg is one outputs_* tree taking part in a combine, with the position
@@ -110,6 +130,41 @@ func convergeCombineLegs(d *data, dir string) ([]combineLeg, error) {
 	return legs, nil
 }
 
+// combineWalkLeg visits every .out file in one leg, handing back the path each
+// one takes inside it. The preview a prompt shows and the combine it confirms
+// both see their files through here, so what gets listed is what gets written.
+func combineWalkLeg(
+	ctx context.Context,
+	d *data,
+	leg combineLeg,
+	visit func(fPath, rel string, info os.FileInfo),
+) error {
+	prefix := leg.path + "/"
+
+	return afero.Walk(d.user.Fs, leg.path, func(fPath string, info os.FileInfo, err error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if err != nil || info == nil || info.IsDir() {
+			return nil //nolint:nilerr // an unreadable entry simply does not take part
+		}
+		if files.IsSymlink(info.Mode()) || !d.CheckRules(fPath) {
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(info.Name()), ".out") {
+			return nil
+		}
+
+		rel, ok := strings.CutPrefix(fPath, prefix)
+		if !ok || rel == "" {
+			return nil
+		}
+
+		visit(fPath, rel, info)
+		return nil
+	})
+}
+
 // combineSources gathers every .out file in the legs, keyed by its path
 // relative to the leg root. That key carries the whole of the layout logic: it
 // puts stream0/thermo.out beside its counterparts in the other legs, keeps a
@@ -121,32 +176,11 @@ func combineSources(ctx context.Context, d *data, legs []combineLeg) (map[string
 	order := []string{}
 
 	for _, leg := range legs {
-		prefix := leg.path + "/"
-
-		err := afero.Walk(d.user.Fs, leg.path, func(fPath string, info os.FileInfo, err error) error {
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return ctxErr
-			}
-			if err != nil || info == nil || info.IsDir() {
-				return nil //nolint:nilerr // an unreadable entry simply does not take part
-			}
-			if files.IsSymlink(info.Mode()) || !d.CheckRules(fPath) {
-				return nil
-			}
-			if !strings.HasSuffix(strings.ToLower(info.Name()), ".out") {
-				return nil
-			}
-
-			rel, ok := strings.CutPrefix(fPath, prefix)
-			if !ok || rel == "" {
-				return nil
-			}
-
+		err := combineWalkLeg(ctx, d, leg, func(fPath, rel string, _ os.FileInfo) {
 			if _, seen := sources[rel]; !seen {
 				order = append(order, rel)
 			}
 			sources[rel] = append(sources[rel], fPath)
-			return nil
 		})
 		if err != nil {
 			return nil, nil, err
@@ -233,7 +267,18 @@ func combineOutFile(ctx context.Context, afs afero.Fs, sources []string, target 
 	}
 	defer out.Close()
 
-	buffered := bufio.NewWriter(out)
+	if err := combineStream(ctx, afs, sources, out, state); err != nil {
+		return err
+	}
+	return nil
+}
+
+// combineStream writes the joined legs to w. Splitting it out from the file
+// case is what lets one .out be combined straight down a response body: the
+// download a user takes from the chain view and the file a combine leaves on
+// disk come off the same code, so they cannot drift apart.
+func combineStream(ctx context.Context, afs afero.Fs, sources []string, w io.Writer, state *combineState) error {
+	buffered := bufio.NewWriter(w)
 
 	// Each leg stops where the one after it starts.
 	cutoffs := make([]float64, len(sources))
@@ -252,7 +297,7 @@ func combineOutFile(ctx context.Context, afs afero.Fs, sources []string, target 
 	}
 
 	if err := buffered.Flush(); err != nil {
-		return fmt.Errorf("failed to write %s: %w", path.Base(target), err)
+		return fmt.Errorf("failed to write combined output: %w", err)
 	}
 	return nil
 }
@@ -331,6 +376,187 @@ func combineAppendLeg(
 		return fmt.Errorf("failed to read %s: %w", source, err)
 	}
 	return nil
+}
+
+// combineViewHandler answers for the combine of whatever the path names: a
+// case directory describes the combine a POST would run, a single .out file
+// streams its own joined form. Both are reads, and neither writes anything.
+var combineViewHandler = withUser(func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+	target := r.URL.Path
+	if !d.Check(target) {
+		return http.StatusForbidden, nil
+	}
+
+	info, err := d.user.Fs.Stat(target)
+	if err != nil {
+		return errToStatus(err), err
+	}
+
+	if info.IsDir() {
+		return combinePreviewResult(w, r, d, target)
+	}
+	return combineFileResult(w, r, d, target, info.Name())
+})
+
+// combinePreviewResult lists the legs a combine would join, in the order it
+// would join them. A case with too few legs is not an error here: the prompt
+// asking the question is better placed to say so than a failed request.
+func combinePreviewResult(w http.ResponseWriter, r *http.Request, d *data, dir string) (int, error) {
+	if !d.user.Perm.Create {
+		return http.StatusForbidden, nil
+	}
+
+	isCase, err := isConvergeCase(d, dir)
+	if err != nil {
+		return errToStatus(err), err
+	}
+	if !isCase {
+		return http.StatusBadRequest, errors.New("not a CONVERGE case directory")
+	}
+
+	legs, err := convergeCombineLegs(d, dir)
+	if err != nil {
+		return errToStatus(err), err
+	}
+
+	resp := &combinePreviewResponse{
+		Name: convergeCombinedDir,
+		Legs: make([]combineLegPreview, 0, len(legs)),
+	}
+
+	distinct := map[string]struct{}{}
+	for _, leg := range legs {
+		view := combineLegPreview{Name: leg.name}
+		err := combineWalkLeg(r.Context(), d, leg, func(_, rel string, info os.FileInfo) {
+			view.Files++
+			view.Bytes += info.Size()
+			distinct[rel] = struct{}{}
+		})
+		if err != nil {
+			return errToStatus(err), err
+		}
+
+		resp.Legs = append(resp.Legs, view)
+		resp.Bytes += view.Bytes
+	}
+	resp.Files = len(distinct)
+
+	_, statErr := d.user.Fs.Stat(path.Join(dir, convergeCombinedDir))
+	switch {
+	case statErr == nil:
+		resp.Exists = true
+	case !os.IsNotExist(statErr):
+		return errToStatus(statErr), statErr
+	}
+
+	return renderJSON(w, r, resp)
+}
+
+// combineFileResult streams one .out file joined across its whole chain. This
+// is what the plotter's full-chain view is looking at, so downloading from
+// there hands over the file being plotted rather than the single leg it was
+// opened from — and every leg takes part, including the ones the plotter left
+// out to stay inside its own byte budget.
+func combineFileResult(w http.ResponseWriter, r *http.Request, d *data, fPath, name string) (int, error) {
+	if !d.user.Perm.Download {
+		return http.StatusForbidden, nil
+	}
+	if !strings.HasSuffix(strings.ToLower(name), ".out") {
+		return http.StatusBadRequest, errors.New("not a CONVERGE output file")
+	}
+
+	caseRoot, remainder, ok := combineCaseFor(fPath)
+	if !ok {
+		return http.StatusBadRequest, errors.New("file is not inside a CONVERGE output directory")
+	}
+	if !d.Check(caseRoot) {
+		return http.StatusForbidden, nil
+	}
+
+	isCase, err := isConvergeCase(d, caseRoot)
+	if err != nil {
+		return errToStatus(err), err
+	}
+	if !isCase {
+		return http.StatusBadRequest, errors.New("not a CONVERGE case directory")
+	}
+
+	sources, err := combineFileSources(d, caseRoot, remainder)
+	if err != nil {
+		return errToStatus(err), err
+	}
+	if len(sources) == 0 {
+		return http.StatusNotFound, nil
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition",
+		"attachment; filename*=utf-8''"+url.PathEscape(combinedFileName(name)))
+
+	// The body is on its way from here, so a failure part-way through can only
+	// end the response; the status has already gone out.
+	if err := combineStream(r.Context(), d.user.Fs, sources, w, &combineState{}); err != nil {
+		return 0, err
+	}
+	return 0, nil
+}
+
+// combineCaseFor locates the case a .out file belongs to by climbing to the
+// leg directory above it — the outputs_* name CONVERGE writes a run into. The
+// case is that leg's parent, and what hangs below the leg is the path the same
+// output takes in every other leg.
+func combineCaseFor(fPath string) (caseRoot, remainder string, ok bool) {
+	for dir := path.Dir(fPath); dir != "" && dir != "/" && dir != "."; dir = path.Dir(dir) {
+		name := strings.ToLower(path.Base(dir))
+		if !strings.HasPrefix(name, convergeOutputDirPrefix) || name == convergeCombinedDir {
+			continue
+		}
+		return path.Dir(dir), strings.TrimPrefix(fPath, dir), true
+	}
+	return "", "", false
+}
+
+// combineFileSources lists one output across every leg that wrote it, in chain
+// order. A leg that never wrote the file simply sits the join out.
+func combineFileSources(d *data, caseRoot, remainder string) ([]string, error) {
+	legs, err := convergeCombineLegs(d, caseRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	sources := make([]string, 0, len(legs))
+	for _, leg := range legs {
+		fPath := leg.path + remainder
+		if !d.CheckRules(fPath) {
+			continue
+		}
+
+		info, err := combineLstat(d.user.Fs, fPath)
+		if err != nil || info.IsDir() || files.IsSymlink(info.Mode()) {
+			continue
+		}
+		sources = append(sources, fPath)
+	}
+
+	return sources, nil
+}
+
+// combineLstat looks at the entry itself rather than what it points at, which
+// is what the leg walk sees; a symlinked leg file is skipped by both.
+func combineLstat(afs afero.Fs, fPath string) (os.FileInfo, error) {
+	if lstater, ok := afs.(afero.Lstater); ok {
+		info, _, err := lstater.LstatIfPossible(fPath)
+		return info, err
+	}
+	return afs.Stat(fPath)
+}
+
+// combinedFileName names the download after the folder a whole-case combine
+// would write, so thermo.out arrives as thermo_combined.out and does not land
+// on top of the single-leg file already in the user's downloads.
+func combinedFileName(name string) string {
+	ext := path.Ext(name)
+	return strings.TrimSuffix(name, ext) + "_combined" + ext
 }
 
 // combineHandler joins every .out file across a case's outputs_* legs into a

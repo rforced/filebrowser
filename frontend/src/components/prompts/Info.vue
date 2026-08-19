@@ -13,6 +13,23 @@
         <strong>{{ t("prompts.displayName") }}</strong> {{ displayName }}
       </p>
 
+      <div
+        v-if="fileStore.selected.length < 2"
+        class="flex items-start gap-2 min-w-0"
+      >
+        <strong class="shrink-0 py-1">{{ t("prompts.path") }}:</strong>
+        <code
+          class="flex-1 min-w-0 py-1 text-sm break-all text-gray-600 dark:text-gray-300"
+          v-text="fullPath"
+        ></code>
+        <IconAction
+          icon="fa-copy"
+          size="sm"
+          :title="t('buttons.copyToClipboard')"
+          @action="copyPath"
+        />
+      </div>
+
       <p v-if="!dir || fileStore.selected.length > 1">
         <strong>{{ t("prompts.size") }}:</strong>
         <span id="content_length"></span> {{ humanSize }}
@@ -106,14 +123,17 @@
 import { computed, inject, ref } from "vue";
 import { useRoute } from "vue-router";
 import { useI18n } from "vue-i18n";
+import IconAction from "@/components/ui/IconAction.vue";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { filesize } from "@/utils";
+import { copy } from "@/utils/clipboard";
 import { compressionRatio } from "@/utils/usage";
 import dayjs from "dayjs";
 import { files as api } from "@/api";
 
 const $showError = inject<IToastError>("$showError")!;
+const $showSuccess = inject<IToastSuccess>("$showSuccess")!;
 
 const fileStore = useFileStore();
 const layoutStore = useLayoutStore();
@@ -165,6 +185,26 @@ const displayName = computed(() => {
     ? (fileStore.req?.name ?? "")
     : fileStore.req!.items[fileStore.selected[0]].name;
 });
+
+const fullPath = computed(() =>
+  fileStore.selectedCount === 0
+    ? (fileStore.req?.path ?? "")
+    : fileStore.req!.items[fileStore.selected[0]].path
+);
+
+// Same fallback dance as the share links: the plain write is refused in some
+// browsers until the permission has been asked for explicitly.
+const copyPath = () => {
+  const text = fullPath.value;
+  copy({ text }).then(
+    () => $showSuccess(t("success.pathCopied")),
+    () =>
+      copy({ text }, { permission: true }).then(
+        () => $showSuccess(t("success.pathCopied")),
+        (e: Error) => $showError(e)
+      )
+  );
+};
 
 const dir = computed(() => {
   return (

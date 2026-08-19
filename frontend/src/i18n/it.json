@@ -184,6 +184,8 @@
     "loadError": "Non è stato possibile caricare il file.",
     "thisRun": "Questa esecuzione",
     "fullChain": "Catena completa",
+    "downloadFull": "Scarica completo",
+    "downloadFullHint": "Scarica tutte le esecuzioni unite in un unico file",
     "chainRuns": "{count} esecuzioni",
     "chainPartial": "mostra le {shown} esecuzioni più recenti su {total}",
     "chainTrimmed": "{count} righe sostituite da un'esecuzione successiva",
@@ -249,6 +251,12 @@
     "convergeCleanScanning": "Ricerca dei file di output in corso…",
     "convergeCleanTotal": "Verranno eliminati {count} elementi, liberando {size}.",
     "convergeCleaning": "Eliminazione dei file di output in corso…",
+    "convergeCombine": "Unisci output",
+    "convergeCombineEmpty": "Queste cartelle di output non contengono file .out da unire.",
+    "convergeCombineMessage": "Unisce ogni file .out delle cartelle di output di questo caso in una nuova cartella {name}, partendo dall'esecuzione più vecchia. Dove un riavvio si sovrappone all'esecuzione precedente prevalgono le righe più recenti, la stessa giunzione disegnata dal grafico della catena completa. Nulla di esistente viene modificato o eliminato.",
+    "convergeCombineRunning": "Questo caso sembra in esecuzione. L'output unito si fermerà al punto raggiunto dal solutore.",
+    "convergeCombineScanning": "Ricerca dei file di output in corso…",
+    "convergeCombineTotal": "Verranno scritti {count} file in {name}, occupando fino a {size}.",
     "convergeKinds": {
       "echo": "Echo",
       "restart": "Restart",
@@ -443,7 +451,8 @@
     "siteSettings": "Impostazioni del sito"
   },
   "success": {
-    "linkCopied": "Link copiato!"
+    "linkCopied": "Link copiato!",
+    "pathCopied": "Percorso copiato!"
   },
   "time": {
     "days": "Giorni",

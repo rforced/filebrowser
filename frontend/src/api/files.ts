@@ -486,6 +486,46 @@ export async function convergeCombine(
   return (await res.json()) as ConvergeCombineResult;
 }
 
+export interface ConvergeCombineLeg {
+  name: string;
+  files: number;
+  bytes: number;
+}
+
+export interface ConvergeCombinePreview {
+  name: string;
+  legs: ConvergeCombineLeg[];
+  files: number;
+  bytes: number;
+  exists: boolean;
+}
+
+/*
+ * What a combine of this case would join, in the order it would join it. The
+ * confirmation prompt asks the server rather than reading the listing so the
+ * folders it names, and the order it names them in, are the ones the combine
+ * itself will use.
+ */
+export async function convergeCombinePreview(
+  url: string,
+  signal?: AbortSignal
+): Promise<ConvergeCombinePreview> {
+  url = removePrefix(url);
+  const res = await fetchURL(`/api/combine${url}`, { signal });
+  return (await res.json()) as ConvergeCombinePreview;
+}
+
+/*
+ * One .out file joined across every leg of its restart chain, streamed. This
+ * is the download for the plotter's full-chain view: the server applies the
+ * same seam rule the plot draws, but over the original text, so nothing is
+ * lost to a parse and no leg is left out for a byte budget.
+ */
+export function getCombinedDownloadURL(path: string) {
+  const authStore = useAuthStore();
+  return createURL("api/combine" + path, { auth: authStore.token });
+}
+
 /*
  * Per-child usage for one directory, biggest first. One walk on the server
  * answers the whole view, so the du page, the storage card's top consumers and

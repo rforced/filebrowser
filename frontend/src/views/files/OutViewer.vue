@@ -39,10 +39,11 @@
           :href="downloadUrl"
           target="_blank"
           class="btn btn-flex btn-blue btn-soft"
-          :aria-label="t('buttons.download')"
+          :aria-label="downloadLabel"
+          :title="chainActive ? t('outPlot.downloadFullHint') : undefined"
         >
           <i class="fa-solid fa-download"></i>
-          <span class="hidden md:inline">{{ t("buttons.download") }}</span>
+          <span class="hidden md:inline">{{ downloadLabel }}</span>
         </a>
       </div>
     </header>
@@ -405,8 +406,21 @@ const logScale = ref(false);
 const canvas = ref<HTMLCanvasElement | null>(null);
 const chart = shallowRef<Chart | null>(null);
 
-const downloadUrl = computed(() =>
-  fileStore.req ? api.getDownloadURL(fileStore.req, false) : ""
+/*
+ * In the chain view what is plotted is not this file but every leg of its
+ * chain stitched together, so that is what the download hands over. The server
+ * joins the original text under the same seam rule the plot draws, and it
+ * reaches legs the plot itself left out to stay inside its byte budget.
+ */
+const downloadUrl = computed(() => {
+  if (!fileStore.req) return "";
+  return chainActive.value
+    ? api.getCombinedDownloadURL(fileStore.req.path)
+    : api.getDownloadURL(fileStore.req, false);
+});
+
+const downloadLabel = computed(() =>
+  chainActive.value ? t("outPlot.downloadFull") : t("buttons.download")
 );
 
 const canOpenAsText = computed(

@@ -36,7 +36,13 @@ vi.mock("@/utils/auth", () => ({
   logout: vi.fn(),
 }));
 
-import { dirSize, usageBreakdown, checksum } from "../files";
+import {
+  dirSize,
+  usageBreakdown,
+  checksum,
+  convergeCombinePreview,
+  getCombinedDownloadURL,
+} from "../files";
 
 function mockFetchResponse(body: any, status = 200) {
   return vi.fn().mockResolvedValue({
@@ -158,6 +164,43 @@ describe("files API", () => {
       await usageBreakdown("/cases", { kinds: true });
       expect((globalThis.fetch as any).mock.calls[0][0]).toContain(
         "kinds=true"
+      );
+    });
+  });
+
+  describe("convergeCombinePreview", () => {
+    /*
+     * The prompt hands over the route it is open on, a /files/... router URL,
+     * so this one does go through removePrefix — unlike the download below,
+     * which is addressed by resource path.
+     */
+    it("strips the router prefix off the case it previews", async () => {
+      globalThis.fetch = mockFetchResponse({ legs: [] });
+
+      await convergeCombinePreview("/files/cases/engine/");
+
+      const callUrl = (globalThis.fetch as any).mock.calls[0][0];
+      expect(callUrl).toContain("/api/combine/cases/engine/");
+    });
+  });
+
+  describe("getCombinedDownloadURL", () => {
+    /*
+     * Addressed by RESOURCE path, the form FileInfo.path takes, because that
+     * is what the plotter holds. Passing it through removePrefix would drop
+     * the leg the file lives in and combine some other case's output.
+     */
+    it("addresses the resource path directly", () => {
+      // createURL resolves against the page's own origin, which happy-dom does
+      // not put on the global the way a browser does.
+      vi.stubGlobal("origin", "http://localhost");
+
+      const url = getCombinedDownloadURL(
+        "/cases/engine/outputs_original/stream0/thermo.out"
+      );
+
+      expect(url).toContain(
+        "/api/combine/cases/engine/outputs_original/stream0/thermo.out"
       );
     });
   });

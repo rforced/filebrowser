@@ -132,9 +132,6 @@ withDefaults(defineProps<{ variant?: "stack" | "rail" }>(), {
 const { t } = useI18n();
 const route = useRoute();
 const { actions } = useFileActions();
-
-// Inside the platform's iframe the deep link should carry the whole page over
-// to the platform rather than spawn a tab from within the frame.
 const linkTarget = embedded ? "_top" : "_blank";
 
 const STACK_LAYOUT: string[][][] = [
@@ -142,6 +139,7 @@ const STACK_LAYOUT: string[][][] = [
     ["new-folder", "new-file"],
     ["upload", "download"],
   ],
+  [["info", "rename"], ["copy", "move"], ["extract", "share"], ["delete"]],
   [
     ["create-job"],
     ["create-workstation"],
@@ -149,7 +147,6 @@ const STACK_LAYOUT: string[][][] = [
     ["converge-combine"],
     ["converge-udf"],
   ],
-  [["info", "rename"], ["copy", "move"], ["extract", "share"], ["delete"]],
   [["settings"]],
 ];
 

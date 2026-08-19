@@ -184,6 +184,8 @@
     "loadError": "The file could not be loaded.",
     "thisRun": "This run",
     "fullChain": "Full chain",
+    "downloadFull": "Download full",
+    "downloadFullHint": "Downloads every run joined into a single file",
     "chainRuns": "{count} runs",
     "chainPartial": "showing the newest {shown} of {total} runs",
     "chainTrimmed": "{count} rows superseded by a later run",
@@ -249,6 +251,12 @@
     "convergeCleanScanning": "Looking for output files...",
     "convergeCleanTotal": "{count} item(s) will be deleted, freeing {size}.",
     "convergeCleaning": "Deleting output files...",
+    "convergeCombine": "Combine output",
+    "convergeCombineEmpty": "These output folders hold no .out files to combine.",
+    "convergeCombineMessage": "This joins every .out file across this case's output folders into a new {name} folder, oldest run first. Where a restart overlaps the run before it the newer rows win, which is the same seam the full-chain plot draws. Nothing already in the case is changed or deleted.",
+    "convergeCombineRunning": "This case appears to be running. The combined output will end wherever the solver had reached.",
+    "convergeCombineScanning": "Looking for output files...",
+    "convergeCombineTotal": "{count} file(s) will be written to {name}, using up to {size}.",
     "convergeKinds": {
       "echo": "Echo",
       "restart": "Restart",
@@ -443,7 +451,8 @@
     "siteSettings": "Site Settings"
   },
   "success": {
-    "linkCopied": "Link copied!"
+    "linkCopied": "Link copied!",
+    "pathCopied": "Path copied!"
   },
   "time": {
     "days": "Days",

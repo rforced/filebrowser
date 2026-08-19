@@ -184,6 +184,8 @@
     "loadError": "无法加载该文件。",
     "thisRun": "本次运行",
     "fullChain": "完整运行链",
+    "downloadFull": "下载完整数据",
+    "downloadFullHint": "将所有运行合并为一个文件后下载",
     "chainRuns": "{count} 次运行",
     "chainPartial": "共 {total} 次运行，显示最新的 {shown} 次",
     "chainTrimmed": "{count} 行已被后续运行取代",
@@ -249,6 +251,12 @@
     "convergeCleanScanning": "正在查找输出文件…",
     "convergeCleanTotal": "将删除 {count} 个项目，释放 {size}。",
     "convergeCleaning": "正在删除输出文件…",
+    "convergeCombine": "合并输出",
+    "convergeCombineEmpty": "这些输出文件夹中没有可合并的 .out 文件。",
+    "convergeCombineMessage": "将本案例各输出文件夹中的每个 .out 文件按运行时间从旧到新合并到新的 {name} 文件夹中。重启与上一次运行重叠的部分以较新的行为准，与完整运行链图表所绘制的接缝一致。不会修改或删除任何现有文件。",
+    "convergeCombineRunning": "该案例似乎正在运行。合并后的输出将止于求解器当前到达的位置。",
+    "convergeCombineScanning": "正在查找输出文件…",
+    "convergeCombineTotal": "将向 {name} 写入 {count} 个文件，最多占用 {size}。",
     "convergeKinds": {
       "echo": "回显文件",
       "restart": "重启文件",
@@ -443,7 +451,8 @@
     "siteSettings": "站点设置"
   },
   "success": {
-    "linkCopied": "链接已复制！"
+    "linkCopied": "链接已复制！",
+    "pathCopied": "路径已复制！"
   },
   "time": {
     "days": "天",

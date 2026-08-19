@@ -341,7 +341,7 @@ export const useFileActions = () => {
           isConvergeCase.value &&
           outputRunCount.value > 1 &&
           !isButtonBusy("converge-combine"),
-        run: combineOutput,
+        run: () => showPrompt("converge-combine"),
       },
       {
         id: "converge-udf",
@@ -364,5 +364,6 @@ export const useFileActions = () => {
     download,
     upload,
     extract,
+    combineOutput,
   };
 };

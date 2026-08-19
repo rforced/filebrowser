@@ -184,6 +184,8 @@
     "loadError": "Die Datei konnte nicht geladen werden.",
     "thisRun": "Dieser Lauf",
     "fullChain": "Gesamte Kette",
+    "downloadFull": "Gesamt herunterladen",
+    "downloadFullHint": "Lädt alle Läufe zu einer einzigen Datei zusammengeführt herunter",
     "chainRuns": "{count} Läufe",
     "chainPartial": "zeigt die {shown} neuesten von {total} Läufen",
     "chainTrimmed": "{count} Zeilen von einem späteren Lauf ersetzt",
@@ -249,6 +251,12 @@
     "convergeCleanScanning": "Ausgabedateien werden gesucht …",
     "convergeCleanTotal": "{count} Eintrag/Einträge werden gelöscht und geben {size} frei.",
     "convergeCleaning": "Ausgabedateien werden gelöscht …",
+    "convergeCombine": "Ausgabe zusammenführen",
+    "convergeCombineEmpty": "Diese Ausgabeordner enthalten keine .out-Dateien zum Zusammenführen.",
+    "convergeCombineMessage": "Dies führt jede .out-Datei aus den Ausgabeordnern dieses Falls in einem neuen Ordner {name} zusammen, ältester Lauf zuerst. Wo ein Neustart den vorherigen Lauf überlappt, gewinnen die neueren Zeilen – dieselbe Nahtstelle, die das Diagramm der gesamten Kette zeichnet. Vorhandenes wird weder geändert noch gelöscht.",
+    "convergeCombineRunning": "Dieser Fall scheint zu laufen. Die zusammengeführte Ausgabe endet dort, wo der Solver gerade angekommen war.",
+    "convergeCombineScanning": "Ausgabedateien werden gesucht …",
+    "convergeCombineTotal": "{count} Datei(en) werden nach {name} geschrieben und belegen bis zu {size}.",
     "convergeKinds": {
       "echo": "Echo",
       "restart": "Restart",
@@ -443,7 +451,8 @@
     "siteSettings": "Website-Einstellungen"
   },
   "success": {
-    "linkCopied": "Link kopiert!"
+    "linkCopied": "Link kopiert!",
+    "pathCopied": "Pfad kopiert!"
   },
   "time": {
     "days": "Tage",

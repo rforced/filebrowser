@@ -184,6 +184,8 @@
     "loadError": "ファイルを読み込めませんでした。",
     "thisRun": "この実行",
     "fullChain": "チェーン全体",
+    "downloadFull": "全体をダウンロード",
+    "downloadFullHint": "すべての実行を 1 つのファイルに結合してダウンロードします",
     "chainRuns": "{count} 実行",
     "chainPartial": "{total} 実行のうち新しい {shown} 実行を表示",
     "chainTrimmed": "{count} 行は後の実行で置き換え",
@@ -249,6 +251,12 @@
     "convergeCleanScanning": "出力ファイルを検索しています…",
     "convergeCleanTotal": "{count} 件の項目を削除し、{size} を解放します。",
     "convergeCleaning": "出力ファイルを削除しています…",
+    "convergeCombine": "出力を結合",
+    "convergeCombineEmpty": "これらの出力フォルダーには結合できる .out ファイルがありません。",
+    "convergeCombineMessage": "このケースの出力フォルダーにあるすべての .out ファイルを、古い実行から順に新しい {name} フォルダーへ結合します。リスタートが前の実行と重なる部分では新しい行が優先され、これはチェーン全体のグラフが描く継ぎ目と同じです。既存のファイルは変更も削除もされません。",
+    "convergeCombineRunning": "このケースは実行中のようです。結合された出力はソルバーが到達した時点で終わります。",
+    "convergeCombineScanning": "出力ファイルを検索しています…",
+    "convergeCombineTotal": "{count} 個のファイルを {name} に書き込みます。最大 {size} を使用します。",
     "convergeKinds": {
       "echo": "エコー",
       "restart": "リスタート",
@@ -443,7 +451,8 @@
     "siteSettings": "サイト設定"
   },
   "success": {
-    "linkCopied": "リンクをコピーしました！"
+    "linkCopied": "リンクをコピーしました！",
+    "pathCopied": "パスをコピーしました！"
   },
   "time": {
     "days": "日",
