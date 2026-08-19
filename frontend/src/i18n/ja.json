@@ -512,6 +512,7 @@
     "surface": "サーフェス",
     "surfaceChip": "{faces} 面、{triangles} 三角形",
     "surfaceCounts": "{faces} 面 · {triangles} 三角形",
+    "surfaceEdgesHidden": "このズームレベルではエッジが密すぎるため表示していません。",
     "surfaceNoValues": "この表面には利用可能な {scalar} の値がありません。",
     "surfaceStrided": "{total} 面のうち {n} 面ごとに表示しています。",
     "truncated": "最初の変数のみ表示しています。",

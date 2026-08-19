@@ -52,8 +52,13 @@
           {{ t("h5View.surfaceNoValues", { scalar: surface.scalar }) }}
         </span>
 
+        <span v-if="edgesHidden" class="text-gray-500 dark:text-gray-400">
+          <i class="fa-solid fa-circle-info mr-1"></i>
+          {{ t("h5View.surfaceEdgesHidden") }}
+        </span>
+
         <div
-          v-else-if="surface.scalar && surface.values"
+          v-if="!noReadings && surface.scalar && surface.values"
           class="flex items-center gap-1.5"
         >
           <span class="shrink-0">{{ surface.scalar }}</span>
@@ -153,6 +158,7 @@ const canvasEl = ref<HTMLCanvasElement | null>(null);
 const loading = ref(true);
 const error = ref("");
 const surface = ref<h5.H5Surface | null>(null);
+const edgesHidden = ref(false);
 
 const rep = () => props.representation ?? "surface";
 
@@ -167,9 +173,10 @@ let invalidated = true;
 let loadToken = 0;
 let radius = 1;
 let center: [number, number, number] = [0, 0, 0];
+let half: [number, number, number] = [0, 0, 0];
 let colorAttr: Float32BufferAttribute | null = null;
-// The camera frames the model once; after that it belongs to the user, so a
-// frame swap or a scalar change must not yank it back.
+let edgeLines: LineSegments[] = [];
+let edgeSegments = 0;
 let hasView = false;
 
 const shownRange = computed(
@@ -189,9 +196,14 @@ const noReadings = computed(() => {
   );
 });
 
-// One material serves every boundary's outline; near-black reads as a mesh
-// line over any boundary colour or ramp.
-const edgeMaterial = new LineBasicMaterial({ color: 0x0d0d0d });
+const edgeMaterial = new LineBasicMaterial({
+  color: 0x0d0d0d,
+  transparent: true,
+});
+
+const EDGE_FADE_MIN_PITCH = 1.5;
+const EDGE_FADE_MAX_PITCH = 4;
+const EDGE_MIN_OPACITY = 0.02;
 
 const disposeModel = () => {
   if (!model) return;
@@ -207,6 +219,9 @@ const disposeModel = () => {
   scene?.remove(model);
   model = null;
   colorAttr = null;
+  edgeLines = [];
+  edgeSegments = 0;
+  edgesHidden.value = false;
 };
 
 const build = (data: h5.H5Surface) => {
@@ -298,8 +313,9 @@ const build = (data: h5.H5Surface) => {
         )
       );
       const lines = new LineSegments(outline, edgeMaterial);
-      lines.visible = rep() === "edges";
       mesh.add(lines);
+      edgeLines.push(lines);
+      edgeSegments += boundary.edgeCount / 2;
     }
 
     legend.push({
@@ -317,6 +333,7 @@ const build = (data: h5.H5Surface) => {
 
   const [minX, minY, minZ, maxX, maxY, maxZ] = data.bounds;
   center = [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
+  half = [(maxX - minX) / 2, (maxY - minY) / 2, (maxZ - minZ) / 2];
   const extent = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
   radius = (Number.isFinite(extent) && extent > 0 ? extent : 1e-3) / 2;
   if (!hasView) {
@@ -325,9 +342,9 @@ const build = (data: h5.H5Surface) => {
   } else {
     invalidated = true;
   }
+  applyEdgeFade();
 };
 
-// A range change is a recolour of what is already on the GPU, never a refetch.
 const recolor = () => {
   const data = surface.value;
   if (!data?.values || !colorAttr) return;
@@ -362,19 +379,58 @@ const savePng = () => {
   saveViewPng(renderer, scene, camera, pngFilename(base, props.scalar));
 };
 
+const facePitchPx = () => {
+  if (!camera || !renderer || edgeSegments === 0) return Infinity;
+
+  const height = renderer.domElement.height;
+  const dx = camera.position.x - center[0];
+  const dy = camera.position.y - center[1];
+  const dz = camera.position.z - center[2];
+  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  if (!(height > 0) || !(distance > 0)) return Infinity;
+
+  const [hx, hy, hz] = half;
+  const silhouette =
+    4 *
+    ((Math.abs(dx) * hy * hz +
+      Math.abs(dy) * hx * hz +
+      Math.abs(dz) * hx * hy) /
+      distance);
+
+  const scale =
+    height / (2 * Math.tan((camera.fov * Math.PI) / 360) * distance);
+  const pitch = Math.sqrt((4 * silhouette * scale * scale) / edgeSegments);
+  return Number.isFinite(pitch) && pitch > 0 ? pitch : Infinity;
+};
+
+const applyEdgeFade = () => {
+  const on = rep() === "edges" && edgeLines.length > 0;
+
+  let opacity = 1;
+  if (on) {
+    const span = EDGE_FADE_MAX_PITCH - EDGE_FADE_MIN_PITCH;
+    const t = (facePitchPx() - EDGE_FADE_MIN_PITCH) / span;
+    const clamped = Math.min(Math.max(t, 0), 1);
+    opacity = clamped * clamped * (3 - 2 * clamped);
+  }
+
+  const visible = on && opacity > EDGE_MIN_OPACITY;
+  edgeMaterial.opacity = opacity;
+  for (const lines of edgeLines) lines.visible = visible;
+  edgesHidden.value = on && !visible;
+};
+
 const applyRepresentation = () => {
   const mode = rep();
   model?.traverse((child) => {
-    if ((child as LineSegments).isLineSegments) {
-      child.visible = mode === "edges";
-      return;
-    }
+    if ((child as LineSegments).isLineSegments) return;
     const mesh = child as Mesh;
     if (mesh.userData.fill) {
       mesh.material =
         mode === "wireframe" ? mesh.userData.wire : mesh.userData.fill;
     }
   });
+  applyEdgeFade();
   invalidated = true;
 };
 
@@ -404,6 +460,7 @@ const animate = () => {
 
   if (controls.update() || invalidated) {
     invalidated = false;
+    applyEdgeFade();
     renderer.render(scene, camera);
   }
 };

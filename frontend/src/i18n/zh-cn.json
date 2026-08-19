@@ -512,6 +512,7 @@
     "surface": "表面",
     "surfaceChip": "{faces} 个面，{triangles} 个三角形",
     "surfaceCounts": "{faces} 个面 · {triangles} 个三角形",
+    "surfaceEdgesHidden": "当前缩放级别下边线过密，暂不绘制。",
     "surfaceNoValues": "此表面没有可用的 {scalar} 数值。",
     "surfaceStrided": "共 {total} 个面，每 {n} 个显示一个。",
     "truncated": "仅列出前若干变量。",

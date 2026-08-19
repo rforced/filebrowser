@@ -512,6 +512,7 @@
     "surface": "Oberfläche",
     "surfaceChip": "{faces} Flächen, {triangles} Dreiecke",
     "surfaceCounts": "{faces} Flächen · {triangles} Dreiecke",
+    "surfaceEdgesHidden": "Bei dieser Zoomstufe liegen die Kanten zu dicht, um sie zu zeichnen.",
     "surfaceNoValues": "Keine verwertbaren {scalar}-Werte auf dieser Oberfläche.",
     "surfaceStrided": "Zeigt jede {n}. von {total} Flächen.",
     "truncated": "Es werden nur die ersten Variablen aufgelistet.",

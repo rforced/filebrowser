@@ -512,6 +512,7 @@
     "surface": "Surface",
     "surfaceChip": "{faces} faces, {triangles} triangles",
     "surfaceCounts": "{faces} faces · {triangles} triangles",
+    "surfaceEdgesHidden": "Edges are too dense to draw at this zoom.",
     "surfaceNoValues": "No usable {scalar} readings on this surface.",
     "surfaceStrided": "Showing 1 in every {n} faces of {total}.",
     "truncated": "Only the first variables are listed.",

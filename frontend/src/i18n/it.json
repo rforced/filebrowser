@@ -512,6 +512,7 @@
     "surface": "Superficie",
     "surfaceChip": "{faces} facce, {triangles} triangoli",
     "surfaceCounts": "{faces} facce · {triangles} triangoli",
+    "surfaceEdgesHidden": "I bordi sono troppo fitti per essere disegnati a questo livello di zoom.",
     "surfaceNoValues": "Nessun valore di {scalar} utilizzabile su questa superficie.",
     "surfaceStrided": "Mostra una faccia ogni {n} su {total}.",
     "truncated": "Sono elencate solo le prime variabili.",
