@@ -5,9 +5,13 @@
 
 export type H5Kind = "post" | "restart" | "map" | "table" | "dataset";
 
+// .cgns is HDF5 too: it is what a v6 case writes instead of post*.h5 when
+// write_cgns_flag is set, and the endpoint maps it onto the same summary.
 export function isH5FileName(name: string): boolean {
   const lower = name.toLowerCase();
-  return lower.endsWith(".h5") || lower.endsWith(".rst");
+  return (
+    lower.endsWith(".h5") || lower.endsWith(".rst") || lower.endsWith(".cgns")
+  );
 }
 
 export function h5KindOf(name: string): H5Kind {
@@ -133,7 +137,10 @@ export function outputProfile(
   const points: OutputPoint[] = [];
   for (const item of items) {
     const lower = item.name.toLowerCase();
-    if (!lower.startsWith("post") || !lower.endsWith(".h5")) continue;
+    if (!lower.startsWith("post")) continue;
+    // A run writes one format or the other, never both, so no case can mix the
+    // two into one sequence.
+    if (!lower.endsWith(".h5") && !lower.endsWith(".cgns")) continue;
     const time = simTimeFromName(item.name);
     if (time === null) continue;
     points.push({

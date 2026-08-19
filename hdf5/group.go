@@ -47,8 +47,10 @@ func (f *File) groupAt(addr uint64, name string) (*Group, error) {
 	return &Group{f: f, addr: addr, Name: name, Attrs: attrs}, nil
 }
 
-// Children lists the group's links in the order the B-tree yields them, which
-// for symbol-table groups is lexicographic by name.
+// Children lists the group's links in the order the file stores them: for a
+// symbol-table group that is lexicographic by name, and for a new-style group
+// it is the order the messages were packed into the header or the heap.
+// Callers that need a particular order sort for it.
 func (g *Group) Children() ([]Link, error) {
 	oh, err := g.f.readObjectHeader(g.addr)
 	if err != nil {
@@ -57,15 +59,9 @@ func (g *Group) Children() ([]Link, error) {
 
 	st := oh.first(msgSymbolTable)
 	if st == nil {
-		// A new-style group keeps its links in link messages and a fractal
-		// heap instead of a symbol table. Reporting "no children" would hide
-		// every dataset it holds, so say so instead.
-		if oh.first(msgLink) != nil || oh.first(msgLinkInfo) != nil {
-			return nil, fmt.Errorf("%w: group %s stores links without a symbol table", ErrUnsupported, g.Name)
-		}
-		// A group with no link storage at all has no children (or is not a
-		// group at all, which callers detect via Kind).
-		return nil, nil
+		// A new-style group keeps its links in the object header, in a fractal
+		// heap, or both.
+		return g.f.newStyleLinks(oh)
 	}
 	o := int(g.f.offsetSz)
 	if len(st) < 2*o {
@@ -84,6 +80,215 @@ func (g *Group) Children() ([]Link, error) {
 		return nil, err
 	}
 	return links, nil
+}
+
+// newStyleLinks collects the children of a group that has no symbol table.
+//
+// HDF5 keeps a group's links in its object header, one message each, until
+// there are more than eight of them; past that it moves the lot into a fractal
+// heap and leaves a link info message pointing at it. Both are read here
+// because both appear in one CGNS file — most nodes have a handful of
+// children, while the zone, the flow solution and the header node do not.
+func (f *File) newStyleLinks(oh *objectHeader) ([]Link, error) {
+	var links []Link
+	for _, m := range oh.all(msgLink) {
+		l, _, ok, err := f.parseLink(m)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			links = append(links, l)
+		}
+	}
+
+	if info := oh.first(msgLinkInfo); info != nil {
+		heapAddr, dense, err := f.linkInfoHeap(info)
+		if err != nil {
+			return nil, err
+		}
+		if dense {
+			heaped, err := f.denseLinks(heapAddr)
+			if err != nil {
+				return nil, err
+			}
+			links = append(links, heaped...)
+		}
+	}
+
+	// A link message names an address but not what lives there, so unlike a
+	// symbol table entry — which caches the answer — each target's header has
+	// to be opened to tell a group from a dataset.
+	for i := range links {
+		kind, err := f.objectKind(links[i].addr)
+		if err != nil {
+			return nil, err
+		}
+		links[i].Kind = kind
+	}
+	return links, nil
+}
+
+// linkInfoHeap reads a link info message, reporting the fractal heap that
+// holds the group's links and whether there is one at all: a group under the
+// compact threshold carries the message with the heap address left undefined.
+func (f *File) linkInfoHeap(b []byte) (uint64, bool, error) {
+	if len(b) < 2 {
+		return 0, false, fmt.Errorf("%w: short link info message", ErrNotHDF5)
+	}
+	if b[0] != 0 {
+		return 0, false, fmt.Errorf("%w: link info version %d", ErrUnsupported, b[0])
+	}
+	p := 2
+	if b[1]&0x01 != 0 {
+		p += 8 // maximum creation index
+	}
+	if p+int(f.offsetSz) > len(b) {
+		return 0, false, fmt.Errorf("%w: truncated link info message", ErrNotHDF5)
+	}
+	heap := f.offset(b[p:])
+	return heap, !f.undefined(heap), nil
+}
+
+// denseLinks reads the links a group has moved into a fractal heap.
+//
+// The heap's objects are read in block order rather than through the name
+// index B-tree that sits beside it. Both reach the same set; the B-tree exists
+// to answer "where is the link named X" without a scan, which is not the
+// question here — every child is wanted, and the walk is over a few hundred
+// bytes. Objects pack from the front of each block and the tail that is left
+// reads as zeroes, which no link message can start with, so the free space
+// terminates the scan.
+//
+// What makes that safe rather than hopeful is the count: the heap header says
+// how many objects it holds, and a walk that does not find exactly that many
+// has misread the layout and says so instead of returning most of a group.
+func (f *File) denseLinks(heapAddr uint64) ([]Link, error) {
+	h, err := f.openFractalHeap(heapAddr)
+	if err != nil {
+		return nil, err
+	}
+	blocks, err := h.blocks()
+	if err != nil {
+		return nil, err
+	}
+
+	var links []Link
+	found := uint64(0)
+	for _, block := range blocks {
+		for p := 0; p < len(block); {
+			if block[p] == 0 {
+				break // free space at the tail of the block
+			}
+			l, n, ok, err := f.parseLink(block[p:])
+			if err != nil {
+				return nil, err
+			}
+			if n <= 0 {
+				break
+			}
+			p += n
+			found++
+			if found > maxLinks {
+				return nil, fmt.Errorf("%w: too many links", ErrNotHDF5)
+			}
+			if ok {
+				links = append(links, l)
+			}
+		}
+	}
+
+	if found != h.objects {
+		return nil, fmt.Errorf("%w: fractal heap holds %d objects, %d read as links",
+			ErrUnsupported, h.objects, found)
+	}
+	return links, nil
+}
+
+// parseLink decodes one link message, returning the bytes it consumed so that
+// messages packed together in a heap block can be walked.
+//
+// Layout: version, flags, then the optional link type, creation order and name
+// character set the flags announce, then the name length — itself one, two,
+// four or eight bytes wide, per the low two flag bits — the name, and finally
+// the link's target.
+func (f *File) parseLink(b []byte) (Link, int, bool, error) {
+	if len(b) < 2 {
+		return Link{}, 0, false, fmt.Errorf("%w: short link message", ErrNotHDF5)
+	}
+	if b[0] != 1 {
+		return Link{}, 0, false, fmt.Errorf("%w: link message version %d", ErrUnsupported, b[0])
+	}
+	flags := b[1]
+	p := 2
+
+	linkType := byte(0)
+	if flags&0x08 != 0 {
+		if p >= len(b) {
+			return Link{}, 0, false, fmt.Errorf("%w: truncated link message", ErrNotHDF5)
+		}
+		linkType = b[p]
+		p++
+	}
+	if flags&0x04 != 0 {
+		p += 8 // creation order
+	}
+	if flags&0x10 != 0 {
+		p++ // name character set
+	}
+
+	nameLenSize := 1 << (flags & 0x03)
+	if p+nameLenSize > len(b) {
+		return Link{}, 0, false, fmt.Errorf("%w: truncated link message", ErrNotHDF5)
+	}
+	nameLen := decodeUint(b[p:], nameLenSize)
+	p += nameLenSize
+	if nameLen > uint64(len(b)-p) {
+		return Link{}, 0, false, fmt.Errorf("%w: link name of %d bytes", ErrNotHDF5, nameLen)
+	}
+	name := string(b[p : p+int(nameLen)])
+	p += int(nameLen)
+
+	switch linkType {
+	case 0: // hard link: the address of the object's header
+		if p+int(f.offsetSz) > len(b) {
+			return Link{}, 0, false, fmt.Errorf("%w: truncated link message", ErrNotHDF5)
+		}
+		addr := f.offset(b[p:])
+		return Link{Name: name, addr: addr}, p + int(f.offsetSz), true, nil
+	case 1, 64:
+		// Soft and external links name a path rather than an object. Whatever a
+		// soft link points at is listed under its real name too, and an
+		// external one lives in another file entirely, so both are stepped over
+		// — but their length still has to be measured to find the next message.
+		if p+2 > len(b) {
+			return Link{}, 0, false, fmt.Errorf("%w: truncated link message", ErrNotHDF5)
+		}
+		n := int(binary.LittleEndian.Uint16(b[p:]))
+		p += 2
+		if n > len(b)-p {
+			return Link{}, 0, false, fmt.Errorf("%w: truncated link message", ErrNotHDF5)
+		}
+		return Link{}, p + n, false, nil
+	}
+	return Link{}, 0, false, fmt.Errorf("%w: link type %d", ErrUnsupported, linkType)
+}
+
+// objectKind opens an object header far enough to say whether it is a group or
+// a dataset. Link storage of any kind marks a group; a dataset is the thing
+// with both a datatype and a layout. Anything else — a committed datatype, say
+// — is reported as a group, which lists as empty rather than failing.
+func (f *File) objectKind(addr uint64) (Kind, error) {
+	oh, err := f.readObjectHeader(addr)
+	if err != nil {
+		return KindGroup, err
+	}
+	if oh.first(msgSymbolTable) != nil || oh.first(msgLink) != nil || oh.first(msgLinkInfo) != nil {
+		return KindGroup, nil
+	}
+	if oh.first(msgLayout) != nil && oh.first(msgDatatype) != nil {
+		return KindDataset, nil
+	}
+	return KindGroup, nil
 }
 
 // localHeap is the name storage a symbol-table group's B-tree keys index into.

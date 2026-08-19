@@ -1473,12 +1473,11 @@ func TestConvergeSummaryFirstPostFile(t *testing.T) {
 			want:  "/case/post000002_-4.81000e+02.h5",
 		},
 		{
-			// The viewer reads HDF5; pointing the button at a .cgns would open a
-			// download instead, so it is not a candidate even though it is a post
-			// file to every other part of the summary.
-			name:  "cgns alone leaves the button off",
+			// A CGNS case is a candidate like any other: the viewer reads both
+			// formats, so the button points at whichever the run wrote.
+			name:  "cgns is a candidate",
 			files: []string{"outputs_original/output/post000001_-4.81000e+02.cgns"},
-			want:  "",
+			want:  "/case/outputs_original/output/post000001_-4.81000e+02.cgns",
 		},
 		{
 			// An unindexed name sorts after every indexed one rather than as zero.

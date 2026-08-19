@@ -1,6 +1,7 @@
 package fbhttp
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"math"
 	"net/http"
@@ -21,7 +22,10 @@ import (
 func h5Scope(t *testing.T) string {
 	t.Helper()
 	scope := t.TempDir()
-	for _, name := range []string{"post.h5", "restart.h5", "odd.h5", "links.h5", "diverged.h5"} {
+	for _, name := range []string{
+		"post.h5", "restart.h5", "odd.h5", "links.h5", "diverged.h5",
+		"newstyle.h5", "post.cgns", "mixed.cgns",
+	} {
 		b, err := os.ReadFile(filepath.Join("..", "hdf5", "testdata", name))
 		if err != nil {
 			t.Fatalf("read fixture %s: %v", name, err)
@@ -417,12 +421,59 @@ func TestH5StatsOnDegenerateFields(t *testing.T) {
 // TestH5SummaryReportsUnlistableStream pins the rule that a stream the reader
 // cannot describe is an error, not an omission: a summary reporting no streams
 // reads as an empty file, which is the one answer that is certainly wrong.
+//
+// The damage is done to the fractal heap that holds the stream's cell data —
+// its object count is stepped past what the blocks hold, which is the check
+// that stops a heap from being half-read. The root's own links sit in its
+// object header and are untouched, so the file still opens and still lists:
+// the summary has to fail on the stream alone, which is the case the rule is
+// about.
 func TestH5SummaryReportsUnlistableStream(t *testing.T) {
-	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+	scope := h5Scope(t)
+	raw, err := os.ReadFile(filepath.Join("..", "hdf5", "testdata", "newstyle.h5"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const countOffset = 14 + 4*8 + 2*8 + 8
+	for i := 0; ; {
+		j := strings.Index(string(raw[i:]), "FRHP")
+		if j < 0 || i+j+countOffset+8 > len(raw) {
+			break
+		}
+		at := i + j + countOffset
+		binary.LittleEndian.PutUint64(raw[at:], binary.LittleEndian.Uint64(raw[at:])+1)
+		i += j + 4
+	}
+	if err := os.WriteFile(filepath.Join(scope, "damaged.h5"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
 
-	rec := h5Get(t, h, token, "/api/h5/links.h5")
+	h, token := h5Handlers(t, scope, users.Permissions{Download: true})
+	rec := h5Get(t, h, token, "/api/h5/damaged.h5")
 	if rec.Code != http.StatusUnprocessableEntity {
 		t.Errorf("status = %d body = %q, want 422", rec.Code, rec.Body.String())
+	}
+}
+
+// TestH5SummaryOverHeapedLinks describes a CONVERGE-shaped file written in the
+// structure generation CGNS uses: the stream's cell data has outgrown its
+// object header into a fractal heap. Nothing above the reader should notice.
+func TestH5SummaryOverHeapedLinks(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	rec := h5Get(t, h, token, "/api/h5/newstyle.h5")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %q", rec.Code, rec.Body.String())
+	}
+	var got h5Summary
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Streams) != 1 || len(got.Streams[0].Variables) != 13 {
+		t.Fatalf("streams = %+v", got.Streams)
+	}
+	if got.Streams[0].Variables[0].Name != "DENSITY" {
+		t.Errorf("variables are not sorted: %+v", got.Streams[0].Variables)
 	}
 }
 

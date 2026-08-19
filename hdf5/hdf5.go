@@ -1,13 +1,20 @@
 // Package hdf5 reads the narrow dialect of HDF5 that CONVERGE writes.
 //
-// Verified against CONVERGE 4.1.2 and 6.0.1 output (post*.h5, *.rst, map*.h5,
-// *_table.h5): superblock v0, old-style groups (v1 B-tree + local heap +
-// symbol table nodes), v1 object headers, and datasets that are always
-// contiguous or compact with no filter pipeline. That subset needs none of the
-// machinery a general reader does — no fractal heaps, no v2 B-trees, no
-// chunk indexing, no decompression — which is what makes a pure-Go
-// implementation tractable. cgo is not an option here: the release ships as a
-// static linux-amd64 binary.
+// CONVERGE writes two dialects, one per output format, and they share almost
+// nothing structurally:
+//
+//   - The native format (post*.h5, *.rst, map*.h5, *_table.h5, CONVERGE 4.1.2
+//     through 6.0.1): superblock v0, old-style groups (v1 B-tree + local heap +
+//     symbol table nodes), v1 object headers.
+//   - CGNS (post*.cgns, surface*.cgns, written when write_cgns_flag is set in
+//     post.in): superblock v2, v2 object headers, and links stored either as
+//     messages in the header or, past eight of them, in a fractal heap.
+//
+// What the two have in common is the part that would have been expensive:
+// every dataset is contiguous or compact with no filter pipeline, so there is
+// no chunk indexing and no decompression in either. cgo is not an option here
+// — the release ships as a static linux-amd64 binary — so both dialects are
+// parsed in Go.
 //
 // Anything outside the subset is reported as an error rather than guessed at.
 package hdf5
@@ -64,11 +71,21 @@ func Open(r io.ReaderAt, size int64) (*File, error) {
 	if [8]byte(buf[0:8]) != signature {
 		return nil, ErrNotHDF5
 	}
-	if v := buf[8]; v != 0 {
+
+	f := &File{r: r, size: size}
+	// The two superblock generations disagree about where the size fields sit.
+	// v0 pads them out behind the free-space and symbol-table version numbers;
+	// v2 dropped all of that, so the sizes move up to bytes 9 and 10. v3
+	// differs from v2 only in what the consistency flags mean, which is not
+	// something a reader acts on.
+	switch v := buf[8]; v {
+	case 0:
+		f.offsetSz, f.lengthSz = buf[13], buf[14]
+	case 2, 3:
+		f.offsetSz, f.lengthSz = buf[9], buf[10]
+	default:
 		return nil, fmt.Errorf("%w: superblock version %d", ErrUnsupported, v)
 	}
-
-	f := &File{r: r, size: size, offsetSz: buf[13], lengthSz: buf[14]}
 	if f.offsetSz != 4 && f.offsetSz != 8 {
 		return nil, fmt.Errorf("%w: offset size %d", ErrUnsupported, f.offsetSz)
 	}
@@ -76,10 +93,28 @@ func Open(r io.ReaderAt, size int64) (*File, error) {
 		return nil, fmt.Errorf("%w: length size %d", ErrUnsupported, f.lengthSz)
 	}
 
-	// v0 superblock: base address follows the 24-byte fixed prefix, then three
-	// more offset-sized fields, then the root group's symbol table entry.
 	o := int(f.offsetSz)
-	f.base = f.offset(buf[24:])
+	if buf[8] == 0 {
+		// v0: base address follows the 24-byte fixed prefix, then three more
+		// offset-sized fields, then the root group's symbol table entry.
+		f.base = f.offset(buf[24:])
+		rootEntry := 24 + 4*o
+		if len(buf) < rootEntry+2*o+8 {
+			return nil, ErrNotHDF5
+		}
+		// Symbol table entry: link name offset, then the object header address.
+		f.rootAddr = f.offset(buf[rootEntry+o:])
+	} else {
+		// v2/v3: base address, superblock extension, end of file, then the root
+		// group's object header address directly — no symbol table entry, since
+		// a v2 root group need not have a symbol table at all.
+		if len(buf) < 12+4*o+4 {
+			return nil, ErrNotHDF5
+		}
+		f.base = f.offset(buf[12:])
+		f.rootAddr = f.offset(buf[12+3*o:])
+	}
+
 	// Every address in the file is relative to the base. A file whose
 	// superblock sits at offset 0 states a base of 0; anything else would
 	// have to be added to each address, and reading it as absolute would
@@ -87,12 +122,6 @@ func Open(r io.ReaderAt, size int64) (*File, error) {
 	if f.base != 0 {
 		return nil, fmt.Errorf("%w: base address %d", ErrUnsupported, f.base)
 	}
-	rootEntry := 24 + 4*o
-	if len(buf) < rootEntry+2*o+8 {
-		return nil, ErrNotHDF5
-	}
-	// Symbol table entry: link name offset, then the object header address.
-	f.rootAddr = f.offset(buf[rootEntry+o:])
 
 	return f, nil
 }

@@ -29,11 +29,13 @@ describe("h5KindOf", () => {
 });
 
 describe("isH5FileName", () => {
-  it("accepts both extensions the reader handles", () => {
+  it("accepts every extension the reader handles", () => {
     expect(isH5FileName("post000001_+0.00000e+00.h5")).toBe(true);
     expect(isH5FileName("restart0074.rst")).toBe(true);
+    // CGNS is HDF5 underneath, and is what a case writes in place of post*.h5.
+    expect(isH5FileName("post000001_+0.00000e+00.cgns")).toBe(true);
+    expect(isH5FileName("slice.cgns")).toBe(true);
     expect(isH5FileName("thermo.out")).toBe(false);
-    expect(isH5FileName("slice.cgns")).toBe(false);
   });
 });
 
@@ -77,6 +79,16 @@ describe("outputProfile", () => {
     expect(points.map((p) => p.sequence)).toEqual([1, 2, 14]);
     expect(points[0].size).toBe(127135516);
     expect(points[2].time).toBeCloseTo(-359.945);
+  });
+
+  it("profiles a CGNS run the same way", () => {
+    const points = outputProfile([
+      { name: "post000001_+0.00000e+00.cgns", size: 318146 },
+      { name: "post000212_+2.10300e+03.cgns", size: 11186075 },
+      { name: "converge.log", size: 20078796 },
+    ]);
+    expect(points.map((p) => p.sequence)).toEqual([1, 212]);
+    expect(points[1].time).toBeCloseTo(2103);
   });
 
   it("orders by write index, not sim time", () => {

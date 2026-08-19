@@ -10,7 +10,10 @@ import (
 // error rather than panic or allocate unboundedly: these bytes reach the
 // reader straight from user-writable storage.
 func FuzzOpen(f *testing.F) {
-	for _, name := range []string{"post.h5", "restart.h5", "odd.h5"} {
+	// post.cgns and newstyle.h5 seed the second structure generation: v2
+	// headers, link messages and the fractal heap, none of which the native
+	// CONVERGE fixtures reach.
+	for _, name := range []string{"post.h5", "restart.h5", "odd.h5", "newstyle.h5", "post.cgns", "mixed.cgns"} {
 		b, err := os.ReadFile("testdata/" + name)
 		if err != nil {
 			f.Fatal(err)

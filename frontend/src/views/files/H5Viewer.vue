@@ -494,41 +494,46 @@
       </section>
 
       <!-- Boundaries: real names, straight out of the file. -->
-      <section v-show="activeTab === 'boundaries'" class="p-3 md:px-6 md:py-4">
+      <section
+        v-show="activeTab === 'boundaries'"
+        class="flex flex-col flex-1 min-h-72"
+      >
         <p
           v-if="!hasBoundaries"
-          class="text-sm text-gray-500 dark:text-gray-400"
+          class="flex-1 flex items-center justify-center p-6 text-center text-sm text-gray-500 dark:text-gray-400"
         >
           {{ t("h5View.noBoundaries") }}
         </p>
 
-        <table v-else class="w-full text-sm max-w-2xl">
-          <thead>
-            <tr
-              class="text-left text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700"
-            >
-              <th class="py-2 pr-4 w-16">{{ t("h5View.id") }}</th>
-              <th class="py-2 pr-4">{{ t("h5View.boundary") }}</th>
-              <th class="py-2 text-right">{{ t("h5View.faces") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="b in summary.boundaries"
-              :key="b.id"
-              class="border-b border-gray-100 dark:border-gray-800 last:border-0"
-              :class="
-                b.elements === 0 ? 'text-gray-400 dark:text-gray-500' : ''
-              "
-            >
-              <td class="py-1.5 pr-4 tabular-nums">{{ b.id }}</td>
-              <td class="py-1.5 pr-4">{{ b.name }}</td>
-              <td class="py-1.5 text-right tabular-nums">
-                {{ formatCount(b.elements) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="p-3 md:px-6 md:py-4">
+          <table class="w-full text-sm max-w-2xl">
+            <thead>
+              <tr
+                class="text-left text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700"
+              >
+                <th class="py-2 pr-4 w-16">{{ t("h5View.id") }}</th>
+                <th class="py-2 pr-4">{{ t("h5View.boundary") }}</th>
+                <th class="py-2 text-right">{{ t("h5View.faces") }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="b in summary.boundaries"
+                :key="b.id"
+                class="border-b border-gray-100 dark:border-gray-800 last:border-0"
+                :class="
+                  b.elements === 0 ? 'text-gray-400 dark:text-gray-500' : ''
+                "
+              >
+                <td class="py-1.5 pr-4 tabular-nums">{{ b.id }}</td>
+                <td class="py-1.5 pr-4">{{ b.name }}</td>
+                <td class="py-1.5 text-right tabular-nums">
+                  {{ formatCount(b.elements) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   </div>
@@ -695,9 +700,11 @@ const parcelScalars = computed(() => {
   );
 });
 
-// The boundary surface is recoverable from any stream that carries face
-// connectivity and names its boundaries — the faces whose owner is negative
-// are the wetted wall.
+// The boundary surface is recoverable from any stream that carries faces and
+// names its boundaries. How the server finds them differs by format — a
+// post*.h5 marks a boundary face in the owner slot of its face table, a CGNS
+// file lists them on the boundary conditions themselves — but what arrives is
+// the same payload either way.
 const surfaceStream = computed(
   () =>
     (summary.value?.boundaries?.length

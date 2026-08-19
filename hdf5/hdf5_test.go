@@ -544,15 +544,22 @@ func TestLinkStorageOutsideSubset(t *testing.T) {
 		t.Errorf("ok = %v, %v", v, err)
 	}
 
-	// A new-style group is still recognised as a group, so the error names the
-	// real limitation rather than claiming the path is not a group.
+	// The external link forced this group into link messages rather than a
+	// symbol table, inside a file that is otherwise the old generation
+	// throughout — so the new-style path has to work off a v1 object header
+	// too, not only the v2 headers CGNS files are made of.
 	g, err := f.Group("STREAM_00")
 	if err != nil {
 		t.Fatalf("new-style group not recognised as a group: %v", err)
 	}
 	kids, err := g.Children()
-	if !errors.Is(err, ErrUnsupported) {
-		t.Errorf("new-style group children = %v (%d links), want ErrUnsupported", err, len(kids))
+	if err != nil {
+		t.Fatalf("new-style group children: %v", err)
+	}
+	// "ext" is absent for the same reason "soft" is: it names a path in another
+	// file, not an object in this one.
+	if len(kids) != 1 || kids[0].Name != "hidden" || kids[0].Kind != KindDataset {
+		t.Errorf("new-style group children = %+v, want the hidden dataset alone", kids)
 	}
 }
 

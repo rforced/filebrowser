@@ -718,7 +718,8 @@ func convergePostSequence(name string) int {
 }
 
 func (s *convergeSummaryScan) observePost(fPath string) {
-	if !strings.HasSuffix(strings.ToLower(fPath), ".h5") {
+	lower := strings.ToLower(fPath)
+	if !strings.HasSuffix(lower, ".h5") && !strings.HasSuffix(lower, ".cgns") {
 		return
 	}
 

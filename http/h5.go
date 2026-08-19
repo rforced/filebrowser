@@ -179,6 +179,15 @@ var h5Handler = withMediaUser(func(w http.ResponseWriter, r *http.Request, d *da
 		return http.StatusUnprocessableEntity, err
 	}
 
+	// Which of the two formats this is decides only the two modes that read the
+	// file's structure. Statistics and the CSV subset are handed a path and a
+	// dataset either way.
+	root, err := f.Root()
+	if err != nil {
+		return http.StatusUnprocessableEntity, err
+	}
+	cgns := cgnsFile(f, root)
+
 	query := r.URL.Query()
 	switch {
 	case query.Get("stats") != "":
@@ -186,17 +195,42 @@ var h5Handler = withMediaUser(func(w http.ResponseWriter, r *http.Request, d *da
 	case query.Get("parcels") != "":
 		return h5ParcelResponse(w, r, f, query)
 	case query.Get("surface") != "":
+		if cgns {
+			return cgnsSurfaceResponse(w, r, f, query)
+		}
 		return h5SurfaceResponse(w, r, f, query)
 	case query.Get("subset") != "":
 		return h5SubsetResponse(w, r, f, info.Name(), query)
 	}
 
-	summary, err := h5Describe(f, info.Name(), info.Size())
+	describe := h5Describe
+	if cgns {
+		describe = cgnsDescribe
+	}
+	summary, err := describe(f, info.Name(), info.Size())
 	if err != nil {
 		return http.StatusUnprocessableEntity, err
 	}
 	return renderJSON(w, r, summary)
 })
+
+// h5OpenDataset resolves a client-supplied path to a dataset.
+//
+// In a CGNS file the addressable thing is the node, and its values hang off it
+// in a child called " data". Falling back to that keeps the paths the summary
+// hands out — and therefore the ones that come back on a stats or subset
+// request — naming the field rather than the artefact of how CGNS maps onto
+// HDF5, which would otherwise leave every column in a CSV called " data".
+func h5OpenDataset(f *hdf5.File, path string) (*hdf5.Dataset, error) {
+	ds, err := f.Dataset(path)
+	if err == nil || !errors.Is(err, hdf5.ErrNotFound) {
+		return ds, err
+	}
+	if inner, innerErr := f.Dataset(path + "/" + cgnsData); innerErr == nil {
+		return inner, nil
+	}
+	return nil, err
+}
 
 // h5Describe builds the CONVERGE-flavoured view of a file. The HDF5 package
 // stays generic; the knowledge of what STREAM_00 and BOUNDARIES mean lives
@@ -547,7 +581,7 @@ func h5StatsResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, list 
 	out := make([]h5StatsEntry, 0, len(paths))
 	for _, p := range paths {
 		entry := h5StatsEntry{Path: p, Name: p[strings.LastIndex(p, "/")+1:]}
-		ds, err := f.Dataset(p)
+		ds, err := h5OpenDataset(f, p)
 		if err != nil {
 			entry.Err = err.Error()
 			out = append(out, entry)
@@ -713,7 +747,7 @@ func h5SubsetResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, name
 	headers := make([]string, 0, len(paths))
 	rows := 0
 	for _, p := range paths {
-		ds, err := f.Dataset(p)
+		ds, err := h5OpenDataset(f, p)
 		if err != nil {
 			return http.StatusNotFound, err
 		}
@@ -728,7 +762,7 @@ func h5SubsetResponse(w http.ResponseWriter, _ *http.Request, f *hdf5.File, name
 		}
 	}
 
-	base := strings.TrimSuffix(strings.TrimSuffix(name, ".h5"), ".rst")
+	base := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(name, ".h5"), ".rst"), ".cgns")
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition",
 		fmt.Sprintf("attachment; filename=%q", base+"_subset.csv"))
