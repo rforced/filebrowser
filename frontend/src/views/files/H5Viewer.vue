@@ -64,13 +64,20 @@
       v-else-if="summary"
       class="flex-1 min-h-0 overflow-y-auto flex flex-col"
     >
-      <!-- Header facts: what this file is, when it was written, how big. -->
+      <!-- Header facts: what this file is, when it was written, how big. Nine
+           of these stacked wrap into a wall on a narrow viewport, so below md
+           the label sits beside its value and the whole strip collapses to a
+           line or two. -->
       <div
-        class="flex flex-wrap gap-x-8 gap-y-3 px-3 md:px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0"
+        class="flex flex-wrap gap-x-4 md:gap-x-8 gap-y-1 md:gap-y-3 px-3 md:px-6 py-2 md:py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0"
       >
-        <div v-for="fact in facts" :key="fact.label" class="min-w-0">
+        <div
+          v-for="fact in facts"
+          :key="fact.label"
+          class="min-w-0 flex items-baseline gap-1.5 md:block"
+        >
           <div
-            class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400"
+            class="text-[11px] md:text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 shrink-0"
           >
             {{ fact.label }}
           </div>
@@ -97,7 +104,7 @@
 
       <div
         v-if="tabs.length > 1"
-        class="flex gap-1 px-3 md:px-6 pt-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
+        class="flex gap-1 px-3 md:px-6 pt-2 md:pt-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
       >
         <button
           v-for="tab in tabs"
@@ -106,8 +113,8 @@
           class="px-3 py-2 text-sm font-medium rounded-t-md transition border-b-2"
           :class="
             activeTab === tab.id
-              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-300'
+              : 'border-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'
           "
           @click="activeTab = tab.id"
         >
@@ -311,6 +318,19 @@
             <option value="wireframe">{{ t("h5View.repWireframe") }}</option>
           </select>
 
+          <label class="text-sm text-gray-600 dark:text-gray-300">
+            {{ t("h5View.resolution") }}
+          </label>
+          <select
+            v-model="surfaceResolution"
+            class="form-control py-1 text-sm w-auto"
+            :aria-label="t('h5View.resolution')"
+          >
+            <option value="low">{{ t("h5View.resLow") }}</option>
+            <option value="medium">{{ t("h5View.resMedium") }}</option>
+            <option value="high">{{ t("h5View.resHigh") }}</option>
+          </select>
+
           <div
             v-if="surfaceBoundaries.length"
             class="flex flex-wrap gap-1.5 items-center min-w-0 max-h-20 overflow-y-auto"
@@ -416,6 +436,14 @@
           </button>
         </div>
 
+        <div
+          v-if="playbackCapped"
+          class="flex items-center gap-1.5 px-3 md:px-6 py-1.5 border-b border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950 text-xs text-amber-800 dark:text-amber-200 shrink-0"
+        >
+          <i class="fa-solid fa-circle-pause"></i>
+          {{ t("h5View.playbackCapped", { minutes: PLAYBACK_MAX_MINUTES }) }}
+        </div>
+
         <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
           <!-- Mounted on first use and kept: the surface is megabytes of
                geometry, so opening any post file must not fetch it. -->
@@ -426,6 +454,7 @@
             :stream="surfaceStream"
             :scalar="surfaceScalar || undefined"
             :representation="surfaceRepresentation"
+            :resolution="surfaceResolution"
             :range="lockedRange"
             @boundaries="onSurfaceBoundaries"
             @loaded="onSurfaceLoaded"
@@ -534,7 +563,13 @@ import {
   type OutputPoint,
 } from "@/utils/convergeH5";
 import type { SurfaceBoundaryInfo } from "@/utils/convergeSurface";
-import { clearSurfaceCache, prefetchSurface } from "@/utils/surfaceCache";
+import {
+  clearSurfaceCache,
+  DEFAULT_SURFACE_RESOLUTION,
+  PLAYBACK_SURFACE_RESOLUTION,
+  prefetchSurface,
+  type SurfaceResolution,
+} from "@/utils/surfaceCache";
 import url from "@/utils/url";
 
 const authStore = useAuthStore();
@@ -557,6 +592,16 @@ const parcelGroup = ref("");
 const parcelScalar = ref("");
 const surfaceScalar = ref("");
 const surfaceRepresentation = ref<"surface" | "edges" | "wireframe">("surface");
+const surfaceResolution = ref<SurfaceResolution>(DEFAULT_SURFACE_RESOLUTION);
+
+const PLAYBACK_MAX_MINUTES = 2;
+const PLAYBACK_MAX_MS = PLAYBACK_MAX_MINUTES * 60_000;
+
+// Playback drops to the low step the first time it runs, because the wire and
+// not the GPU sets the frame rate. It does that by moving the control itself,
+// so the menu says what is being drawn — and once the choice is the user's,
+// playback never takes it back.
+let resolutionChosen = false;
 const surfaceOpened = ref(false);
 const surfaceBoundaries = ref<SurfaceBoundaryInfo[]>([]);
 const hiddenBoundaries = ref<Set<number>>(new Set());
@@ -569,11 +614,13 @@ const frameIndex = ref(0);
 const shownFrame = ref("");
 const playing = ref(false);
 const fps = ref(5);
+const playbackCapped = ref(false);
 const lockedRange = ref<[number, number] | null>(null);
 let lastRange: [number, number] | null = null;
 let playTimer = 0;
 let scrubTimer = 0;
 let frameShownAt = 0;
+let playStartedAt = 0;
 let framesDir = "";
 
 let controller: AbortController | null = null;
@@ -752,6 +799,7 @@ const surfaceRequest = () => ({
   stream: surfaceStream.value,
   scalar: surfaceScalar.value || undefined,
   edges: surfaceRepresentation.value === "edges",
+  resolution: surfaceResolution.value,
 });
 
 const frameCaption = computed(() => {
@@ -810,12 +858,29 @@ const showFrame = (index: number) => {
 
 const advance = () => {
   if (!playing.value || frames.value.length < 2) return;
+
+  // Playback loops, so it has no end of its own: a tab left running streams a
+  // fresh surface per frame until it is closed, and every one of those is a
+  // full pass over a post file on the server. Cap the run rather than trust
+  // someone to come back and stop it.
+  if (performance.now() - playStartedAt >= PLAYBACK_MAX_MS) {
+    playbackCapped.value = true;
+    pause();
+    return;
+  }
+
   showFrame((frameIndex.value + 1) % frames.value.length);
 };
 
 const play = () => {
   if (frames.value.length < 2) return;
+  if (!resolutionChosen) {
+    resolutionChosen = true;
+    surfaceResolution.value = PLAYBACK_SURFACE_RESOLUTION;
+  }
   playing.value = true;
+  playbackCapped.value = false;
+  playStartedAt = performance.now();
   frameShownAt = performance.now();
   window.clearTimeout(playTimer);
   playTimer = window.setTimeout(advance, 1000 / fps.value);
@@ -1070,6 +1135,12 @@ watch(activeTab, (tab) => {
     surfaceOpened.value = true;
     loadFrames();
   }
+});
+
+// Picking a step before ever pressing play still counts as choosing it, so
+// the first play leaves it alone.
+watch(surfaceResolution, () => {
+  resolutionChosen = true;
 });
 
 // A different field has a different range; carrying the old lock over would

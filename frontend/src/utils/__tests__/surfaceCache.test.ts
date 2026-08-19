@@ -5,8 +5,10 @@ vi.mock("@/api/h5", () => ({ surface: surfaceMock }));
 
 import {
   clearSurfaceCache,
+  DEFAULT_SURFACE_RESOLUTION,
   fetchSurface,
-  SURFACE_TRIANGLE_LIMIT,
+  PLAYBACK_SURFACE_RESOLUTION,
+  SURFACE_TRIANGLE_LIMITS,
 } from "../surfaceCache";
 
 // The cache only reads positions.buffer.byteLength off a response.
@@ -39,7 +41,7 @@ describe("fetchSurface", () => {
       {
         stream: "STREAM_00",
         scalar: undefined,
-        limit: SURFACE_TRIANGLE_LIMIT,
+        limit: SURFACE_TRIANGLE_LIMITS[DEFAULT_SURFACE_RESOLUTION],
         edges: undefined,
       },
       expect.any(AbortSignal)
@@ -54,6 +56,50 @@ describe("fetchSurface", () => {
     });
     await fetchSurface("/case/post1.h5", { stream: "STREAM_00", edges: true });
     expect(surfaceMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("keys on the resolution, so raising detail is not answered from the strided copy", async () => {
+    await fetchSurface("/case/post1.h5", {
+      stream: "STREAM_00",
+      resolution: "low",
+    });
+    await fetchSurface("/case/post1.h5", {
+      stream: "STREAM_00",
+      resolution: "high",
+    });
+    expect(surfaceMock).toHaveBeenCalledTimes(2);
+    expect(surfaceMock.mock.calls[0][1].limit).toBe(
+      SURFACE_TRIANGLE_LIMITS.low
+    );
+    expect(surfaceMock.mock.calls[1][1].limit).toBe(
+      SURFACE_TRIANGLE_LIMITS.high
+    );
+  });
+
+  it("treats an unset resolution as the default rather than a key of its own", async () => {
+    await fetchSurface("/case/post1.h5", { stream: "STREAM_00" });
+    await fetchSurface("/case/post1.h5", {
+      stream: "STREAM_00",
+      resolution: DEFAULT_SURFACE_RESOLUTION,
+    });
+    expect(surfaceMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks for fewer triangles at each lower step", () => {
+    expect(SURFACE_TRIANGLE_LIMITS.low).toBeLessThan(
+      SURFACE_TRIANGLE_LIMITS.medium
+    );
+    expect(SURFACE_TRIANGLE_LIMITS.medium).toBeLessThan(
+      SURFACE_TRIANGLE_LIMITS.high
+    );
+  });
+
+  // A frame settles at full detail and playback buys frames with it; if these
+  // ever met, playing would cost what pausing costs.
+  it("plays back below the resolution a settled frame lands on", () => {
+    expect(SURFACE_TRIANGLE_LIMITS[PLAYBACK_SURFACE_RESOLUTION]).toBeLessThan(
+      SURFACE_TRIANGLE_LIMITS[DEFAULT_SURFACE_RESOLUTION]
+    );
   });
 
   it("evicts the oldest frames once past the entry cap", async () => {

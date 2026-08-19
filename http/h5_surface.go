@@ -1,6 +1,7 @@
 package fbhttp
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -250,7 +251,7 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 	if ctx.Err() != nil {
 		return h5Abandoned()
 	}
-	return h5WriteSurface(w, header, surface.Positions, surface.Indices, surface.Values, surface.Edges)
+	return h5WriteSurface(w, r, header, surface.Positions, surface.Indices, surface.Values, surface.Edges)
 }
 
 type h5SurfaceInput struct {
@@ -658,7 +659,7 @@ func h5SurfaceFilter(list string) map[int64]bool {
 // header padded to a 4-byte boundary, then the raw arrays. The padding is what
 // lets the client lay Float32Array and Uint32Array views straight over the
 // response buffer instead of copying it.
-func h5WriteSurface(w http.ResponseWriter, header h5SurfaceHeader, positions []float32, indices []uint32, values []float32, edges []uint32) (int, error) {
+func h5WriteSurface(w http.ResponseWriter, r *http.Request, header h5SurfaceHeader, positions []float32, indices []uint32, values []float32, edges []uint32) (int, error) {
 	if header.Boundaries == nil {
 		header.Boundaries = []h5SurfaceBoundary{}
 	}
@@ -690,9 +691,44 @@ func h5WriteSurface(w http.ResponseWriter, header h5SurfaceHeader, positions []f
 	}
 
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
-	if _, err := w.Write(buf); err != nil {
+
+	// The surface is the largest thing this server sends and playback is bound
+	// by the wire, not by the CPU that packed it. Index arrays especially are
+	// mostly high zero bytes and give most of the saving back. Speed over ratio
+	// deliberately: several frames may be in flight at once, and the point is
+	// to spend less wall-clock than the bytes would have cost.
+	if !acceptsGzip(r) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
+		if _, err := w.Write(buf); err != nil {
+			return 0, err
+		}
+		return 0, nil
+	}
+
+	// No Content-Length: the compressed size is not known until the stream is
+	// closed, and buffering it twice to learn it would undo the saving in
+	// memory on a response this size.
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Add("Vary", "Accept-Encoding")
+	zw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	if _, err := zw.Write(buf); err != nil {
+		zw.Close()
+		return 0, err
+	}
+	if err := zw.Close(); err != nil {
 		return 0, err
 	}
 	return 0, nil
+}
+
+func acceptsGzip(r *http.Request) bool {
+	for _, enc := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
+		if name, _, _ := strings.Cut(enc, ";"); strings.TrimSpace(name) == "gzip" {
+			return true
+		}
+	}
+	return false
 }

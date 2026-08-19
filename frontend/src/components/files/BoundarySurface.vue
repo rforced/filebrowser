@@ -119,7 +119,7 @@ import {
   boundaryColorCss,
   type SurfaceBoundaryInfo,
 } from "@/utils/convergeSurface";
-import { fetchSurface } from "@/utils/surfaceCache";
+import { fetchSurface, type SurfaceResolution } from "@/utils/surfaceCache";
 import { pngFilename, saveViewPng } from "@/utils/viewCapture";
 
 const props = defineProps<{
@@ -127,6 +127,7 @@ const props = defineProps<{
   stream: string;
   scalar?: string;
   representation?: "surface" | "edges" | "wireframe";
+  resolution?: SurfaceResolution;
   // Pins the colour ramp to a fixed range — playback locks it so the colours
   // keep one meaning across frames instead of re-normalising every step.
   range?: [number, number] | null;
@@ -402,6 +403,7 @@ const load = async () => {
       stream: props.stream,
       scalar: props.scalar,
       edges: withEdges,
+      resolution: props.resolution,
     });
     if (token !== loadToken) return;
 
@@ -473,7 +475,7 @@ onMounted(() => {
 
 // The scalar is resolved server-side against the adjacent cell of each face,
 // so changing it is a refetch rather than a recolour.
-watch(() => [props.path, props.stream, props.scalar], load);
+watch(() => [props.path, props.stream, props.scalar, props.resolution], load);
 
 // The representation is local except the first time edges are asked of a
 // surface fetched without them — the outline only travels on request.

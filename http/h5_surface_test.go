@@ -1,13 +1,18 @@
 package fbhttp
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"io"
 	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/rforced/filebrowser/v2/users"
@@ -419,6 +424,99 @@ func TestEarClipDegenerateInput(t *testing.T) {
 			}
 		}
 	})
+}
+
+// Playback is bound by how fast the surface crosses the wire, so the response
+// has to compress when the client will take it — and must still be the same
+// bytes underneath.
+func TestH5SurfaceCompressesWhenAccepted(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	req, _ := http.NewRequest(http.MethodGet,
+		"/api/h5/post.h5?surface=STREAM_00&scalar=TEMPERATURE", http.NoBody)
+	req.Header.Set("X-Auth", token)
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", got)
+	}
+	// A stale Content-Length would be the uncompressed size and truncate the
+	// body at the client.
+	if got := rec.Header().Get("Content-Length"); got != "" {
+		t.Errorf("Content-Length = %q, want it unset on a compressed body", got)
+	}
+	if got := rec.Header().Get("Vary"); !strings.Contains(got, "Accept-Encoding") {
+		t.Errorf("Vary = %q, want it to name Accept-Encoding", got)
+	}
+
+	zr, err := gzip.NewReader(rec.Body)
+	if err != nil {
+		t.Fatalf("gzip reader: %v", err)
+	}
+	plain, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatalf("gzip body: %v", err)
+	}
+
+	uncompressed := h5Get(t, h, token,
+		"/api/h5/post.h5?surface=STREAM_00&scalar=TEMPERATURE")
+	if !bytes.Equal(plain, uncompressed.Body.Bytes()) {
+		t.Error("compressed body does not decode to the uncompressed one")
+	}
+
+	// The decoder has to survive the round trip, not just the byte compare.
+	inflated := httptest.NewRecorder()
+	inflated.Body = bytes.NewBuffer(plain)
+	inflated.Code = http.StatusOK
+	if got := decodeSurface(t, inflated); got.header.Triangles == 0 {
+		t.Error("triangles = 0 after inflating")
+	}
+}
+
+// A client that cannot take gzip still has to be answered, and answered with a
+// length it can trust.
+func TestH5SurfaceUncompressedWithoutAcceptEncoding(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	rec := h5Get(t, h, token, "/api/h5/post.h5?surface=STREAM_00")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Errorf("Content-Encoding = %q, want it unset", got)
+	}
+	if got := rec.Header().Get("Content-Length"); got != strconv.Itoa(rec.Body.Len()) {
+		t.Errorf("Content-Length = %q, want %d", got, rec.Body.Len())
+	}
+	decodeSurface(t, rec)
+}
+
+// "x-gzip" and a q-value are legal ways to say something other than gzip; a
+// substring match on the header would compress for a client that cannot inflate.
+func TestH5SurfaceAcceptsGzipOnlyWhenNamed(t *testing.T) {
+	for _, tc := range []struct {
+		header string
+		want   bool
+	}{
+		{"gzip", true},
+		{"gzip;q=1.0, identity;q=0.5", true},
+		{"deflate, gzip", true},
+		{" GZIP ", false},
+		{"x-gzip", false},
+		{"identity", false},
+		{"", false},
+	} {
+		req, _ := http.NewRequest(http.MethodGet, "/", http.NoBody)
+		req.Header.Set("Accept-Encoding", tc.header)
+		if got := acceptsGzip(req); got != tc.want {
+			t.Errorf("acceptsGzip(%q) = %v, want %v", tc.header, got, tc.want)
+		}
+	}
 }
 
 // A viewer that navigates away mid-extraction has to stop the work, not merely
