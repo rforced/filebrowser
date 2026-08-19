@@ -40,6 +40,16 @@
         <i class="fa-solid fa-file-lines mr-1"></i>
         {{ t("converge.viewLog") }}
       </button>
+
+      <button
+        v-if="summary.postPath"
+        type="button"
+        class="btn btn-sm btn-white btn-soft"
+        @click="viewOutput"
+      >
+        <i class="fa-solid fa-cube mr-1"></i>
+        {{ t("converge.viewOutput") }}
+      </button>
     </div>
 
     <div v-if="progressBounds" class="flex flex-col gap-1">
@@ -373,4 +383,11 @@ const openLog = (logPath?: string) => {
 };
 
 const viewLog = () => openLog(summary.value?.logPath);
+
+const viewOutput = () => {
+  const postPath = summary.value?.postPath;
+  if (postPath) {
+    router.push({ path: `/files${postPath}` });
+  }
+};
 </script>

@@ -214,7 +214,8 @@
       "interrupted": "已中断",
       "idle": "尚无运行记录"
     },
-    "viewLog": "查看日志"
+    "viewLog": "查看日志",
+    "viewOutput": "查看输出"
   },
   "sequence": {
     "frame": "第 {current} / {total} 帧",

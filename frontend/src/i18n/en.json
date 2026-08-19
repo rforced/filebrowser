@@ -214,7 +214,8 @@
       "interrupted": "Interrupted",
       "idle": "No runs yet"
     },
-    "viewLog": "View log"
+    "viewLog": "View log",
+    "viewOutput": "View output"
   },
   "sequence": {
     "frame": "Frame {current} / {total}",

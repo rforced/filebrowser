@@ -423,6 +423,7 @@ export interface ConvergeSummary {
   runs: ConvergeRun[];
   job?: ConvergeJobInfo;
   logPath?: string;
+  postPath?: string;
   lastActivity?: string;
   progress?: ConvergeProgress;
 }

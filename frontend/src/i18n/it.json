@@ -214,7 +214,8 @@
       "interrupted": "Interrotto",
       "idle": "Nessuna esecuzione"
     },
-    "viewLog": "Visualizza il log"
+    "viewLog": "Visualizza il log",
+    "viewOutput": "Visualizza l’output"
   },
   "sequence": {
     "frame": "Fotogramma {current} / {total}",

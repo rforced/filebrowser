@@ -1403,6 +1403,75 @@ func TestConvergeSummaryRunChain(t *testing.T) {
 	}
 }
 
+func TestConvergeSummaryFirstPostFile(t *testing.T) {
+	tests := []struct {
+		name  string
+		files []string
+		want  string
+	}{
+		{
+			name: "lowest write index across the whole chain",
+			files: []string{
+				"outputs_restart1/output/post000009_-1.20000e+02.h5",
+				"outputs_original/output/post000004_-4.81000e+02.h5",
+				"outputs_original/output/post000012_-3.59945e+02.h5",
+			},
+			want: "/case/outputs_original/output/post000004_-4.81000e+02.h5",
+		},
+		{
+			// A chain whose legs each number from one has no single lowest index,
+			// so the path decides and the earliest leg still wins.
+			name: "path breaks a tie between legs that restart their numbering",
+			files: []string{
+				"outputs_restart1/output/post000001_-1.20000e+02.h5",
+				"outputs_original/output/post000001_-4.81000e+02.h5",
+			},
+			want: "/case/outputs_original/output/post000001_-4.81000e+02.h5",
+		},
+		{
+			// The old flat layout keeps its post files beside the deck.
+			name:  "case root in the flat layout",
+			files: []string{"post000002_-4.81000e+02.h5"},
+			want:  "/case/post000002_-4.81000e+02.h5",
+		},
+		{
+			// The viewer reads HDF5; pointing the button at a .cgns would open a
+			// download instead, so it is not a candidate even though it is a post
+			// file to every other part of the summary.
+			name:  "cgns alone leaves the button off",
+			files: []string{"outputs_original/output/post000001_-4.81000e+02.cgns"},
+			want:  "",
+		},
+		{
+			// An unindexed name sorts after every indexed one rather than as zero.
+			name: "an indexed name outranks a bare one",
+			files: []string{
+				"outputs_original/output/post.h5",
+				"outputs_original/output/post000007_-4.81000e+02.h5",
+			},
+			want: "/case/outputs_original/output/post000007_-4.81000e+02.h5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userScope := t.TempDir()
+			caseDir := filepath.Join(userScope, "case")
+			writeCaseFile(t, caseDir, "deck", "inputs.in")
+			for _, f := range tt.files {
+				writeCaseFile(t, caseDir, "h5", filepath.FromSlash(f))
+			}
+
+			scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Download: true})
+			got := getConvergeSummary(t, scan, token, "/api/converge/case")
+
+			if got.PostPath != tt.want {
+				t.Errorf("postPath = %q, want %q", got.PostPath, tt.want)
+			}
+		})
+	}
+}
+
 // keepRuns holds the newest legs back from the whole sweep, not just from the
 // folder deletion: sparing a leg means leaving it intact.
 func TestConvergeCleanKeepRuns(t *testing.T) {

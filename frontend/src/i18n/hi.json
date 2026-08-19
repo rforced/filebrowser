@@ -214,7 +214,8 @@
       "interrupted": "बाधित",
       "idle": "अभी तक कोई रन नहीं"
     },
-    "viewLog": "लॉग देखें"
+    "viewLog": "लॉग देखें",
+    "viewOutput": "आउटपुट देखें"
   },
   "sequence": {
     "frame": "फ़्रेम {current} / {total}",

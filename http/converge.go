@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path"
@@ -535,6 +536,7 @@ type convergeSummaryResponse struct {
 	Runs         []convergeRun     `json:"runs"`
 	Job          *convergeJobInfo  `json:"job,omitempty"`
 	LogPath      string            `json:"logPath,omitempty"`
+	PostPath     string            `json:"postPath,omitempty"`
 	LastActivity *time.Time        `json:"lastActivity,omitempty"`
 	Progress     *convergeProgress `json:"progress,omitempty"`
 }
@@ -586,6 +588,9 @@ type convergeSummaryScan struct {
 
 	logPath string
 	logMod  time.Time
+
+	postPath string
+	postSeq  int
 
 	runs map[string]*convergeRunEvidence
 }
@@ -651,6 +656,8 @@ func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, count
 	s.tally(kind, files.AllocatedSize(info))
 
 	switch kind {
+	case "post":
+		s.observePost(fPath)
 	case "restart":
 		s.restarts = append(s.restarts, convergeMatch{
 			path:    fPath,
@@ -672,6 +679,39 @@ func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, count
 				s.logMod = info.ModTime()
 			}
 		}
+	}
+}
+
+func convergePostSequence(name string) int {
+	rest, ok := strings.CutPrefix(strings.ToLower(name), "post")
+	if !ok {
+		return math.MaxInt
+	}
+
+	digits := 0
+	for digits < len(rest) && rest[digits] >= '0' && rest[digits] <= '9' {
+		digits++
+	}
+	if digits == 0 || digits >= len(rest) || rest[digits] != '_' {
+		return math.MaxInt
+	}
+
+	seq, err := strconv.Atoi(rest[:digits])
+	if err != nil {
+		return math.MaxInt
+	}
+	return seq
+}
+
+func (s *convergeSummaryScan) observePost(fPath string) {
+	if !strings.HasSuffix(strings.ToLower(fPath), ".h5") {
+		return
+	}
+
+	seq := convergePostSequence(path.Base(fPath))
+	if s.postPath == "" || seq < s.postSeq ||
+		(seq == s.postSeq && fPath < s.postPath) {
+		s.postPath, s.postSeq = fPath, seq
 	}
 }
 
@@ -1088,6 +1128,7 @@ var convergeSummaryHandler = func(w http.ResponseWriter, r *http.Request, d *dat
 		Runs:         convergeRuns(d, scan, unit, now),
 		Job:          convergeJobFromSpec(d, dir),
 		LogPath:      logPath,
+		PostPath:     scan.postPath,
 		LastActivity: lastActivity,
 	}
 

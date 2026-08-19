@@ -214,7 +214,8 @@
       "interrupted": "Unterbrochen",
       "idle": "Noch keine Läufe"
     },
-    "viewLog": "Protokoll anzeigen"
+    "viewLog": "Protokoll anzeigen",
+    "viewOutput": "Ausgabe anzeigen"
   },
   "sequence": {
     "frame": "Bild {current} / {total}",
