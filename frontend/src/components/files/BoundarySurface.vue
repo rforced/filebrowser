@@ -201,8 +201,8 @@ const edgeMaterial = new LineBasicMaterial({
   transparent: true,
 });
 
-const EDGE_FADE_MIN_PITCH = 1.5;
-const EDGE_FADE_MAX_PITCH = 4;
+const EDGE_FADE_MIN_PITCH = 0.9;
+const EDGE_FADE_MAX_PITCH = 2.5;
 const EDGE_MIN_OPACITY = 0.02;
 
 const disposeModel = () => {
@@ -410,8 +410,7 @@ const applyEdgeFade = () => {
   if (on) {
     const span = EDGE_FADE_MAX_PITCH - EDGE_FADE_MIN_PITCH;
     const t = (facePitchPx() - EDGE_FADE_MIN_PITCH) / span;
-    const clamped = Math.min(Math.max(t, 0), 1);
-    opacity = clamped * clamped * (3 - 2 * clamped);
+    opacity = Math.sqrt(Math.min(Math.max(t, 0), 1));
   }
 
   const visible = on && opacity > EDGE_MIN_OPACITY;
