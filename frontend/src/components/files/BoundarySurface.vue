@@ -45,8 +45,15 @@
           }}
         </span>
 
+        <!-- A wall drawn entirely in the ramp's no-value grey reads as a broken
+             viewer, so the one case that produces it says so instead. -->
+        <span v-if="noReadings" class="text-amber-700 dark:text-amber-400">
+          <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+          {{ t("h5View.surfaceNoValues", { scalar: surface.scalar }) }}
+        </span>
+
         <div
-          v-if="surface.scalar && surface.values"
+          v-else-if="surface.scalar && surface.values"
           class="flex items-center gap-1.5"
         >
           <span class="shrink-0">{{ surface.scalar }}</span>
@@ -168,6 +175,19 @@ let hasView = false;
 const shownRange = computed(
   () => props.range ?? surface.value?.range ?? [0, 0]
 );
+
+// The field resolved at no vertex the surface kept — a diverged or unwritten
+// variable, or one whose cells the strided face sample never reached. Every
+// vertex then draws as NO_VALUE, which is the pale grey wall.
+const noReadings = computed(() => {
+  const data = surface.value;
+  return (
+    !!data?.scalar &&
+    !!data.values &&
+    data.vertices > 0 &&
+    data.unresolved === data.vertices
+  );
+});
 
 // One material serves every boundary's outline; near-black reads as a mesh
 // line over any boundary colour or ramp.

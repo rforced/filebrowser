@@ -147,6 +147,9 @@ export interface H5SurfaceHeader {
   bounds: number[];
   scalar?: string;
   range: number[];
+  // Vertices carrying no usable reading of the scalar. Equal to `vertices` when
+  // the field resolved nowhere, which draws the whole wall in no-value grey.
+  unresolved?: number;
   // Total entries in the edge index array, when edges were requested.
   edges?: number;
   boundaries: H5SurfaceBoundary[];

@@ -103,7 +103,6 @@
       </div>
 
       <div
-        v-if="tabs.length > 1"
         class="flex gap-1 px-3 md:px-6 pt-2 md:pt-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
       >
         <button
@@ -288,117 +287,126 @@
         v-show="activeTab === 'surface'"
         class="flex flex-col flex-1 min-h-72"
       >
-        <div
-          class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
+        <p
+          v-if="!surfaceStream"
+          class="flex-1 flex items-center justify-center p-6 text-center text-sm text-gray-500 dark:text-gray-400"
         >
-          <label class="text-sm text-gray-600 dark:text-gray-300">
-            {{ t("h5View.colourBy") }}
-          </label>
-          <select
-            v-model="surfaceScalar"
-            class="form-control py-1 text-sm w-auto"
-            :aria-label="t('h5View.colourBy')"
-          >
-            <option value="">{{ t("h5View.byBoundary") }}</option>
-            <option v-for="v in surfaceScalars" :key="v.path" :value="v.name">
-              {{ v.name }}
-            </option>
-          </select>
+          {{ t("h5View.noSurface") }}
+        </p>
 
-          <label class="text-sm text-gray-600 dark:text-gray-300">
-            {{ t("h5View.representation") }}
-          </label>
-          <select
-            v-model="surfaceRepresentation"
-            class="form-control py-1 text-sm w-auto"
-            :aria-label="t('h5View.representation')"
-          >
-            <option value="surface">{{ t("h5View.repSurface") }}</option>
-            <option value="edges">{{ t("h5View.repEdges") }}</option>
-            <option value="wireframe">{{ t("h5View.repWireframe") }}</option>
-          </select>
-
-          <label class="text-sm text-gray-600 dark:text-gray-300">
-            {{ t("h5View.resolution") }}
-          </label>
-          <select
-            v-model="surfaceResolution"
-            class="form-control py-1 text-sm w-auto"
-            :aria-label="t('h5View.resolution')"
-          >
-            <option value="low">{{ t("h5View.resLow") }}</option>
-            <option value="medium">{{ t("h5View.resMedium") }}</option>
-            <option value="high">{{ t("h5View.resHigh") }}</option>
-            <option value="ultra">{{ t("h5View.resUltra") }}</option>
-          </select>
-
+        <template v-else>
           <div
-            v-if="surfaceBoundaries.length"
-            class="flex flex-wrap gap-1.5 items-center min-w-0 max-h-20 overflow-y-auto"
+            class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
           >
-            <button
-              v-for="b in surfaceBoundaries"
-              :key="b.id"
-              v-tooltip="
-                t('h5View.surfaceChip', {
-                  faces: formatCount(b.faceCount ?? 0),
-                  triangles: formatCount(b.triangleCount),
-                })
-              "
-              type="button"
-              class="px-2 py-0.5 rounded-full text-xs font-medium border transition"
-              :class="
-                hiddenBoundaries.has(b.id)
-                  ? 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 line-through'
-                  : 'border-transparent text-white'
-              "
-              :style="
-                hiddenBoundaries.has(b.id) ? {} : { backgroundColor: b.color }
-              "
-              :aria-pressed="!hiddenBoundaries.has(b.id)"
-              @click="toggleBoundary(b.id)"
+            <label class="text-sm text-gray-600 dark:text-gray-300">
+              {{ t("h5View.colourBy") }}
+            </label>
+            <select
+              v-model="surfaceScalar"
+              class="form-control py-1 text-sm w-auto"
+              :aria-label="t('h5View.colourBy')"
             >
-              {{ b.name || t("surfaceView.boundary", { id: b.id }) }}
-            </button>
-          </div>
-        </div>
+              <option value="">{{ t("h5View.byBoundary") }}</option>
+              <option v-for="v in surfaceScalars" :key="v.path" :value="v.name">
+                {{ v.name }}
+              </option>
+            </select>
 
-        <!-- Playback over the sibling post files of this run: the same
+            <label class="text-sm text-gray-600 dark:text-gray-300">
+              {{ t("h5View.representation") }}
+            </label>
+            <select
+              v-model="surfaceRepresentation"
+              class="form-control py-1 text-sm w-auto"
+              :aria-label="t('h5View.representation')"
+            >
+              <option value="surface">{{ t("h5View.repSurface") }}</option>
+              <option value="edges">{{ t("h5View.repEdges") }}</option>
+              <option value="wireframe">{{ t("h5View.repWireframe") }}</option>
+            </select>
+
+            <label class="text-sm text-gray-600 dark:text-gray-300">
+              {{ t("h5View.resolution") }}
+            </label>
+            <select
+              v-model="surfaceResolution"
+              class="form-control py-1 text-sm w-auto"
+              :aria-label="t('h5View.resolution')"
+            >
+              <option value="low">{{ t("h5View.resLow") }}</option>
+              <option value="medium">{{ t("h5View.resMedium") }}</option>
+              <option value="high">{{ t("h5View.resHigh") }}</option>
+              <option value="ultra">{{ t("h5View.resUltra") }}</option>
+            </select>
+
+            <div
+              v-if="surfaceBoundaries.length"
+              class="flex flex-wrap gap-1.5 items-center min-w-0 max-h-20 overflow-y-auto"
+            >
+              <button
+                v-for="b in surfaceBoundaries"
+                :key="b.id"
+                v-tooltip="
+                  t('h5View.surfaceChip', {
+                    faces: formatCount(b.faceCount ?? 0),
+                    triangles: formatCount(b.triangleCount),
+                  })
+                "
+                type="button"
+                class="px-2 py-0.5 rounded-full text-xs font-medium border transition"
+                :class="
+                  hiddenBoundaries.has(b.id)
+                    ? 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 line-through'
+                    : 'border-transparent text-white'
+                "
+                :style="
+                  hiddenBoundaries.has(b.id) ? {} : { backgroundColor: b.color }
+                "
+                :aria-pressed="!hiddenBoundaries.has(b.id)"
+                @click="toggleBoundary(b.id)"
+              >
+                {{ b.name || t("surfaceView.boundary", { id: b.id }) }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Playback over the sibling post files of this run: the same
              transport as the Catalyst image player, but every frame is a
              fresh surface (AMR remeshes between outputs). -->
-        <FramePlayer
-          v-if="frames.length > 1"
-          :playing="playing"
-          :frame-index="frameIndex"
-          :total="frames.length"
-          :caption="frameCaption"
-          :fps="fps"
-          :can-rescale="!!(surfaceScalar && lockedRange)"
-          :capped="playbackCapped"
-          :capped-minutes="PLAYBACK_MAX_MINUTES"
-          @toggle="togglePlay"
-          @step="stepFrame"
-          @scrub="onScrub"
-          @update:fps="fps = $event"
-          @rescale="rescaleRange"
-        />
-
-        <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
-          <!-- Mounted on first use and kept: the surface is megabytes of
-               geometry, so opening any post file must not fetch it. -->
-          <BoundarySurface
-            v-if="surfaceOpened && surfaceStream"
-            ref="surfaceView"
-            :path="surfaceShown"
-            :stream="surfaceStream"
-            :scalar="surfaceScalar || undefined"
-            :representation="surfaceRepresentation"
-            :resolution="surfaceResolution"
-            :range="lockedRange"
-            @boundaries="onSurfaceBoundaries"
-            @loaded="onSurfaceLoaded"
+          <FramePlayer
+            v-if="frames.length > 1"
+            :playing="playing"
+            :frame-index="frameIndex"
+            :total="frames.length"
+            :caption="frameCaption"
+            :fps="fps"
+            :can-rescale="!!(surfaceScalar && lockedRange)"
+            :capped="playbackCapped"
+            :capped-minutes="PLAYBACK_MAX_MINUTES"
+            @toggle="togglePlay"
+            @step="stepFrame"
+            @scrub="onScrub"
+            @update:fps="fps = $event"
+            @rescale="rescaleRange"
           />
-        </div>
+
+          <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
+            <!-- Mounted on first use and kept: the surface is megabytes of
+               geometry, so opening any post file must not fetch it. -->
+            <BoundarySurface
+              v-if="surfaceOpened && surfaceStream"
+              ref="surfaceView"
+              :path="surfaceShown"
+              :stream="surfaceStream"
+              :scalar="surfaceScalar || undefined"
+              :representation="surfaceRepresentation"
+              :resolution="surfaceResolution"
+              :range="lockedRange"
+              @boundaries="onSurfaceBoundaries"
+              @loaded="onSurfaceLoaded"
+            />
+          </div>
+        </template>
       </section>
 
       <!-- Parcels: a spray cloud needs no mesh, so it renders directly. -->
@@ -406,71 +414,87 @@
         v-show="activeTab === 'parcels'"
         class="flex flex-col flex-1 min-h-72"
       >
-        <div
-          v-if="parcelGroups.length"
-          class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
+        <p
+          v-if="!hasParcels"
+          class="flex-1 flex items-center justify-center p-6 text-center text-sm text-gray-500 dark:text-gray-400"
         >
-          <select
-            v-if="parcelGroups.length > 1"
-            v-model="parcelGroup"
-            class="form-control py-1 text-sm w-auto"
-            :aria-label="t('h5View.parcelGroup')"
-          >
-            <option v-for="g in parcelGroups" :key="g.path" :value="g.path">
-              {{ g.name }} ({{ formatCount(g.count) }})
-            </option>
-          </select>
+          {{ t("h5View.noParcels") }}
+        </p>
 
-          <label class="text-sm text-gray-600 dark:text-gray-300">
-            {{ t("h5View.colourBy") }}
-          </label>
-          <select
-            v-model="parcelScalar"
-            class="form-control py-1 text-sm w-auto"
-            :aria-label="t('h5View.colourBy')"
+        <template v-else>
+          <div
+            v-if="parcelGroups.length"
+            class="flex flex-wrap gap-2 items-center px-3 md:px-6 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
           >
-            <option value="">{{ t("h5View.uniform") }}</option>
-            <option v-for="name in parcelScalars" :key="name" :value="name">
-              {{ name }}
-            </option>
-          </select>
-        </div>
+            <select
+              v-if="parcelGroups.length > 1"
+              v-model="parcelGroup"
+              class="form-control py-1 text-sm w-auto"
+              :aria-label="t('h5View.parcelGroup')"
+            >
+              <option v-for="g in parcelGroups" :key="g.path" :value="g.path">
+                {{ g.name }} ({{ formatCount(g.count) }})
+              </option>
+            </select>
 
-        <!-- The spray develops output by output, so the same transport plays
+            <label class="text-sm text-gray-600 dark:text-gray-300">
+              {{ t("h5View.colourBy") }}
+            </label>
+            <select
+              v-model="parcelScalar"
+              class="form-control py-1 text-sm w-auto"
+              :aria-label="t('h5View.colourBy')"
+            >
+              <option value="">{{ t("h5View.uniform") }}</option>
+              <option v-for="name in parcelScalars" :key="name" :value="name">
+                {{ name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- The spray develops output by output, so the same transport plays
              the parcel cloud through the run. -->
-        <FramePlayer
-          v-if="frames.length > 1"
-          :playing="playing"
-          :frame-index="frameIndex"
-          :total="frames.length"
-          :caption="frameCaption"
-          :fps="fps"
-          :can-rescale="!!(parcelScalar && parcelLockedRange)"
-          :capped="playbackCapped"
-          :capped-minutes="PLAYBACK_MAX_MINUTES"
-          @toggle="togglePlay"
-          @step="stepFrame"
-          @scrub="onScrub"
-          @update:fps="fps = $event"
-          @rescale="rescaleRange"
-        />
-
-        <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
-          <ParcelCloud
-            v-if="parcelGroup"
-            :key="parcelGroup"
-            :path="parcelShown"
-            :group="parcelGroup"
-            :scalar="parcelScalar || undefined"
-            :range="parcelLockedRange"
-            @loaded="onParcelLoaded"
+          <FramePlayer
+            v-if="frames.length > 1"
+            :playing="playing"
+            :frame-index="frameIndex"
+            :total="frames.length"
+            :caption="frameCaption"
+            :fps="fps"
+            :can-rescale="!!(parcelScalar && parcelLockedRange)"
+            :capped="playbackCapped"
+            :capped-minutes="PLAYBACK_MAX_MINUTES"
+            @toggle="togglePlay"
+            @step="stepFrame"
+            @scrub="onScrub"
+            @update:fps="fps = $event"
+            @rescale="rescaleRange"
           />
-        </div>
+
+          <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
+            <ParcelCloud
+              v-if="parcelGroup"
+              :key="parcelGroup"
+              :path="parcelShown"
+              :group="parcelGroup"
+              :scalar="parcelScalar || undefined"
+              :range="parcelLockedRange"
+              @loaded="onParcelLoaded"
+            />
+          </div>
+        </template>
       </section>
 
       <!-- Boundaries: real names, straight out of the file. -->
       <section v-show="activeTab === 'boundaries'" class="p-3 md:px-6 md:py-4">
-        <table class="w-full text-sm max-w-2xl">
+        <p
+          v-if="!hasBoundaries"
+          class="text-sm text-gray-500 dark:text-gray-400"
+        >
+          {{ t("h5View.noBoundaries") }}
+        </p>
+
+        <table v-else class="w-full text-sm max-w-2xl">
           <thead>
             <tr
               class="text-left text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700"
@@ -586,8 +610,13 @@ const fps = ref(1);
 const playbackCapped = ref(false);
 const lockedRange = ref<[number, number] | null>(null);
 const parcelLockedRange = ref<[number, number] | null>(null);
-let lastRange: [number, number] | null = null;
-let lastParcelRange: [number, number] | null = null;
+// The range a settled frame reported, tagged with the field it was measured
+// from. The lock is taken when the sequence starts moving, and between picking
+// a new field and its first frame arriving the only range in hand still belongs
+// to the old one — locking that would colour the new field against another
+// quantity's scale.
+let lastRange: { field: string; range: [number, number] } | null = null;
+let lastParcelRange: { field: string; range: [number, number] } | null = null;
 let playTimer = 0;
 let scrubTimer = 0;
 let frameShownAt = 0;
@@ -668,33 +697,22 @@ const surfaceScalars = computed(() => {
   return (stream?.variables ?? []).filter((v) => !v.type.startsWith("string"));
 });
 
-const tabs = computed(() => {
-  const out = [
-    { id: "variables", icon: "fa-table-list", label: t("h5View.variables") },
-  ];
-  if (surfaceStream.value) {
-    out.push({
-      id: "surface",
-      icon: "fa-draw-polygon",
-      label: t("h5View.surface"),
-    });
-  }
-  if (parcelGroups.value.some((g) => g.hasCoords && g.count > 0)) {
-    out.push({
-      id: "parcels",
-      icon: "fa-spray-can",
-      label: t("h5View.parcels"),
-    });
-  }
-  if (summary.value?.boundaries?.length) {
-    out.push({
-      id: "boundaries",
-      icon: "fa-border-all",
-      label: t("h5View.boundaries"),
-    });
-  }
-  return out;
-});
+const hasParcels = computed(() =>
+  parcelGroups.value.some((g) => g.hasCoords && g.count > 0)
+);
+
+const hasBoundaries = computed(() => !!summary.value?.boundaries?.length);
+
+// Every tab is offered for every file. A file that carries nothing behind one
+// says so when it is opened, which is a shorter path to knowing than a tab bar
+// whose contents change from one output to the next and leave you wondering
+// whether the parcels are missing or the viewer is.
+const tabs = computed(() => [
+  { id: "variables", icon: "fa-table-list", label: t("h5View.variables") },
+  { id: "surface", icon: "fa-draw-polygon", label: t("h5View.surface") },
+  { id: "parcels", icon: "fa-spray-can", label: t("h5View.parcels") },
+  { id: "boundaries", icon: "fa-border-all", label: t("h5View.boundaries") },
+]);
 
 const facts = computed(() => {
   const s = summary.value;
@@ -789,6 +807,18 @@ const surfaceRequest = () => ({
   resolution: surfaceResolution.value,
 });
 
+// What makes one ramp's range comparable to another's. A parcel group is part
+// of it: the same variable over a different spray is a different population.
+const surfaceField = () => `${surfaceStream.value} ${surfaceScalar.value}`;
+const parcelField = () => `${parcelGroup.value} ${parcelScalar.value}`;
+
+// The range of the frame on screen, or null when the field it was measured
+// from is no longer the one selected.
+const settledSurfaceRange = () =>
+  lastRange?.field === surfaceField() ? lastRange.range : null;
+const settledParcelRange = () =>
+  lastParcelRange?.field === parcelField() ? lastParcelRange.range : null;
+
 const frameCaption = computed(() => {
   const frame = frames.value[frameIndex.value];
   if (!frame || frame.time === null) return "";
@@ -835,11 +865,13 @@ const showFrame = (index: number) => {
   if (!frame) return;
   // Lock the ramps to the ranges in effect when the sequence starts moving,
   // so the colours keep one meaning instead of re-normalising every frame.
-  if (surfaceScalar.value && !lockedRange.value && lastRange) {
-    lockedRange.value = lastRange;
+  const settled = settledSurfaceRange();
+  if (surfaceScalar.value && !lockedRange.value && settled) {
+    lockedRange.value = settled;
   }
-  if (parcelScalar.value && !parcelLockedRange.value && lastParcelRange) {
-    parcelLockedRange.value = lastParcelRange;
+  const settledParcels = settledParcelRange();
+  if (parcelScalar.value && !parcelLockedRange.value && settledParcels) {
+    parcelLockedRange.value = settledParcels;
   }
   frameIndex.value = clamped;
   shownFrame.value = frameResourcePath(frame.name);
@@ -915,12 +947,12 @@ const onScrub = (index: number) => {
 
 const rescaleRange = () => {
   if (activeTab.value === "parcels") {
-    if (lastParcelRange) {
-      parcelLockedRange.value = [lastParcelRange[0], lastParcelRange[1]];
-    }
-  } else if (lastRange) {
-    lockedRange.value = [lastRange[0], lastRange[1]];
+    const settled = settledParcelRange();
+    if (settled) parcelLockedRange.value = [settled[0], settled[1]];
+    return;
   }
+  const settled = settledSurfaceRange();
+  if (settled) lockedRange.value = [settled[0], settled[1]];
 };
 
 const prefetchNext = () => {
@@ -965,13 +997,15 @@ const paceFrame = (ok: boolean) => {
   }
 };
 
+// A load only reports once it is the newest one outstanding, so the field it
+// was measured from is the one selected now.
 const onSurfaceLoaded = (range: [number, number] | null) => {
-  lastRange = range;
+  lastRange = range ? { field: surfaceField(), range } : null;
   if (activeTab.value === "surface") paceFrame(range !== null);
 };
 
 const onParcelLoaded = (range: [number, number] | null) => {
-  lastParcelRange = range;
+  lastParcelRange = range ? { field: parcelField(), range } : null;
   if (activeTab.value === "parcels") paceFrame(range !== null);
 };
 
@@ -1187,15 +1221,6 @@ watch(surfaceScalars, (list) => {
     !list.some((v) => v.name === surfaceScalar.value)
   ) {
     surfaceScalar.value = "";
-  }
-});
-
-// A restart has no parcels to show, so switching to one from a post file
-// would otherwise leave the viewer on a tab that is no longer offered — and
-// with a single tab the bar is hidden, so there is nothing to click back to.
-watch(tabs, (list) => {
-  if (!list.some((tab) => tab.id === activeTab.value)) {
-    activeTab.value = list[0].id;
   }
 });
 

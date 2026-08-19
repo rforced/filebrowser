@@ -80,17 +80,22 @@ type h5SurfaceBoundary struct {
 }
 
 type h5SurfaceHeader struct {
-	Stream     string              `json:"stream"`
-	Vertices   int                 `json:"vertices"`
-	Triangles  int                 `json:"triangles"`
-	Faces      int                 `json:"faces"`
-	FacesTotal int                 `json:"facesTotal"`
-	Stride     int                 `json:"stride"`
-	Truncated  bool                `json:"truncated,omitempty"`
-	Skipped    int                 `json:"skipped,omitempty"`
-	Bounds     [6]float64          `json:"bounds"`
-	Scalar     string              `json:"scalar,omitempty"`
-	Range      [2]float64          `json:"range"`
+	Stream     string     `json:"stream"`
+	Vertices   int        `json:"vertices"`
+	Triangles  int        `json:"triangles"`
+	Faces      int        `json:"faces"`
+	FacesTotal int        `json:"facesTotal"`
+	Stride     int        `json:"stride"`
+	Truncated  bool       `json:"truncated,omitempty"`
+	Skipped    int        `json:"skipped,omitempty"`
+	Bounds     [6]float64 `json:"bounds"`
+	Scalar     string     `json:"scalar,omitempty"`
+	Range      [2]float64 `json:"range"`
+	// Unresolved counts the vertices carrying no usable reading of the scalar.
+	// Every vertex unresolved draws the whole wall in the ramp's no-value grey,
+	// which is indistinguishable from a broken viewer unless it is said out
+	// loud — so the count travels rather than being left to be inferred.
+	Unresolved int                 `json:"unresolved,omitempty"`
 	Edges      int                 `json:"edges,omitempty"`
 	Boundaries []h5SurfaceBoundary `json:"boundaries"`
 }
@@ -244,7 +249,13 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 	header.FacesTotal = facesTotal
 	header.Stride = stride
 	header.Truncated = stride > 1
-	header.Scalar = scalar
+	// The client lays its values view over the payload whenever the header
+	// names a scalar, so naming one the payload does not carry would have it
+	// read the edge indices back as readings, or run off the end of the buffer
+	// entirely. An empty cell variable is the case that reaches here.
+	if len(surface.Values) > 0 {
+		header.Scalar = scalar
+	}
 	header.Edges = len(surface.Edges)
 	header.Boundaries = surface.Boundaries
 
@@ -443,6 +454,7 @@ func h5ExtractSurface(ctx context.Context, in h5SurfaceInput) (h5SurfaceResult, 
 	}
 
 	valueRange := [2]float64{math.Inf(1), math.Inf(-1)}
+	unresolved := 0
 	if in.CellValues != nil {
 		out.Values = make([]float32, len(counts))
 		for i, c := range counts {
@@ -450,10 +462,22 @@ func h5ExtractSurface(ctx context.Context, in h5SurfaceInput) (h5SurfaceResult, 
 				// Touched only by faces with no usable value. NaN travels to
 				// the client as a hole in the field rather than as a reading.
 				out.Values[i] = float32(math.NaN())
+				unresolved++
 				continue
 			}
 			v := sums[i] / float64(c)
-			out.Values[i] = float32(v)
+			// The wire carries float32, so a field beyond its range would
+			// arrive as ±Inf — which the ramp draws as the same grey it uses
+			// for no reading at all, while the legend still showed the finite
+			// span this average came from. Better to say the vertex has no
+			// reading than to hand the client an infinity dressed as one.
+			f := float32(v)
+			if math.IsInf(float64(f), 0) {
+				out.Values[i] = float32(math.NaN())
+				unresolved++
+				continue
+			}
+			out.Values[i] = f
 			valueRange[0] = math.Min(valueRange[0], v)
 			valueRange[1] = math.Max(valueRange[1], v)
 		}
@@ -468,12 +492,13 @@ func h5ExtractSurface(ctx context.Context, in h5SurfaceInput) (h5SurfaceResult, 
 		triangles += b.Triangles
 	}
 	out.Header = h5SurfaceHeader{
-		Vertices:  len(out.Positions) / 3,
-		Triangles: triangles,
-		Faces:     faces,
-		Skipped:   skipped,
-		Bounds:    bounds,
-		Range:     valueRange,
+		Vertices:   len(out.Positions) / 3,
+		Triangles:  triangles,
+		Faces:      faces,
+		Skipped:    skipped,
+		Bounds:     bounds,
+		Range:      valueRange,
+		Unresolved: unresolved,
 	}
 	return out, nil
 }

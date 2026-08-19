@@ -222,6 +222,59 @@ func TestH5SurfaceScalarSurvivesNonFinite(t *testing.T) {
 	if got.header.Triangles != 7 {
 		t.Errorf("triangles = %d: a non-finite field must not drop geometry", got.header.Triangles)
 	}
+
+	// The client draws a vertex with no reading in the ramp's no-value grey, so
+	// the count of them has to be reported: a surface that is all grey and a
+	// surface the viewer failed to colour look exactly alike otherwise.
+	holes := 0
+	for _, v := range got.values {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			holes++
+		}
+	}
+	if got.header.Unresolved != holes {
+		t.Errorf("unresolved = %d, want the %d vertices the payload has no reading for",
+			got.header.Unresolved, holes)
+	}
+	for i, v := range got.values {
+		if math.IsInf(float64(v), 0) {
+			t.Errorf("values[%d] = %v: an infinity draws as the same grey as no "+
+				"reading while the legend still shows a finite span, so it must "+
+				"travel as NaN instead", i, v)
+		}
+	}
+}
+
+// The client lays its values view over the payload whenever the header names a
+// scalar. Naming one the payload does not carry would have it read the bytes
+// after the indices — the edge array, or nothing at all — back as readings.
+func TestH5SurfaceHeaderScalarMatchesPayload(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	for _, url := range []string{
+		"/api/h5/post.h5?surface=STREAM_00",
+		"/api/h5/post.h5?surface=STREAM_00&scalar=TEMPERATURE",
+		"/api/h5/post.h5?surface=STREAM_00&scalar=EQUIV_RATIO&edges=1",
+	} {
+		t.Run(url, func(t *testing.T) {
+			rec := h5Get(t, h, token, url)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+			}
+
+			// decodeSurface reads the values array only when the header names a
+			// scalar, and fails the test if that leaves the body over- or
+			// under-consumed — which is exactly the client's own rule.
+			got := decodeSurface(t, rec)
+			if got.header.Scalar != "" && len(got.values) != got.header.Vertices {
+				t.Errorf("header names %q but carries %d of %d values",
+					got.header.Scalar, len(got.values), got.header.Vertices)
+			}
+			if got.header.Scalar == "" && got.header.Unresolved != 0 {
+				t.Errorf("unresolved = %d with no scalar named", got.header.Unresolved)
+			}
+		})
+	}
 }
 
 // Edges are the polygon perimeters, never the triangulation: a quad face
