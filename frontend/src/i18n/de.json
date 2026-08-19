@@ -199,6 +199,10 @@
   },
   "converge": {
     "caseTitle": "CONVERGE-Case",
+    "combineExists": "{name} existiert bereits. Entfernen oder umbenennen, bevor erneut zusammengeführt wird.",
+    "combineNeedsRuns": "Dieser Fall hat nur einen Ausgabeordner – es gibt nichts zusammenzuführen.",
+    "combined": "{files} Ausgabedateien in {name} zusammengeführt",
+    "combining": "Ausgabe wird zusammengeführt …",
     "cycleN": "Zyklus {n}",
     "files": "{count} Dateien",
     "job": "Job",

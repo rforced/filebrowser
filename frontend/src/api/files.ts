@@ -464,6 +464,28 @@ export async function convergeClean(
   return (await res.json()) as ConvergeCleanResult;
 }
 
+export interface ConvergeCombineResult {
+  path: string;
+  files: number;
+  legs: number;
+  bytes: number;
+}
+
+/*
+ * Joins every .out file across a case's outputs_* legs into one
+ * outputs_combined tree. The work rides this request: no signal is passed
+ * because the fetch surviving in-app navigation and dying on a page refresh is
+ * exactly the lifetime we want, and the server drops a partial tree when its
+ * context is cancelled.
+ */
+export async function convergeCombine(
+  url: string
+): Promise<ConvergeCombineResult> {
+  url = removePrefix(url);
+  const res = await fetchURL(`/api/combine${url}`, { method: "POST" });
+  return (await res.json()) as ConvergeCombineResult;
+}
+
 /*
  * Per-child usage for one directory, biggest first. One walk on the server
  * answers the whole view, so the du page, the storage card's top consumers and

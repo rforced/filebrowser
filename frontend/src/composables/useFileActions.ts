@@ -5,7 +5,10 @@ import { useRoute } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
+import { useToastStore } from "@/stores/toast";
 import { users, files as api } from "@/api";
+import { StatusError } from "@/api/utils";
+import buttons, { isButtonBusy } from "@/utils/buttons";
 
 export interface FileAction {
   id: string;
@@ -31,6 +34,8 @@ const ARCHIVE_EXTENSIONS = [
 ];
 
 const COMPOUND_EXTENSIONS = [".tar.gz", ".tar.zst", ".tar.lz4"];
+
+const COMBINED_OUTPUT_DIR = "outputs_combined";
 
 export const isArchiveFile = (name: string): boolean => {
   const lower = name.toLowerCase();
@@ -80,11 +85,18 @@ export const useFileActions = () => {
       )
   );
 
+  // The combined tree is derived from the legs rather than being one, so it
+  // does not count toward having something to combine. The server agrees.
   const outputRunCount = computed(
     () =>
-      fileStore.req?.items.filter(
-        (item) => item.isDir && item.name.toLowerCase().startsWith("outputs")
-      ).length ?? 0
+      fileStore.req?.items.filter((item) => {
+        const name = item.name.toLowerCase();
+        return (
+          item.isDir &&
+          name.startsWith("outputs_") &&
+          name !== COMBINED_OUTPUT_DIR
+        );
+      }).length ?? 0
   );
 
   const selectedIsArchive = computed(() => {
@@ -145,6 +157,44 @@ export const useFileActions = () => {
       prompt: "extract",
       props: { destination: archiveBaseName(item.name) },
     });
+  };
+
+  // Nothing is queued server-side, so refreshing or closing the page cancels
+  // the request and takes the half-written tree with it.
+  const combineOutput = async () => {
+    const toastStore = useToastStore();
+    const running = toastStore.show(t("converge.combining"), "info", 0);
+
+    buttons.loading("converge-combine");
+    try {
+      const result = await api.convergeCombine(route.path);
+      buttons.success("converge-combine");
+      toastStore.dismiss(running);
+      toastStore.show(
+        t("converge.combined", {
+          files: result.files,
+          name: COMBINED_OUTPUT_DIR,
+        }),
+        "success"
+      );
+      fileStore.reload = true;
+    } catch (error) {
+      buttons.done("converge-combine");
+      toastStore.dismiss(running);
+      $showError(combineFailure(error));
+    }
+  };
+
+  const combineFailure = (error: unknown): string => {
+    const code = error instanceof StatusError ? error.code : undefined;
+    switch (code) {
+      case "combinedExists":
+        return t("converge.combineExists", { name: COMBINED_OUTPUT_DIR });
+      case "combineNeedsRuns":
+        return t("converge.combineNeedsRuns");
+      default:
+        return error instanceof Error ? error.message : String(error);
+    }
   };
 
   const switchView = async () => {
@@ -287,8 +337,11 @@ export const useFileActions = () => {
         icon: "fa-code-merge",
         label: t("buttons.combineConvergeOutput"),
         visible: !!perm.value?.create,
-        enabled: isConvergeCase.value && outputRunCount.value > 1,
-        run: () => {},
+        enabled:
+          isConvergeCase.value &&
+          outputRunCount.value > 1 &&
+          !isButtonBusy("converge-combine"),
+        run: combineOutput,
       },
       {
         id: "converge-udf",

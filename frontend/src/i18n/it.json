@@ -199,6 +199,10 @@
   },
   "converge": {
     "caseTitle": "Caso CONVERGE",
+    "combineExists": "{name} esiste già. Rimuovilo o rinominalo prima di unire di nuovo.",
+    "combineNeedsRuns": "Questo caso ha una sola cartella di output: non c'è nulla da unire.",
+    "combined": "Uniti {files} file di output in {name}",
+    "combining": "Unione dell'output in corso…",
     "cycleN": "ciclo {n}",
     "files": "{count} file",
     "job": "Job",

@@ -199,6 +199,10 @@
   },
   "converge": {
     "caseTitle": "CONVERGE case",
+    "combineExists": "{name} already exists. Remove or rename it before combining again.",
+    "combineNeedsRuns": "This case has only one output folder — there is nothing to combine.",
+    "combined": "Combined {files} output files into {name}",
+    "combining": "Combining output…",
     "cycleN": "cycle {n}",
     "files": "{count} files",
     "job": "Job",

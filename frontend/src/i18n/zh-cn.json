@@ -199,6 +199,10 @@
   },
   "converge": {
     "caseTitle": "CONVERGE 算例",
+    "combineExists": "{name} 已存在。请先删除或重命名，然后再次合并。",
+    "combineNeedsRuns": "此案例只有一个输出文件夹——没有可合并的内容。",
+    "combined": "已将 {files} 个输出文件合并到 {name}",
+    "combining": "正在合并输出…",
     "cycleN": "循环 {n}",
     "files": "{count} 个文件",
     "job": "作业",

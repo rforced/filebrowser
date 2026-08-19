@@ -623,24 +623,35 @@ func (s *convergeSummaryScan) tally(kind string, size int64) {
 	s.size += size
 }
 
+// file records one file against a run. An empty runDir means the file counts
+// toward the case's totals without belonging to a run — outputs_combined is
+// derived from the legs rather than being one, so its bytes are real but its
+// mtime must not pose as the newest evidence of a solve.
 func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, countOther bool) {
 	name := strings.ToLower(path.Base(fPath))
 
-	run := s.run(runDir)
-	run.count++
-	run.size += files.AllocatedSize(info)
+	var run *convergeRunEvidence
+	if runDir != "" {
+		run = s.run(runDir)
+		run.count++
+		run.size += files.AllocatedSize(info)
+	}
 
 	switch name {
 	case convergeStartMarker:
-		run.hasStart = true
-		if info.ModTime().After(run.start) {
-			run.start = info.ModTime()
+		if run != nil {
+			run.hasStart = true
+			if info.ModTime().After(run.start) {
+				run.start = info.ModTime()
+			}
 		}
 		return
 	case convergeDoneMarker:
-		run.hasDone = true
-		if info.ModTime().After(run.done) {
-			run.done = info.ModTime()
+		if run != nil {
+			run.hasDone = true
+			if info.ModTime().After(run.done) {
+				run.done = info.ModTime()
+			}
 		}
 		return
 	}
@@ -666,6 +677,9 @@ func (s *convergeSummaryScan) file(runDir, fPath string, info os.FileInfo, count
 			modTime: info.ModTime(),
 		})
 	case "out", "log":
+		if run == nil {
+			return
+		}
 		if info.ModTime().After(run.activity) {
 			run.activity = info.ModTime()
 		}
@@ -849,6 +863,12 @@ func summarizeConvergeCase(ctx context.Context, d *data, dir string) (*convergeS
 		if entry.IsDir() {
 			lower := strings.ToLower(name)
 			switch {
+			// The combined tree is derived from the legs, not another leg. Its
+			// bytes are real and count, but it must not join the run chain the
+			// plotter stitches, and its mtime — always the newest in the case —
+			// must not be what chooseRun reads the case's status from.
+			case lower == convergeCombinedDir:
+				convergeWalkRunDir(ctx, d, "", fPath, scan)
 			case strings.HasPrefix(lower, convergeOutputDirPrefix):
 				run := scan.run(fPath)
 				run.outputDir = true

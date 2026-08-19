@@ -199,6 +199,10 @@
   },
   "converge": {
     "caseTitle": "CONVERGE ケース",
+    "combineExists": "{name} は既に存在します。再度結合する前に削除するか名前を変更してください。",
+    "combineNeedsRuns": "このケースには出力フォルダーが 1 つしかないため、結合するものがありません。",
+    "combined": "{files} 個の出力ファイルを {name} に結合しました",
+    "combining": "出力を結合しています…",
     "cycleN": "サイクル {n}",
     "files": "{count} ファイル",
     "job": "ジョブ",

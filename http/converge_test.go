@@ -1403,6 +1403,44 @@ func TestConvergeSummaryRunChain(t *testing.T) {
 	}
 }
 
+// TestConvergeSummaryIgnoresCombinedDir pins that outputs_combined is derived
+// from the legs rather than being one. It matches the outputs_ prefix, and it
+// is always the newest thing in the case, so left alone it would both join the
+// chain the plotter stitches and win chooseRun — reporting a finished case as
+// running off a directory with no log and no markers. Its bytes still count.
+func TestConvergeSummaryIgnoresCombinedDir(t *testing.T) {
+	userScope := t.TempDir()
+	caseDir := filepath.Join(userScope, "case")
+	convergeChain(t, caseDir, "4016.760984")
+
+	writeCaseFile(t, caseDir, "cols", convergeCombinedDir, "stream0", "thermo.out")
+
+	scan, _, token := convergeTestHandlers(t, userScope, users.Permissions{Download: true})
+	got := getConvergeSummary(t, scan, token, "/api/converge/case")
+
+	for _, run := range got.Runs {
+		if run.Name == convergeCombinedDir || run.Path == "/case/"+convergeCombinedDir {
+			t.Fatalf("Runs includes the combined tree: %+v", got.Runs)
+		}
+	}
+	if len(got.Runs) != 3 {
+		t.Errorf("Runs = %+v, want the 3 real legs", got.Runs)
+	}
+	if got.Status != "completed" {
+		t.Errorf("Status = %q, want completed — the combined tree must not pose as a live run", got.Status)
+	}
+
+	var out *convergeGroup
+	for i := range got.Groups {
+		if got.Groups[i].Kind == "out" {
+			out = &got.Groups[i]
+		}
+	}
+	if out == nil || out.Count != 4 {
+		t.Errorf("out group = %+v, want the 3 legs' thermo.out plus the combined one", out)
+	}
+}
+
 func TestConvergeSummaryFirstPostFile(t *testing.T) {
 	tests := []struct {
 		name  string
