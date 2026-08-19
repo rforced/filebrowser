@@ -11,44 +11,48 @@
     <template v-if="listing">
       <div class="px-6 py-4 flex flex-col gap-3">
         <table>
-          <tr>
-            <th class="text-left">#</th>
-            <th class="text-left">{{ t("settings.shareDuration") }}</th>
-            <th class="text-left">{{ t("settings.owner") }}</th>
-            <th></th>
-            <th></th>
-          </tr>
+          <thead>
+            <tr>
+              <th class="text-left">#</th>
+              <th class="text-left">{{ t("settings.shareDuration") }}</th>
+              <th class="text-left">{{ t("settings.owner") }}</th>
+              <th></th>
+              <th></th>
+            </tr>
+          </thead>
 
-          <tr v-for="link in links" :key="link.hash">
-            <td>{{ link.hash.substring(0, 8) }}...</td>
-            <td>
-              <template v-if="link.expire !== 0">{{
-                humanTime(link.expire)
-              }}</template>
-              <template v-else>{{ t("permanent") }}</template>
-            </td>
-            <td>{{ link.username }}</td>
-            <td class="small">
-              <button
-                class="action"
-                :aria-label="t('buttons.copyToClipboard')"
-                :title="t('buttons.copyToClipboard')"
-                @click="copyToClipboard(buildLink(link))"
-              >
-                <i class="fa-solid fa-paste"></i>
-              </button>
-            </td>
-            <td class="small">
-              <button
-                class="action"
-                @click="deleteLink($event, link)"
-                :aria-label="t('buttons.delete')"
-                :title="t('buttons.delete')"
-              >
-                <i class="fa-solid fa-trash"></i>
-              </button>
-            </td>
-          </tr>
+          <tbody>
+            <tr v-for="link in links" :key="link.hash">
+              <td>{{ link.hash.substring(0, 8) }}...</td>
+              <td>
+                <template v-if="link.expire !== 0">{{
+                  humanTime(link.expire)
+                }}</template>
+                <template v-else>{{ t("permanent") }}</template>
+              </td>
+              <td>{{ link.username }}</td>
+              <td class="small">
+                <button
+                  class="action"
+                  :aria-label="t('buttons.copyToClipboard')"
+                  :title="t('buttons.copyToClipboard')"
+                  @click="copyToClipboard(buildLink(link))"
+                >
+                  <i class="fa-solid fa-paste"></i>
+                </button>
+              </td>
+              <td class="small">
+                <button
+                  class="action"
+                  @click="deleteLink($event, link)"
+                  :aria-label="t('buttons.delete')"
+                  :title="t('buttons.delete')"
+                >
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
         </table>
       </div>
 

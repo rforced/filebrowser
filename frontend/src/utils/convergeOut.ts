@@ -15,6 +15,18 @@ const isComment = (line: string) => line.startsWith("#");
 
 const UNIT_TOKEN = /^\((.*)\)$/;
 
+const RULER = /^#\s*column((?:\s+\d+)+)\s*$/i;
+
+// time.out closes each row with a dt_limiter tag written as "#dt_grow" or
+// "#dt_piso, max_piso_recover reached" — free text, sometimes several tokens,
+// always introduced by a hash. Cutting there leaves the numeric fields; a row
+// whose limiter is empty is unaffected.
+const dataFields = (line: string): string[] => {
+  const hash = line.indexOf("#");
+  const data = hash === -1 ? line : line.slice(0, hash).trimEnd();
+  return data === "" ? [] : data.split(/\s+/);
+};
+
 function mergeHeaderRow(columns: OutColumn[], tokens: string[]) {
   for (let c = 0; c < columns.length && c < tokens.length; c++) {
     const unit = UNIT_TOKEN.exec(tokens[c]);
@@ -37,14 +49,22 @@ function headerColumns(comments: string[], width: number): OutColumn[] {
     unit: "",
   }));
 
-  const ruler = comments.findIndex((line) =>
-    /^#\s*column(\s+\d+)+\s*$/i.test(line)
+  const ruler = comments.findIndex((line) => RULER.test(line));
+
+  // The ruler is what the file says it writes, which can exceed the numeric
+  // width when the last column is free text. Header rows are allowed up to that
+  // count so the names still land on the columns that do carry numbers.
+  const declared = Math.max(
+    width,
+    ruler === -1
+      ? 0
+      : RULER.exec(comments[ruler])![1].trim().split(/\s+/).length
   );
 
   for (const line of comments.slice(ruler + 1)) {
     const tokens = line.replace(/^#/, "").trim().split(/\s+/);
     if (tokens.length === 0 || tokens[0] === "") continue;
-    if (tokens.length > width) continue;
+    if (tokens.length > declared) continue;
     mergeHeaderRow(columns, tokens);
   }
 
@@ -75,8 +95,7 @@ export function parseOutFile(text: string): OutTable {
       continue;
     }
 
-    const tokens = line.split(/\s+/);
-    const row = tokens.map(Number);
+    const row = dataFields(line).map(Number);
     if (row.some((v) => !Number.isFinite(v))) {
       skippedRows++;
       continue;
@@ -124,7 +143,7 @@ export function appendOutRows(table: OutTable, lines: string[]): number {
     const line = rawLine.trim();
     if (line === "" || line.startsWith("#")) continue;
 
-    const row = line.split(/\s+/).map(Number);
+    const row = dataFields(line).map(Number);
     if (row.length !== width || row.some((v) => !Number.isFinite(v))) {
       table.skippedRows++;
       continue;

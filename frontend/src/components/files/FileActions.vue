@@ -17,6 +17,18 @@
             <span class="truncate">{{ t("sidebar.createJob") }}</span>
           </a>
 
+          <a
+            v-else-if="entry.id === 'create-workstation'"
+            :href="workstationUrl"
+            :target="linkTarget"
+            rel="noopener noreferrer"
+            class="btn btn-menu btn-white btn-soft min-w-0"
+            :class="entry.span === 2 ? 'col-span-2' : ''"
+          >
+            <i class="fa-solid fa-desktop fa-fw"></i>
+            <span class="truncate">{{ t("sidebar.createWorkstation") }}</span>
+          </a>
+
           <router-link
             v-else-if="entry.id === 'settings'"
             to="/settings/profile"
@@ -80,6 +92,17 @@
         <span>{{ t("sidebar.createJob") }}</span>
       </a>
 
+      <a
+        v-if="workstationUrl"
+        :href="workstationUrl"
+        :target="linkTarget"
+        rel="noopener noreferrer"
+        class="btn btn-flex btn-white btn-soft whitespace-nowrap"
+      >
+        <i class="fa-solid fa-desktop fa-fw"></i>
+        <span>{{ t("sidebar.createWorkstation") }}</span>
+      </a>
+
       <router-link
         v-if="embedded"
         to="/settings/profile"
@@ -119,8 +142,14 @@ const STACK_LAYOUT: string[][][] = [
     ["new-folder", "new-file"],
     ["upload", "download"],
   ],
-  [["create-job"], ["converge-clean"]],
-  [["info", "rename"], ["copy", "move"], ["share"], ["extract"], ["delete"]],
+  [
+    ["create-job"],
+    ["create-workstation"],
+    ["converge-clean"],
+    ["converge-combine"],
+    ["converge-udf"],
+  ],
+  [["info", "rename"], ["copy", "move"], ["extract", "share"], ["delete"]],
   [["settings"]],
 ];
 
@@ -137,6 +166,10 @@ const jobUrl = computed(() => {
   return `${domain}/${teamId}/jobs/create?sid=${filesystemId}&stype=filesystem&path=${encodeURIComponent(folderPath)}`;
 });
 
+const workstationUrl = computed(() =>
+  domain && teamId ? `${domain}/${teamId}/workstations/create` : ""
+);
+
 const stackGroups = computed<StackEntry[][]>(() => {
   const byId = new Map(actions.value.map((action) => [action.id, action]));
 
@@ -149,8 +182,9 @@ const stackGroups = computed<StackEntry[][]>(() => {
       for (const id of row) {
         if (id === "create-job") {
           if (jobUrl.value) entries.push({ id, span: 2 });
+        } else if (id === "create-workstation") {
+          if (workstationUrl.value) entries.push({ id, span: 2 });
         } else if (id === "settings") {
-          // Only embedded: standalone keeps its header button.
           if (embedded) entries.push({ id, span: 2 });
         } else {
           const action = byId.get(id);

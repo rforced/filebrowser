@@ -42,7 +42,31 @@ const CELL_COUNT = `# CONVERGE 6.0.1/  Jul 27 2026       Run Date:Sat Aug 15 17:
                 6           675191            22274
 `;
 
+const TIME = `# CONVERGE 6.0.1/  Jul 27 2026       Run Date:Tue Aug 18 18:27:50 2026
+# column        1                2                3                4
+#           Crank     Cycle_Number               dt       dt_limiter
+#           (deg)           (none)              (s)           (none)
+#
+   -4.8099100e+02                1    5.0000000e-07
+   -4.8097975e+02                2    6.2500000e-07  #dt_grow
+   -4.8096569e+02                3    7.8125000e-07  #dt_cfl_by_region   0
+   -4.8094811e+02                4    9.7656250e-07  #dt_piso, max_piso_recover reached
+`;
+
 describe("parseOutFile", () => {
+  it("keeps rows whose trailing dt_limiter tag is free text", () => {
+    const table = parseOutFile(TIME);
+
+    expect(table.rowCount).toBe(4);
+    expect(table.skippedRows).toBe(0);
+    expect(table.columns.map(columnLabel)).toEqual([
+      "Crank (deg)",
+      "Cycle_Number",
+      "dt (s)",
+    ]);
+    expect(table.values[1]).toEqual([1, 2, 3, 4]);
+  });
+
   it("reads names and units from the header block", () => {
     const table = parseOutFile(DYNAMIC);
 
@@ -129,6 +153,18 @@ describe("appendOutRows", () => {
     expect(table.skippedRows).toBe(1);
     expect(table.values[0].at(-1)).toBeCloseTo(-480.5);
     expect(table.values[2].at(-1)).toBe(5);
+  });
+
+  it("strips a trailing dt_limiter tag from appended rows", () => {
+    const table = parseOutFile(TIME);
+    const added = appendOutRows(table, [
+      "   -4.8092614e+02                5    1.2207031e-06  #dt_grow",
+      "   -4.8089867e+02                6    1.5258789e-06",
+    ]);
+
+    expect(added).toBe(2);
+    expect(table.skippedRows).toBe(0);
+    expect(table.values[1].slice(-2)).toEqual([5, 6]);
   });
 
   it("adds nothing to an empty table", () => {

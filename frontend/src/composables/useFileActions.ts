@@ -80,6 +80,13 @@ export const useFileActions = () => {
       )
   );
 
+  const outputRunCount = computed(
+    () =>
+      fileStore.req?.items.filter(
+        (item) => item.isDir && item.name.toLowerCase().startsWith("outputs")
+      ).length ?? 0
+  );
+
   const selectedIsArchive = computed(() => {
     const item = selectedItem.value;
     return item != null && !item.isDir && isArchiveFile(item.name);
@@ -274,6 +281,22 @@ export const useFileActions = () => {
         visible: !!perm.value?.delete,
         enabled: isConvergeCase.value,
         run: () => showPrompt("converge-clean"),
+      },
+      {
+        id: "converge-combine",
+        icon: "fa-code-merge",
+        label: t("buttons.combineConvergeOutput"),
+        visible: !!perm.value?.create,
+        enabled: isConvergeCase.value && outputRunCount.value > 1,
+        run: () => {},
+      },
+      {
+        id: "converge-udf",
+        icon: "fa-hammer",
+        label: t("buttons.compileUdf"),
+        visible: !!perm.value?.create,
+        enabled: isConvergeCase.value,
+        run: () => {},
       },
     ].filter((action) => action.visible);
   });

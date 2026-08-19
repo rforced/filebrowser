@@ -271,8 +271,10 @@ const { t } = useI18n();
 
 const { actions } = useFileActions();
 
+const CASE_ACTIONS = ["converge-clean", "converge-combine", "converge-udf"];
+
 const contextActions = computed(() =>
-  actions.value.filter((action) => action.id !== "converge-clean")
+  actions.value.filter((action) => !CASE_ACTIONS.includes(action.id))
 );
 
 const listing = ref<HTMLElement | null>(null);

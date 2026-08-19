@@ -1,55 +1,61 @@
 <template>
   <Card v-if="summary?.isCase" class="p-4 flex flex-col gap-3">
-    <div class="flex flex-wrap gap-x-4 gap-y-2 items-center">
-      <span
-        class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
-        :class="statusClass"
-      >
-        <i class="fa-solid text-[0.65rem]" :class="statusIcon"></i>
-        {{ t(`converge.status.${summary.status}`) }}
-      </span>
+    <!--
+      The buttons are their own shrink-proof row-mate so a long job line wraps
+      inside the left column instead of pushing "View output" onto a second row.
+    -->
+    <div class="flex items-center gap-4">
+      <div class="flex flex-wrap gap-x-4 gap-y-2 items-center flex-1 min-w-0">
+        <span
+          class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium"
+          :class="statusClass"
+        >
+          <i class="fa-solid text-[0.65rem]" :class="statusIcon"></i>
+          {{ t(`converge.status.${summary.status}`) }}
+        </span>
 
-      <span class="font-medium text-gray-900 dark:text-gray-100">
-        {{ t("converge.caseTitle") }}
-      </span>
+        <span class="font-medium text-gray-900 dark:text-gray-100">
+          {{ t("converge.caseTitle") }}
+        </span>
 
-      <span
-        v-if="jobLine"
-        class="text-sm text-gray-600 dark:text-gray-300 truncate"
-      >
-        {{ jobLine }}
-      </span>
+        <span
+          v-if="jobLine"
+          class="text-sm text-gray-600 dark:text-gray-300 truncate"
+        >
+          {{ jobLine }}
+        </span>
 
-      <span
-        v-if="summary.lastActivity && summary.status !== 'idle'"
-        class="text-xs text-gray-500 dark:text-gray-400"
-      >
-        {{
-          t("converge.lastActivity", { time: fromNow(summary.lastActivity) })
-        }}
-      </span>
+        <span
+          v-if="summary.lastActivity && summary.status !== 'idle'"
+          class="text-xs text-gray-500 dark:text-gray-400"
+        >
+          {{
+            t("converge.lastActivity", { time: fromNow(summary.lastActivity) })
+          }}
+        </span>
+      </div>
 
-      <span class="flex-1"></span>
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          v-if="summary.logPath"
+          type="button"
+          class="btn btn-sm btn-white btn-soft whitespace-nowrap"
+          @click="viewLog"
+        >
+          <i class="fa-solid fa-file-lines mr-1"></i>
+          {{ t("converge.viewLog") }}
+        </button>
 
-      <button
-        v-if="summary.logPath"
-        type="button"
-        class="btn btn-sm btn-white btn-soft"
-        @click="viewLog"
-      >
-        <i class="fa-solid fa-file-lines mr-1"></i>
-        {{ t("converge.viewLog") }}
-      </button>
-
-      <button
-        v-if="summary.postPath"
-        type="button"
-        class="btn btn-sm btn-white btn-soft"
-        @click="viewOutput"
-      >
-        <i class="fa-solid fa-cube mr-1"></i>
-        {{ t("converge.viewOutput") }}
-      </button>
+        <button
+          v-if="summary.postPath"
+          type="button"
+          class="btn btn-sm btn-white btn-soft whitespace-nowrap"
+          @click="viewOutput"
+        >
+          <i class="fa-solid fa-cube mr-1"></i>
+          {{ t("converge.viewOutput") }}
+        </button>
+      </div>
     </div>
 
     <div v-if="progressBounds" class="flex flex-col gap-1">
@@ -136,7 +142,7 @@
     </div>
 
     <OutputSizeStrip
-      v-if="postFiles.length > 1"
+      v-if="SHOW_OUTPUT_SIZE && postFiles.length > 1"
       :items="postFiles"
       :start="summary.progress?.start"
       :end="summary.progress?.end"
@@ -175,6 +181,10 @@ const fileStore = useFileStore();
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+
+// TODO: re-enable the output size profile once it earns its place in the panel.
+// The strip and its loader are kept whole so this is a one-line switch back.
+const SHOW_OUTPUT_SIZE = false;
 
 const summary = ref<ConvergeSummary | null>(null);
 
@@ -293,23 +303,15 @@ const progressClass = computed(() => {
 
 const newestRestart = computed(() => summary.value?.restarts[0] ?? null);
 
-// Left undefined when the deck did not say, so the number renders bare rather
-// than carrying a unit nobody established. Labelling crank degrees as seconds
-// is a wrong reading, not a cosmetic slip.
 const timeUnit = computed<"s" | "deg" | undefined>(() => {
   const unit = summary.value?.progress?.unit;
   return unit === "deg" || unit === "s" ? unit : undefined;
 });
 
-// The newest leg is the one still being written, so its output directory is
-// the profile worth showing.
 const newestRun = computed(() => summary.value?.runs[0] ?? null);
-
 const postFiles = ref<{ name: string; size: number }[]>([]);
 const outputDir = ref("");
 
-// Sizes come from a plain directory listing — post file size tracks cell count
-// closely, so the profile costs one stat per file and opens nothing.
 const loadOutputSizes = async () => {
   postFiles.value = [];
   outputDir.value = "";
@@ -318,7 +320,7 @@ const loadOutputSizes = async () => {
   const hasPost = summary.value?.groups.some(
     (g) => g.kind === "post" && g.count > 1
   );
-  if (!run || !hasPost) return;
+  if (!SHOW_OUTPUT_SIZE || !run || !hasPost) return;
 
   const dir = `${run.path}/output`;
   try {
