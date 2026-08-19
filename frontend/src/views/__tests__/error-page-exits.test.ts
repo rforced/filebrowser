@@ -121,7 +121,6 @@ const mountView = (view: any) =>
         StorageCard: true,
         HelpBox: true,
         Search: true,
-        QrcodeVue: true,
         Item: true,
       },
       provide: { $showError: vi.fn(), $showSuccess: vi.fn() },

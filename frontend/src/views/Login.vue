@@ -130,13 +130,13 @@
 import { StatusError } from "@/api/utils";
 import * as auth from "@/utils/auth";
 import { framed, embeddedHandoff } from "@/utils/embedded";
+import { name, version } from "@/utils/constants";
 import {
-  cspNonce,
-  name,
-  recaptcha,
-  recaptchaKey,
-  version,
-} from "@/utils/constants";
+  executeRecaptcha,
+  mountRecaptcha,
+  recaptchaEnabled,
+  unmountRecaptcha,
+} from "@/utils/recaptcha";
 import { inject, nextTick, ref, onMounted, onBeforeUnmount } from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
@@ -163,11 +163,6 @@ const $showError = inject<IToastError>("$showError")!;
 
 const reason = route.query["logout-reason"] ?? null;
 
-// Dynamically load reCAPTCHA Enterprise script only on the login page
-let recaptchaScript: HTMLScriptElement | null = null;
-
-// When framed, first try to exchange a handoff code with the embedding
-// platform page; the login form is only for the case where that fails.
 onMounted(async () => {
   if (framed) {
     if (await embeddedHandoff()) {
@@ -178,31 +173,8 @@ onMounted(async () => {
   }
 });
 
-onMounted(() => {
-  if (recaptcha && recaptchaKey) {
-    recaptchaScript = document.createElement("script");
-    if (cspNonce) {
-      recaptchaScript.nonce = cspNonce;
-      recaptchaScript.setAttribute("nonce", cspNonce);
-    }
-    recaptchaScript.src =
-      "https://www.google.com/recaptcha/enterprise.js?render=" + recaptchaKey;
-    document.head.appendChild(recaptchaScript);
-  }
-});
-
-onBeforeUnmount(() => {
-  // Remove the reCAPTCHA script tag
-  if (recaptchaScript) {
-    recaptchaScript.remove();
-    recaptchaScript = null;
-  }
-  // Remove the reCAPTCHA badge injected by Google
-  const badge = document.querySelector(".grecaptcha-badge");
-  if (badge) {
-    badge.remove();
-  }
-});
+onMounted(mountRecaptcha);
+onBeforeUnmount(unmountRecaptcha);
 
 const revealMfa = async () => {
   mfaVisible.value = true;
@@ -221,35 +193,11 @@ const submit = async (event: Event) => {
   const redirect = (route.query.redirect || "/files/") as string;
 
   let captcha = "";
-  if (recaptcha) {
+  if (recaptchaEnabled) {
     try {
-      // Wait for the reCAPTCHA Enterprise script to be ready
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(
-          () => reject(new Error("reCAPTCHA script load timeout")),
-          10000
-        );
-        const check = () => {
-          if (
-            typeof window.grecaptcha !== "undefined" &&
-            typeof window.grecaptcha.enterprise !== "undefined"
-          ) {
-            clearTimeout(timeout);
-            resolve();
-          } else {
-            setTimeout(check, 100);
-          }
-        };
-        check();
-      });
-
-      captcha = await window.grecaptcha.enterprise.execute(recaptchaKey, {
-        action: "login",
-      });
+      captcha = await executeRecaptcha("login");
     } catch {
-      error.value = t("login.wrongCredentials");
-      loading.value = false;
-      return;
+      captcha = "";
     }
 
     if (captcha === "") {

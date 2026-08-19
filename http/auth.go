@@ -37,8 +37,6 @@ func init() {
 	go evictStaleLoginEntries()
 }
 
-// evictStaleLoginEntries periodically removes rate limiter entries with no
-// recent attempts, preventing unbounded memory growth from many unique IPs.
 func evictStaleLoginEntries() {
 	ticker := time.NewTicker(loginRateWindow * 2)
 	defer ticker.Stop()
@@ -63,7 +61,6 @@ func evictStaleLoginEntries() {
 	}
 }
 
-// checkLoginRateLimit returns true if the IP has exceeded the login rate limit.
 func checkLoginRateLimit(ip string) bool {
 	now := time.Now()
 	val, _ := loginRateLimiter.LoadOrStore(ip, &loginAttempts{})
@@ -223,10 +220,6 @@ func loginHandler(policy tokenPolicy) handleFunc {
 	}
 }
 
-// handoffHandler exchanges a single-use code minted by the job platform for a
-// session, so the embedded (iframed) app can authenticate on the strength of
-// the user's live platform session instead of a second login. Only the hook
-// auth method can vouch for a code, so the route plays dead everywhere else.
 func handoffHandler(policy tokenPolicy) handleFunc {
 	return func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
 		if r.Body != nil {
@@ -309,10 +302,31 @@ var meHandler = withUser(func(w http.ResponseWriter, _ *http.Request, d *data) (
 	return renderJSON(w, nil, info)
 })
 
-// createAndReturnToken issues a session token for user and writes the bearer
-// string to the response. startedAt is when the session began: time.Now() for a
-// fresh login, and the original login time for a renewal, so that the absolute
-// lifetime is measured from the login rather than from the last renewal.
+func configuredReCaptcha(d *data) (*fbAuth.ReCaptcha, error) {
+	var recaptcha *fbAuth.ReCaptcha
+
+	switch d.settings.AuthMethod {
+	case fbAuth.MethodJSONAuth, fbAuth.MethodHookAuth:
+		raw, err := d.store.Auth.Get(d.settings.AuthMethod)
+		if err != nil {
+			return nil, err
+		}
+
+		switch auther := raw.(type) {
+		case *fbAuth.JSONAuth:
+			recaptcha = auther.ReCaptcha
+		case *fbAuth.HookAuth:
+			recaptcha = auther.ReCaptcha
+		}
+	}
+
+	if recaptcha == nil || recaptcha.Key == "" || recaptcha.Secret == "" || recaptcha.ProjectID == "" {
+		return nil, nil
+	}
+
+	return recaptcha, nil
+}
+
 func createAndReturnToken(w http.ResponseWriter, d *data, user *users.User, policy tokenPolicy, startedAt time.Time) (int, error) {
 	tokenStr, err := fbAuth.GenerateToken()
 	if err != nil {

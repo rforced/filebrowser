@@ -163,8 +163,13 @@ func (a *restAssessor) CreateAssessment(_ context.Context, projectID string, req
 	return &result, nil
 }
 
-// Ok checks if a reCAPTCHA Enterprise token is valid by creating an assessment.
+const LoginAction = "login"
+
 func (r *ReCaptcha) Ok(token string) (bool, error) {
+	return r.OkAction(token, LoginAction)
+}
+
+func (r *ReCaptcha) OkAction(token, action string) (bool, error) {
 	if token == "" {
 		log.Printf("[reCAPTCHA] Empty token received, rejecting")
 		return false, nil
@@ -180,7 +185,7 @@ func (r *ReCaptcha) Ok(token string) (bool, error) {
 	req := &assessmentRequest{}
 	req.Event.Token = token
 	req.Event.SiteKey = r.Key
-	req.Event.ExpectedAction = "login"
+	req.Event.ExpectedAction = action
 
 	response, err := assessor.CreateAssessment(ctx, r.ProjectID, req)
 	if err != nil {
@@ -201,22 +206,16 @@ func (r *ReCaptcha) Ok(token string) (bool, error) {
 		return false, nil
 	}
 
-	// Check if the expected action was executed.
-	if response.TokenProperties.Action != "login" {
-		log.Printf("[reCAPTCHA] Action mismatch: got %q, want %q", response.TokenProperties.Action, "login")
+	if response.TokenProperties.Action != action {
+		log.Printf("[reCAPTCHA] Action mismatch: got %q, want %q", response.TokenProperties.Action, action)
 		return false, nil
 	}
 
-	// Score must be above the threshold (0.5 recommended by Google)
 	if response.RiskAnalysis.Score < 0.5 {
 		log.Printf("[reCAPTCHA] Score %.1f below threshold 0.5", response.RiskAnalysis.Score)
 		return false, nil
 	}
 
-	// When domain validation is disabled in the reCAPTCHA console (e.g. for
-	// IP-only deployments), anyone who obtains the site key can generate tokens
-	// from any origin. Google recommends checking the hostname returned in the
-	// response against an explicit allowlist to compensate.
 	if len(r.AllowedHostnames) > 0 {
 		hostname := response.TokenProperties.Hostname
 		if !slices.Contains(r.AllowedHostnames, hostname) {

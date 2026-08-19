@@ -14,13 +14,16 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	fbAuth "github.com/rforced/filebrowser/v2/auth"
 	"github.com/rforced/filebrowser/v2/files"
 	"github.com/rforced/filebrowser/v2/share"
 )
 
 const (
-	shareRateLimit  = 10
-	shareRateWindow = time.Minute
+	shareRateLimit     = 10
+	shareRateWindow    = time.Minute
+	shareCaptchaWindow = 15 * time.Minute
+	shareCaptchaAction = "share"
 )
 
 type shareAttempts struct {
@@ -40,7 +43,7 @@ func evictStaleShareEntries() {
 	ticker := time.NewTicker(shareRateWindow * 2)
 	defer ticker.Stop()
 	for range ticker.C {
-		cutoff := time.Now().Add(-shareRateWindow)
+		cutoff := time.Now().Add(-shareCaptchaWindow)
 		shareRateLimiter.Range(func(key, value any) bool {
 			attempts := value.(*shareAttempts)
 			attempts.mu.Lock()
@@ -60,30 +63,43 @@ func evictStaleShareEntries() {
 	}
 }
 
-// checkShareRateLimit returns true if the key has exceeded the share auth rate limit.
-func checkShareRateLimit(key string) bool {
-	now := time.Now()
-	val, _ := shareRateLimiter.LoadOrStore(key, &shareAttempts{})
+func recentShareFailures(key string, window time.Duration) int {
+	val, ok := shareRateLimiter.Load(key)
+	if !ok {
+		return 0
+	}
 	attempts := val.(*shareAttempts)
 
 	attempts.mu.Lock()
 	defer attempts.mu.Unlock()
 
-	cutoff := now.Add(-shareRateWindow)
-	valid := attempts.times[:0]
+	now := time.Now()
+	kept := attempts.times[:0]
+	count := 0
 	for _, t := range attempts.times {
-		if t.After(cutoff) {
-			valid = append(valid, t)
+		if t.After(now.Add(-shareCaptchaWindow)) {
+			kept = append(kept, t)
+		}
+		if t.After(now.Add(-window)) {
+			count++
 		}
 	}
-	attempts.times = valid
+	attempts.times = kept
 
-	if len(attempts.times) >= shareRateLimit {
-		return true
-	}
+	return count
+}
 
-	attempts.times = append(attempts.times, now)
-	return false
+func recordShareFailure(key string) {
+	val, _ := shareRateLimiter.LoadOrStore(key, &shareAttempts{})
+	attempts := val.(*shareAttempts)
+
+	attempts.mu.Lock()
+	defer attempts.mu.Unlock()
+	attempts.times = append(attempts.times, time.Now())
+}
+
+func clearShareFailures(key string) {
+	shareRateLimiter.Delete(key)
 }
 
 var withHashFile = func(fn handleFunc) handleFunc {
@@ -95,14 +111,15 @@ var withHashFile = func(fn handleFunc) handleFunc {
 		}
 
 		ip := clientIP(r, d.server.TrustedProxyNets)
-		rateLimitKey := ip + ":" + id
-		if checkShareRateLimit(rateLimitKey) {
+
+		status, detail, err := authenticateShareRequest(r, d, link, ip, id)
+		if status == http.StatusTooManyRequests {
 			log.Printf("share auth rate limit exceeded for IP %s on share %s", ip, id)
 			w.Header().Set("Retry-After", "60")
-			return http.StatusTooManyRequests, nil
 		}
-
-		status, err := authenticateShareRequest(r, link)
+		if detail != nil {
+			return renderClientError(w, status, *detail)
+		}
 		if status != 0 || err != nil {
 			return status, err
 		}
@@ -210,27 +227,87 @@ var publicDlHandler = withHashFile(func(w http.ResponseWriter, r *http.Request, 
 	return rawDirHandler(w, r, d, file)
 })
 
-func authenticateShareRequest(r *http.Request, l *share.Link) (int, error) {
+func authenticateShareRequest(r *http.Request, d *data, l *share.Link, ip, id string) (int, *clientError, error) {
 	if l.PasswordHash == "" {
-		return http.StatusForbidden, fmt.Errorf("share is not password-protected")
+		return http.StatusForbidden, nil, fmt.Errorf("share is not password-protected")
 	}
 
 	password, err := url.QueryUnescape(r.Header.Get("X-SHARE-PASSWORD"))
 	if err != nil {
-		return http.StatusBadRequest, err
+		return http.StatusBadRequest, nil, err
 	}
 	if password == "" {
 		password = r.URL.Query().Get("password")
 	}
 	if password == "" {
-		return http.StatusUnauthorized, nil
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(l.PasswordHash), []byte(password)); err != nil {
-		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
-			return http.StatusUnauthorized, nil
-		}
-		return http.StatusInternalServerError, err
+		return http.StatusUnauthorized, nil, nil
 	}
 
-	return 0, nil
+	attemptKey := ip + ":" + id
+	if recentShareFailures(attemptKey, shareRateWindow) >= shareRateLimit {
+		return http.StatusTooManyRequests, nil, nil
+	}
+
+	detail, err := checkShareCaptcha(r, d, attemptKey, id)
+	if err != nil {
+		return http.StatusInternalServerError, nil, err
+	}
+	if detail != nil {
+		if detail.Code == "captchaFailed" {
+			recordShareFailure(attemptKey)
+		}
+
+		return http.StatusUnauthorized, detail, nil
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(l.PasswordHash), []byte(password)); err != nil {
+		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			recordShareFailure(attemptKey)
+			return http.StatusUnauthorized, nil, nil
+		}
+		return http.StatusInternalServerError, nil, err
+	}
+
+	clearShareFailures(attemptKey)
+	return 0, nil, nil
+}
+
+var assessShareCaptcha = func(recaptcha *fbAuth.ReCaptcha, token string) (bool, error) {
+	return recaptcha.OkAction(token, shareCaptchaAction)
+}
+
+func checkShareCaptcha(r *http.Request, d *data, attemptKey, id string) (*clientError, error) {
+	recaptcha, err := configuredReCaptcha(d)
+	if err != nil {
+		return nil, err
+	}
+	if recaptcha == nil {
+		return nil, nil
+	}
+
+	token := r.Header.Get("X-SHARE-CAPTCHA")
+	if token == "" {
+		if recentShareFailures(attemptKey, shareCaptchaWindow) == 0 {
+			return nil, nil
+		}
+
+		return &clientError{
+			Code:    "captchaRequired",
+			Message: "security verification required",
+		}, nil
+	}
+
+	ok, err := assessShareCaptcha(recaptcha, token)
+	if err != nil {
+		log.Printf("share captcha assessment failed on share %s: %v", id, err)
+		return nil, nil
+	}
+	if !ok {
+		return &clientError{
+			Code:    "captchaFailed",
+			Message: "security verification failed",
+		}, nil
+	}
+
+	return nil, nil
 }

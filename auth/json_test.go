@@ -174,6 +174,45 @@ func TestReCaptchaOkRequestFields(t *testing.T) {
 	}
 }
 
+// TestReCaptchaOkAction covers the actions other than login: the assessment has
+// to be made for the action the caller names, and a token minted for a
+// different form has to be rejected rather than silently accepted.
+func TestReCaptchaOkAction(t *testing.T) {
+	t.Parallel()
+
+	var capturedReq *assessmentRequest
+	newReCaptcha := func(signedAction string) *ReCaptcha {
+		return &ReCaptcha{
+			Key:       "my-site-key",
+			Secret:    "my-secret",
+			ProjectID: "my-project",
+			Assessor: assessorFunc(func(_ context.Context, _ string, req *assessmentRequest) (*assessmentResponse, error) {
+				capturedReq = req
+				return validAssessment(0.9, signedAction, "example.com"), nil
+			}),
+		}
+	}
+
+	ok, err := newReCaptcha("share").OkAction("the-token", "share")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Error("a token signed for the requested action was rejected")
+	}
+	if capturedReq.Event.ExpectedAction != "share" {
+		t.Errorf("ExpectedAction = %q, want %q", capturedReq.Event.ExpectedAction, "share")
+	}
+
+	ok, err = newReCaptcha("login").OkAction("the-token", "share")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Error("a token signed for another action was accepted")
+	}
+}
+
 // assessorFunc adapts a function to the Assessor interface.
 type assessorFunc func(ctx context.Context, projectID string, req *assessmentRequest) (*assessmentResponse, error)
 

@@ -29,7 +29,6 @@
     "filesize": "^11.0.22",
     "marked": "^18.0.9",
     "pinia": "^4.0.3",
-    "qrcode.vue": "^3.10.0",
     "tailwindcss": "^4.3.3",
     "three": "0.185.1",
     "tippy.js": "^6.3.7",

@@ -1,16 +1,23 @@
 import { fetchURL, removePrefix, createURL } from "./utils";
 import { baseURL } from "@/utils/constants";
+import { encodePath } from "@/utils/url";
 
-export async function fetch(url: string, password: string = "") {
+export async function fetch(
+  url: string,
+  password: string = "",
+  captcha: string = ""
+) {
   url = removePrefix(url);
 
-  const res = await fetchURL(
-    `/api/public/share${url}`,
-    {
-      headers: { "X-SHARE-PASSWORD": encodeURIComponent(password) },
-    },
-    false
-  );
+  const headers: Record<string, string> = {
+    "X-SHARE-PASSWORD": encodeURIComponent(password),
+  };
+
+  if (captcha !== "") {
+    headers["X-SHARE-CAPTCHA"] = captcha;
+  }
+
+  const res = await fetchURL(`/api/public/share${url}`, { headers }, false);
 
   const data = (await res.json()) as Resource;
   data.url = `/share${url}`;
@@ -41,16 +48,9 @@ export function download(
   let url = `${baseURL}/api/public/dl/${hash}`;
 
   if (files.length === 1) {
-    url += files[0] + "?";
+    url += encodePath(files[0]) + "?";
   } else {
-    let arg = "";
-
-    for (const file of files) {
-      arg += file + ",";
-    }
-
-    arg = arg.substring(0, arg.length - 1);
-    arg = encodeURIComponent(arg);
+    const arg = encodeURIComponent(files.map(encodePath).join(","));
     url += `/?files=${arg}&`;
   }
 

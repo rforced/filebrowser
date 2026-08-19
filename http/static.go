@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rforced/filebrowser/v2/auth"
 	"github.com/rforced/filebrowser/v2/settings"
 	"github.com/rforced/filebrowser/v2/storage"
 	"github.com/rforced/filebrowser/v2/version"
@@ -59,24 +58,13 @@ func handleWithStaticData(w http.ResponseWriter, r *http.Request, d *data, fSys 
 		}
 	}
 
-	var recaptcha *auth.ReCaptcha
-	switch d.settings.AuthMethod {
-	case auth.MethodJSONAuth:
-		raw, err := d.store.Auth.Get(d.settings.AuthMethod)
-		if err != nil {
-			return http.StatusInternalServerError, err
-		}
-		recaptcha = raw.(*auth.JSONAuth).ReCaptcha
-	case auth.MethodHookAuth:
-		raw, err := d.store.Auth.Get(d.settings.AuthMethod)
-		if err != nil {
-			return http.StatusInternalServerError, err
-		}
-		recaptcha = raw.(*auth.HookAuth).ReCaptcha
+	recaptcha, err := configuredReCaptcha(d)
+	if err != nil {
+		return http.StatusInternalServerError, err
 	}
 
 	if recaptcha != nil {
-		data["ReCaptcha"] = recaptcha.Key != "" && recaptcha.Secret != "" && recaptcha.ProjectID != ""
+		data["ReCaptcha"] = true
 		data["ReCaptchaKey"] = recaptcha.Key
 	}
 
