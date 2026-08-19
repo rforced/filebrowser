@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/klauspost/compress/zstd"
+
 	"github.com/rforced/filebrowser/v2/users"
 )
 
@@ -531,6 +533,88 @@ func TestH5SurfaceCompressesWhenAccepted(t *testing.T) {
 	}
 }
 
+// Every browser that reaches this viewer names zstd, and it is the encoding
+// the surface is actually sent under; the body has to survive the round trip.
+func TestH5SurfacePrefersZstdWhenAccepted(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	req, _ := http.NewRequest(http.MethodGet,
+		"/api/h5/post.h5?surface=STREAM_00&scalar=TEMPERATURE", http.NoBody)
+	req.Header.Set("X-Auth", token)
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br, zstd")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "zstd" {
+		t.Fatalf("Content-Encoding = %q, want zstd", got)
+	}
+	if got := rec.Header().Get("Content-Length"); got != "" {
+		t.Errorf("Content-Length = %q, want it unset on a compressed body", got)
+	}
+	if got := rec.Header().Get("Vary"); !strings.Contains(got, "Accept-Encoding") {
+		t.Errorf("Vary = %q, want it to name Accept-Encoding", got)
+	}
+
+	zr, err := zstd.NewReader(rec.Body)
+	if err != nil {
+		t.Fatalf("zstd reader: %v", err)
+	}
+	defer zr.Close()
+	plain, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatalf("zstd body: %v", err)
+	}
+
+	uncompressed := h5Get(t, h, token,
+		"/api/h5/post.h5?surface=STREAM_00&scalar=TEMPERATURE")
+	if !bytes.Equal(plain, uncompressed.Body.Bytes()) {
+		t.Error("packed body does not decode to the uncompressed one")
+	}
+
+	inflated := httptest.NewRecorder()
+	inflated.Body = bytes.NewBuffer(plain)
+	inflated.Code = http.StatusOK
+	if got := decodeSurface(t, inflated); got.header.Triangles == 0 {
+		t.Error("triangles = 0 after unpacking")
+	}
+}
+
+// The encoders are pooled and reset per response, so a second request must not
+// inherit anything from the first.
+func TestH5SurfaceZstdSurvivesAPooledEncoder(t *testing.T) {
+	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
+
+	var first []byte
+	for i := 0; i < 4; i++ {
+		req, _ := http.NewRequest(http.MethodGet,
+			"/api/h5/post.h5?surface=STREAM_00", http.NoBody)
+		req.Header.Set("X-Auth", token)
+		req.Header.Set("Accept-Encoding", "zstd")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		zr, err := zstd.NewReader(rec.Body)
+		if err != nil {
+			t.Fatalf("run %d: zstd reader: %v", i, err)
+		}
+		plain, err := io.ReadAll(zr)
+		zr.Close()
+		if err != nil {
+			t.Fatalf("run %d: zstd body: %v", i, err)
+		}
+		if i == 0 {
+			first = plain
+			continue
+		}
+		if !bytes.Equal(plain, first) {
+			t.Fatalf("run %d decoded to a different surface", i)
+		}
+	}
+}
+
 // A client that cannot take gzip still has to be answered, and answered with a
 // length it can trust.
 func TestH5SurfaceUncompressedWithoutAcceptEncoding(t *testing.T) {
@@ -551,23 +635,33 @@ func TestH5SurfaceUncompressedWithoutAcceptEncoding(t *testing.T) {
 
 // "x-gzip" and a q-value are legal ways to say something other than gzip; a
 // substring match on the header would compress for a client that cannot inflate.
-func TestH5SurfaceAcceptsGzipOnlyWhenNamed(t *testing.T) {
+func TestH5SurfaceEncodingOnlyWhenNamed(t *testing.T) {
 	for _, tc := range []struct {
 		header string
-		want   bool
+		want   string
 	}{
-		{"gzip", true},
-		{"gzip;q=1.0, identity;q=0.5", true},
-		{"deflate, gzip", true},
-		{" GZIP ", false},
-		{"x-gzip", false},
-		{"identity", false},
-		{"", false},
+		{"gzip", "gzip"},
+		{"gzip;q=1.0, identity;q=0.5", "gzip"},
+		{"deflate, gzip", "gzip"},
+		{" GZIP ", ""},
+		{"x-gzip", ""},
+		{"identity", ""},
+		{"", ""},
+		// zstd wins wherever it is named, whichever order it arrives in.
+		{"zstd", "zstd"},
+		{"gzip, deflate, br, zstd", "zstd"},
+		{"zstd, gzip", "zstd"},
+		{"zstd;q=1.0, gzip;q=0.8", "zstd"},
+		{" ZSTD ", ""},
+		// A zero quality is a refusal, not a preference.
+		{"zstd;q=0, gzip", "gzip"},
+		{"zstd;q=0.0, gzip;q=0", ""},
+		{"gzip;q=0", ""},
 	} {
 		req, _ := http.NewRequest(http.MethodGet, "/", http.NoBody)
 		req.Header.Set("Accept-Encoding", tc.header)
-		if got := acceptsGzip(req); got != tc.want {
-			t.Errorf("acceptsGzip(%q) = %v, want %v", tc.header, got, tc.want)
+		if got := h5Encoding(req); got != tc.want {
+			t.Errorf("h5Encoding(%q) = %q, want %q", tc.header, got, tc.want)
 		}
 	}
 }
