@@ -32,6 +32,17 @@ const titles = {
   InternalServerError: "errors.internal",
 };
 
+// An error page belongs inside the app frame: reached on its own it would
+// otherwise be a card on a blank tab, with no header and nowhere to go. The
+// name stays on the child so the document-title lookup still finds it.
+const errorRoute = (path: string, name: string, errorCode: number) => [
+  {
+    path,
+    component: Layout,
+    children: [{ path: "", name, component: Errors, props: { errorCode } }],
+  },
+];
+
 const routes = [
   {
     path: "/login",
@@ -116,33 +127,9 @@ const routes = [
       },
     ],
   },
-  {
-    path: "/403",
-    name: "Forbidden",
-    component: Errors,
-    props: {
-      errorCode: 403,
-      showHeader: true,
-    },
-  },
-  {
-    path: "/404",
-    name: "NotFound",
-    component: Errors,
-    props: {
-      errorCode: 404,
-      showHeader: true,
-    },
-  },
-  {
-    path: "/500",
-    name: "InternalServerError",
-    component: Errors,
-    props: {
-      errorCode: 500,
-      showHeader: true,
-    },
-  },
+  ...errorRoute("/403", "Forbidden", 403),
+  ...errorRoute("/404", "NotFound", 404),
+  ...errorRoute("/500", "InternalServerError", 500),
   {
     path: "/:catchAll(.*)",
     redirect: (to: RouteLocation) => catchAllRedirect(to.params.catchAll),

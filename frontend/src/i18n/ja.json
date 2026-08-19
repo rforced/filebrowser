@@ -87,6 +87,8 @@
     "internal": "内部エラーが発生しました。",
     "notFound": "リソースが見つかりませんでした。",
     "connection": "サーバーに接続できませんでした。",
+    "backToFiles": "マイファイルに戻る",
+    "backToShare": "共有フォルダーに戻る",
     "alreadyExists": "同じ名前のファイルまたはフォルダーが既に存在します。"
   },
   "files": {

@@ -87,6 +87,8 @@
     "internal": "Si è verificato un errore imprevisto.",
     "notFound": "Questo percorso non può essere raggiunto.",
     "connection": "Il server non è raggiungibile.",
+    "backToFiles": "Torna ai miei file",
+    "backToShare": "Torna alla cartella condivisa",
     "alreadyExists": "Esiste già un file o una cartella con questo nome."
   },
   "files": {

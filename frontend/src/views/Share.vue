@@ -46,7 +46,16 @@
         </div>
       </Card>
 
-      <errors v-else :errorCode="error.status" />
+      <errors v-else :errorCode="error.status">
+        <router-link
+          v-if="shareRoot"
+          :to="shareRoot"
+          class="btn btn-flex btn-blue btn-soft"
+        >
+          <i class="fa-solid fa-folder-open"></i>
+          <span>{{ t("errors.backToShare") }}</span>
+        </router-link>
+      </errors>
     </template>
 
     <template v-else-if="req !== null">
@@ -270,6 +279,11 @@ watch(route, () => {
 });
 
 const req = computed(() => fileStore.req);
+
+const shareRoot = computed(() => {
+  const parts = route.params.path;
+  return Array.isArray(parts) && parts.length > 1 ? `/share/${parts[0]}/` : "";
+});
 
 // Define computes
 

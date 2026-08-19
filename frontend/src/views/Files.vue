@@ -2,7 +2,25 @@
   <component :is="currentView" v-if="isFullBleed" />
 
   <main v-else class="flex flex-col gap-4 p-4">
-    <errors v-if="error" :errorCode="error.status" />
+    <template v-if="error">
+      <breadcrumbs base="/files">
+        <template #actions>
+          <IconAction
+            icon="fa-arrows-rotate"
+            :title="t('buttons.refresh')"
+            size="lg"
+            @action="refresh"
+          />
+        </template>
+      </breadcrumbs>
+
+      <errors :errorCode="error.status">
+        <router-link to="/files/" class="btn btn-flex btn-blue btn-soft">
+          <i class="fa-solid fa-folder-open"></i>
+          <span>{{ t("errors.backToFiles") }}</span>
+        </router-link>
+      </errors>
+    </template>
 
     <template v-else>
       <file-actions v-if="showSidebar" variant="rail" />

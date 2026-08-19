@@ -87,6 +87,8 @@
     "internal": "Da ist etwas schiefgelaufen.",
     "notFound": "Dieser Ort ist nicht erreichbar.",
     "connection": "Der Server ist nicht erreichbar.",
+    "backToFiles": "Zurück zu meinen Dateien",
+    "backToShare": "Zurück zum geteilten Ordner",
     "alreadyExists": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits."
   },
   "files": {

@@ -9,7 +9,7 @@
     class="sticky top-0 flex gap-3 md:gap-4 items-center justify-between bg-gray-200 dark:bg-gray-900 border-b border-transparent dark:border-gray-700 p-3 md:px-6 z-50"
   >
     <router-link
-      to="/files"
+      :to="brandTo"
       class="outline-hidden focus:ring-3 ring-offset-4 ring-offset-gray-200 dark:ring-offset-gray-900 rounded-xs shrink-0"
       :aria-label="name"
     >
@@ -88,7 +88,14 @@ const router = useRouter();
 const authStore = useAuthStore();
 const { isLoggedIn } = storeToRefs(authStore);
 
-// The button leads wherever you are not: out of settings, or into them.
+const brandTo = computed(() => {
+  if (isLoggedIn.value || !route.path.startsWith("/share/")) {
+    return "/files";
+  }
+  const hash = route.path.split("/")[2];
+  return hash ? `/share/${hash}/` : "/files";
+});
+
 const navAction = computed(() =>
   route.path.startsWith("/settings")
     ? { label: t("sidebar.myFiles"), icon: "fa-folder-open", to: "/files/" }

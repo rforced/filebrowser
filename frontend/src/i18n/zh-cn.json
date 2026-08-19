@@ -87,6 +87,8 @@
     "internal": "服务器内部错误。",
     "notFound": "该位置无法访问。",
     "connection": "无法连接服务器。",
+    "backToFiles": "返回我的文件",
+    "backToShare": "返回共享文件夹",
     "alreadyExists": "已存在同名的文件或文件夹。"
   },
   "files": {

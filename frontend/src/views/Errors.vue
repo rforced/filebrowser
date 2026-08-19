@@ -5,6 +5,7 @@
     >
       <i class="fa-solid text-4xl" :class="[info.icon, info.color]"></i>
       <div class="text-sm font-medium">{{ t(info.message) }}</div>
+      <slot />
     </div>
   </Card>
 </template>
@@ -41,16 +42,9 @@ const errors: {
   },
 };
 
-const props = withDefaults(
-  defineProps<{
-    errorCode?: number;
-    showHeader?: boolean;
-  }>(),
-  {
-    errorCode: 500,
-    showHeader: false,
-  }
-);
+const props = withDefaults(defineProps<{ errorCode?: number }>(), {
+  errorCode: 500,
+});
 
 const info = computed(() => {
   return errors[props.errorCode] ? errors[props.errorCode] : errors[500];

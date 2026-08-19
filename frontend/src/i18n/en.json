@@ -87,6 +87,8 @@
     "internal": "Something really went wrong.",
     "notFound": "This location can't be reached.",
     "connection": "The server can't be reached.",
+    "backToFiles": "Back to my files",
+    "backToShare": "Back to the shared folder",
     "alreadyExists": "A file or folder with this name already exists."
   },
   "files": {
