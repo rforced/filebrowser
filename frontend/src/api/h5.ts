@@ -192,7 +192,9 @@ export async function surface(
   if (opts.boundaries?.length) {
     params.set("boundaries", opts.boundaries.join(","));
   }
-  if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.limit && Number.isFinite(opts.limit)) {
+    params.set("limit", String(opts.limit));
+  }
   if (opts.edges) params.set("edges", "1");
 
   const res = await fetchURL(endpoint(path, `?${params}`), { signal });

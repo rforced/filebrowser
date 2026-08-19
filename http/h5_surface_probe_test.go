@@ -113,7 +113,7 @@ func TestH5SurfaceProbe(t *testing.T) {
 				h.Stride, h.Truncated, h.Skipped)
 			if h.Stride > 1 {
 				fmt.Printf("  WHOLE     ~%d triangles at stride 1, ceiling is %d\n",
-					h.Triangles*h.Stride, h5DefaultSurfaceTriangles)
+					h.Triangles*h.Stride, h5MaxSurfaceTriangles)
 			}
 		}
 		if tc.enc == "" && rec.Body.Len() > 1<<20 {

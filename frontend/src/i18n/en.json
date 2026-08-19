@@ -516,6 +516,7 @@
     "surfaceNoValues": "No usable {scalar} readings on this surface.",
     "surfaceStrided": "Showing 1 in every {n} faces of {total}.",
     "surfaceTooLarge": "This mesh is too large to draw.",
+    "surfaceTooLargeForStep": "This surface is too large to draw at this detail. Try a lower step.",
     "truncated": "Only the first variables are listed.",
     "type": "Type",
     "uniform": "Uniform",

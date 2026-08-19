@@ -3,19 +3,18 @@ import { createFrameCache } from "./frameCache";
 
 export type SurfaceResolution = "low" | "medium" | "high" | "ultra";
 
-// What one response may carry. The largest post file measured yields 787k
-// triangles, so high already leaves every case measured whole and ultra is for
-// the geometries past them — it sits at the server's own ceiling, since asking
-// above that is strided down all the same. Past a step's limit the server
-// strides the surface down and says so, which the legend then reports rather
-// than presenting a partial wall as the whole. Playback is bound by how fast
-// the response crosses the wire, so the lower steps are there to buy frames
-// with detail nobody can see at playback size.
+// The lower steps name a triangle budget and the server thins the surface to
+// fit it, reporting the stride so the legend can say the wall is partial. The
+// top step names none: it asks for the wetted surface as it is, and the server
+// draws it whole or refuses it outright, never halves it quietly. A measured
+// 2.2M-cell case runs to 8.5M triangles, well past what the lower steps carry.
+// Playback is bound by how fast the response crosses the wire, so the lower
+// steps are there to buy frames with detail nobody can see at playback size.
 export const SURFACE_TRIANGLE_LIMITS: Record<SurfaceResolution, number> = {
   low: 200_000,
   medium: 500_000,
   high: 2_000_000,
-  ultra: 5_000_000,
+  ultra: Infinity,
 };
 
 export const DEFAULT_SURFACE_RESOLUTION: SurfaceResolution = "high";

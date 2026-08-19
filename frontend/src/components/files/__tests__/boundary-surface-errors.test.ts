@@ -97,18 +97,24 @@ vi.mock("@/api/h5", () => ({ surface: (...a: any[]) => mockSurface(...a) }));
 import { clearSurfaceCache } from "@/utils/surfaceCache";
 import BoundarySurface from "../BoundarySurface.vue";
 
-function mountSurface() {
+function mountSurface(props: Record<string, any> = {}) {
   const i18n = createI18n({
     legacy: false,
     locale: "en",
     missingWarn: false,
     fallbackWarn: false,
     messages: {
-      en: { h5View: { surfaceTooLarge: "This mesh is too large to draw." } },
+      en: {
+        h5View: {
+          surfaceTooLarge: "This mesh is too large to draw.",
+          surfaceTooLargeForStep:
+            "This surface is too large to draw at this detail. Try a lower step.",
+        },
+      },
     },
   });
   return mount(BoundarySurface, {
-    props: { path: "/case/post000001.h5", stream: "STREAM_00" },
+    props: { path: "/case/post000001.h5", stream: "STREAM_00", ...props },
     global: { plugins: [i18n], directives: { tooltip: {} } },
   });
 }
@@ -120,17 +126,35 @@ describe("BoundarySurface errors", () => {
   });
 
   // The server sends no body with a 413, so the raw failure reads as the bare
-  // status line. A mesh the extractor refuses is a fact about the file, not a
-  // transport error, and the viewer says so.
-  it("explains a 413 instead of showing the bare status", async () => {
+  // status line. A surface the extractor refuses is a fact about the file, not
+  // a transport error, and the viewer says so.
+  //
+  // Above the lowest step the refusal is one a lower step may well answer, so
+  // it says which lever there is; at the lowest there is nothing to suggest.
+  it("explains a 413 and points at the detail step", async () => {
     const err: any = new Error("413 Request Entity Too Large");
     err.status = 413;
     mockSurface.mockRejectedValue(err);
 
-    const wrapper = mountSurface();
+    const wrapper = mountSurface({ resolution: "ultra" });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Try a lower step.");
+    expect(wrapper.text()).not.toContain("413");
+
+    wrapper.unmount();
+  });
+
+  it("stops suggesting a lower step once there is none", async () => {
+    const err: any = new Error("413 Request Entity Too Large");
+    err.status = 413;
+    mockSurface.mockRejectedValue(err);
+
+    const wrapper = mountSurface({ resolution: "low" });
     await flushPromises();
 
     expect(wrapper.text()).toContain("This mesh is too large to draw.");
+    expect(wrapper.text()).not.toContain("Try a lower step.");
     expect(wrapper.text()).not.toContain("413");
 
     wrapper.unmount();

@@ -504,7 +504,14 @@ const load = async () => {
     }
     error.value =
       e?.status === 413
-        ? t("h5View.surfaceTooLarge")
+        ? // The top step asks for the surface whole, so a refusal there is one
+          // a lower step may well answer. At the lowest there is nothing left
+          // to suggest, and the size is the file's rather than the setting's.
+          t(
+            props.resolution === "low"
+              ? "h5View.surfaceTooLarge"
+              : "h5View.surfaceTooLargeForStep"
+          )
         : (e?.message ?? String(e));
     emit("loaded", null);
   } finally {

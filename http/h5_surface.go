@@ -29,13 +29,29 @@ import (
 // boundary names attached. Verified exact across CONVERGE 4, 5 and 6 — the
 // negative count equals sum(BOUNDARIES/NUM_ELEMENTS) in every file measured.
 
-// h5DefaultSurfaceTriangles bounds one response, and is also the ceiling on
-// what a client may ask for, so the viewer's top step has to stay at or below
-// it — above, the surface is strided down anyway and the raised setting buys
-// nothing. The largest post file measured (CONVERGE 6, 225k cells) yields 787k
-// triangles from 425k boundary faces; the room past that is for the very large
-// geometries the top step exists to draw whole.
-const h5DefaultSurfaceTriangles = 5_000_000
+// h5MaxSurfaceTriangles is the most one response will carry. A client that
+// names a smaller budget is thinned to fit it; one that names none is drawn
+// whole, and past this it is refused rather than thinned.
+//
+// Refused rather than thinned because thinning is a bad trade at this size.
+// The stride drops whole faces, and on a measured 2.2M-cell case dropping half
+// of them shed only 9.6% of the vertices — the survivors still touch nearly
+// every one — so it gave up half the wall to save under a third of the wire.
+// What arrives is not a coarser surface but a holed one, which is worse than
+// being told the surface is too big to draw.
+//
+// Priced rather than guessed, because the number is a memory budget wearing a
+// geometry label. At this ceiling one response is ~206MB of positions and
+// indices, ~228MB carrying a scalar and ~323MB carrying edges as well — and
+// h5WriteSurface holds the packed buffer and the arrays it copies at the same
+// time, so peak is about twice that. A FileSystem box runs two extractions at
+// once. Raising it means paying that again: price it before moving it.
+//
+// The largest post file measured is 8.5M triangles from 4.5M boundary faces,
+// so this leaves a real case comfortably inside. It is a plain decimal because
+// it counts triangles, not bytes: 16 << 20 reads as sixteen million and is
+// 16,777,216, which is how it was set too high the first time.
+const h5MaxSurfaceTriangles = 12_000_000
 
 // h5MaxFaces caps the mesh whose face table the extractor will decode. Only
 // POLYGON_OFFSET and CONNECTED_CELLS are read whole — 24 bytes a face once
@@ -228,15 +244,11 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 		}
 	}
 
-	limit := h5DefaultSurfaceTriangles
-	if v := firstValue(query, "limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < limit {
-			limit = n
-		}
-	}
-	stride := 1
-	if trianglesTotal > limit && limit > 0 {
-		stride = (trianglesTotal + limit - 1) / limit
+	stride := h5SurfaceStride(trianglesTotal, firstValue(query, "limit"))
+	if drawnTriangles := trianglesTotal / stride; drawnTriangles > h5MaxSurfaceTriangles {
+		return http.StatusRequestEntityTooLarge,
+			fmt.Errorf("surface too large to draw: %d triangles from %d boundary faces",
+				drawnTriangles, facesTotal)
 	}
 
 	// Settling the stride here rather than inside the extractor means the faces
@@ -315,6 +327,22 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 		return h5Abandoned()
 	}
 	return h5WriteSurface(w, r, header, surface.Positions, surface.Indices, surface.Values, surface.Edges)
+}
+
+// h5SurfaceStride settles how far apart the drawn faces sit. A client that
+// names a triangle budget is thinned to fit it; one that names none is asking
+// for the surface as it is, and gets it whole however large — the top step
+// exists to be believed, and a wall quietly drawn at half its faces reads as a
+// broken viewer rather than as a setting.
+func h5SurfaceStride(trianglesTotal int, limit string) int {
+	if limit == "" || trianglesTotal < 1 {
+		return 1
+	}
+	n, err := strconv.Atoi(limit)
+	if err != nil || n < 1 || trianglesTotal <= n {
+		return 1
+	}
+	return (trianglesTotal + n - 1) / n
 }
 
 // h5DrawnFaces reduces each boundary to the faces that will actually be drawn
