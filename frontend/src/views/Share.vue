@@ -46,7 +46,7 @@
         </div>
       </Card>
 
-      <errors v-else :errorCode="error.status">
+      <errors v-else :errorCode="error.status" :message="errorMessage">
         <router-link
           v-if="shareRoot"
           :to="shareRoot"
@@ -284,6 +284,17 @@ const shareRoot = computed(() => {
   const parts = route.params.path;
   return Array.isArray(parts) && parts.length > 1 ? `/share/${parts[0]}/` : "";
 });
+
+// A missing share root is the share itself being gone, and the server answers
+// a revoked, expired and never-issued link identically — an expired one is
+// deleted the moment it is asked for — so the wording covers both without
+// claiming to know which. Deeper in, the share is fine and only the path
+// within it is not, which the generic wording already says.
+const errorMessage = computed(() =>
+  error.value?.status === 404 && !shareRoot.value
+    ? "errors.shareNotFound"
+    : undefined
+);
 
 // Define computes
 

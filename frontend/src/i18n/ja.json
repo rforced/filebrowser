@@ -86,6 +86,8 @@
     "forbidden": "これにアクセスする権限がありません。",
     "internal": "内部エラーが発生しました。",
     "notFound": "リソースが見つかりませんでした。",
+    "shareNotFound": "この共有は存在しないか、有効期限が切れています。",
+    "tooManyAttempts": "試行回数が多すぎます。1 分後にもう一度お試しください。",
     "connection": "サーバーに接続できませんでした。",
     "backToFiles": "マイファイルに戻る",
     "backToShare": "共有フォルダーに戻る",

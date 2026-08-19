@@ -89,6 +89,8 @@ function i18nPlugin() {
           forbidden: "You don't have permissions to access this.",
           internal: "Something really went wrong.",
           connection: "The server can't be reached.",
+          shareNotFound: "This share doesn't exist or has expired.",
+          tooManyAttempts: "Too many attempts. Try again in a minute.",
           backToFiles: "Back to my files",
           backToShare: "Back to the shared folder",
         },
@@ -248,9 +250,62 @@ describe("an unreachable location inside a share", () => {
     const wrapper = mountView(Share);
     await flushPromises();
 
-    expect(wrapper.text()).toContain("This location can't be reached.");
     expect(wrapper.text()).not.toContain("Back to the shared folder");
     expect(linkTargets(wrapper)).not.toContain("/files");
+
+    wrapper.unmount();
+  });
+
+  // Revoked, expired and never-issued all answer 404 — an expired link is
+  // deleted the moment it is asked for — so one wording has to cover them
+  // without claiming to know which, and without the generic file-browser
+  // phrasing that reads as though the share is merely unreachable right now.
+  it("names the share as gone rather than the location as unreachable", async () => {
+    shareParams.value = ["GONE"];
+    routePath.value = "/share/GONE";
+
+    const wrapper = mountView(Share);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "This share doesn't exist or has expired."
+    );
+    expect(wrapper.text()).not.toContain("This location can't be reached.");
+
+    wrapper.unmount();
+  });
+
+  // The share is fine here; only the path inside it is not. Saying the share
+  // has expired would send the visitor away from something that still works.
+  it("keeps the generic wording for a bad path inside a live share", async () => {
+    shareParams.value = ["ABC123", "deep", "missing"];
+    routePath.value = "/share/ABC123/deep/missing";
+
+    const wrapper = mountView(Share);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("This location can't be reached.");
+    expect(wrapper.text()).not.toContain("This share doesn't exist");
+
+    wrapper.unmount();
+  });
+
+  // The limiter is keyed per address and share, so this is reached by mistyping
+  // a password, not only by attacking one. Falling through to the 500 wording
+  // told that visitor the server had broken.
+  it("says to wait when the password attempts are rate limited", async () => {
+    shareParams.value = ["ABC123"];
+    routePath.value = "/share/ABC123";
+    mockPubFetch.mockReset();
+    mockPubFetch.mockRejectedValue(new StatusError("too many", 429));
+
+    const wrapper = mountView(Share);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(
+      "Too many attempts. Try again in a minute."
+    );
+    expect(wrapper.text()).not.toContain("Something really went wrong.");
 
     wrapper.unmount();
   });

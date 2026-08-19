@@ -86,6 +86,8 @@
     "forbidden": "Non hai i permessi per accedere a questo elemento.",
     "internal": "Si è verificato un errore imprevisto.",
     "notFound": "Questo percorso non può essere raggiunto.",
+    "shareNotFound": "Questa condivisione non esiste o è scaduta.",
+    "tooManyAttempts": "Troppi tentativi. Riprova tra un minuto.",
     "connection": "Il server non è raggiungibile.",
     "backToFiles": "Torna ai miei file",
     "backToShare": "Torna alla cartella condivisa",

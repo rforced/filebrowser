@@ -4,7 +4,7 @@
       class="flex flex-col items-center gap-3 text-center text-gray-600 dark:text-gray-300"
     >
       <i class="fa-solid text-4xl" :class="[info.icon, info.color]"></i>
-      <div class="text-sm font-medium">{{ t(info.message) }}</div>
+      <div class="text-sm font-medium">{{ t(message) }}</div>
       <slot />
     </div>
   </Card>
@@ -35,6 +35,14 @@ const errors: {
     message: "errors.notFound",
     color: "text-gray-500 dark:text-gray-400",
   },
+  // Share password attempts are rate limited per address. Without this the
+  // limiter's answer falls through to the 500 case, telling someone who simply
+  // mistyped a password that the server broke — and not that waiting fixes it.
+  429: {
+    icon: "fa-hourglass-half",
+    message: "errors.tooManyAttempts",
+    color: "text-amber-600 dark:text-amber-400",
+  },
   500: {
     icon: "fa-triangle-exclamation",
     message: "errors.internal",
@@ -42,11 +50,20 @@ const errors: {
   },
 };
 
-const props = withDefaults(defineProps<{ errorCode?: number }>(), {
-  errorCode: 500,
-});
+const props = withDefaults(
+  defineProps<{
+    errorCode?: number;
+    // Overrides the message for this status with a translation key of the
+    // caller's own, for a page that can say something more exact than the
+    // status alone allows.
+    message?: string;
+  }>(),
+  { errorCode: 500 }
+);
 
 const info = computed(() => {
   return errors[props.errorCode] ? errors[props.errorCode] : errors[500];
 });
+
+const message = computed(() => props.message || info.value.message);
 </script>

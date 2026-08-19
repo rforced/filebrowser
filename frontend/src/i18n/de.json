@@ -86,6 +86,8 @@
     "forbidden": "Du hast keine Berechtigung für diesen Zugriff.",
     "internal": "Da ist etwas schiefgelaufen.",
     "notFound": "Dieser Ort ist nicht erreichbar.",
+    "shareNotFound": "Diese Freigabe existiert nicht oder ist abgelaufen.",
+    "tooManyAttempts": "Zu viele Versuche. Versuchen Sie es in einer Minute erneut.",
     "connection": "Der Server ist nicht erreichbar.",
     "backToFiles": "Zurück zu meinen Dateien",
     "backToShare": "Zurück zum geteilten Ordner",

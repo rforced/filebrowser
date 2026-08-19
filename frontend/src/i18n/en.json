@@ -86,6 +86,8 @@
     "forbidden": "You don't have permissions to access this.",
     "internal": "Something really went wrong.",
     "notFound": "This location can't be reached.",
+    "shareNotFound": "This share doesn't exist or has expired.",
+    "tooManyAttempts": "Too many attempts. Try again in a minute.",
     "connection": "The server can't be reached.",
     "backToFiles": "Back to my files",
     "backToShare": "Back to the shared folder",
