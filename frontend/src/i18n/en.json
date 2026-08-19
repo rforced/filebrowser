@@ -515,6 +515,7 @@
     "surfaceEdgesHidden": "Edges are too dense to draw at this zoom.",
     "surfaceNoValues": "No usable {scalar} readings on this surface.",
     "surfaceStrided": "Showing 1 in every {n} faces of {total}.",
+    "surfaceTooLarge": "This mesh is too large to draw.",
     "truncated": "Only the first variables are listed.",
     "type": "Type",
     "uniform": "Uniform",

@@ -110,6 +110,54 @@ func (d *Dataset) Raw() ([]byte, error) {
 	return nil, fmt.Errorf("%w: layout class %d", ErrUnsupported, d.layout.class)
 }
 
+// RawRange returns the bytes of count elements starting at element index
+// start. A caller that needs a few spans of a large dataset pays only for the
+// spans, which is what keeps a boundary surface off the interior of the mesh.
+func (d *Dataset) RawRange(start, count uint64) ([]byte, error) {
+	if start > d.count || count > d.count-start {
+		return nil, fmt.Errorf("%w: %s range %d+%d of %d",
+			ErrNotHDF5, d.Name, start, count, d.count)
+	}
+	size := uint64(d.Type.Size)
+	if size == 0 {
+		return nil, fmt.Errorf("%w: %s has zero-width elements", ErrUnsupported, d.Name)
+	}
+	from, n := start*size, count*size
+
+	switch d.layout.class {
+	case layoutCompact:
+		if from+n > uint64(len(d.layout.compact)) {
+			return nil, fmt.Errorf("%w: %s truncated", ErrNotHDF5, d.Name)
+		}
+		return d.layout.compact[from : from+n], nil
+	case layoutContiguous:
+		if d.f.undefined(d.layout.addr) {
+			return make([]byte, n), nil
+		}
+		return d.f.readAt(d.layout.addr+from, int(n))
+	}
+	return nil, fmt.Errorf("%w: layout class %d", ErrUnsupported, d.layout.class)
+}
+
+// IntsRange decodes count integer elements starting at element index start.
+func (d *Dataset) IntsRange(start, count uint64) ([]int64, error) {
+	if d.Type.Class != ClassInt {
+		return nil, fmt.Errorf("%w: %s is %s", ErrUnsupported, d.Name, d.Type)
+	}
+	raw, err := d.RawRange(start, count)
+	if err != nil {
+		return nil, err
+	}
+	if uint64(len(raw)) < count*uint64(d.Type.Size) {
+		return nil, fmt.Errorf("%w: %s truncated", ErrNotHDF5, d.Name)
+	}
+	out := make([]int64, count)
+	for i := range out {
+		out[i] = d.Type.decodeInt(raw[i*d.Type.Size:])
+	}
+	return out, nil
+}
+
 // Floats decodes the dataset to float64, widening from whatever numeric type
 // it is stored as.
 func (d *Dataset) Floats() ([]float64, error) {

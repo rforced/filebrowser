@@ -502,7 +502,10 @@ const load = async () => {
     if (token !== loadToken || e?.name === "AbortError" || e?.is_canceled) {
       return;
     }
-    error.value = e?.message ?? String(e);
+    error.value =
+      e?.status === 413
+        ? t("h5View.surfaceTooLarge")
+        : (e?.message ?? String(e));
     emit("loaded", null);
   } finally {
     if (token === loadToken) loading.value = false;

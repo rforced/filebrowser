@@ -24,6 +24,12 @@ export const DEFAULT_SURFACE_RESOLUTION: SurfaceResolution = "high";
 // seconds to arrive, so playback trades it away and takes it back on pause.
 export const PLAYBACK_SURFACE_RESOLUTION: SurfaceResolution = "low";
 
+// The ceiling playback will honour whatever the user picked. A FileSystem box
+// is a handful of cores shared with the solver, and the top step asks it to
+// cut millions of triangles per frame for a viewer that shows each one for a
+// fraction of a second — so the step exists for a still, not for a sequence.
+export const PLAYBACK_MAX_RESOLUTION: SurfaceResolution = "high";
+
 export interface SurfaceRequest {
   stream: string;
   scalar?: string;

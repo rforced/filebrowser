@@ -34,11 +34,23 @@ import (
 // geometries the top step exists to draw whole.
 const h5DefaultSurfaceTriangles = 5_000_000
 
-// h5MaxConnectivity caps the connectivity arrays the extractor will decode.
-// Decoding widens the file's int32 storage to int64, so without a ceiling a
-// file far outside anything CONVERGE writes would be answered by exhausting
-// the box's memory instead of by an error.
-const h5MaxConnectivity = 64 << 20
+// h5MaxFaces caps the mesh whose face table the extractor will decode. Only
+// POLYGON_OFFSET and CONNECTED_CELLS are read whole — 24 bytes a face once
+// widened from the file's int32 storage — because both are indexed by face and
+// the boundary faces are not known until they have been scanned.
+const h5MaxFaces = 32 << 20
+
+// h5MaxSurfaceConnectivity caps the face vertices actually decoded, which are
+// the drawn boundary faces alone. It bounds the wetted surface a request may
+// ask for rather than the mesh it was cut from: the interior dwarfs the
+// boundary on any real case, and none of it reaches the browser.
+const h5MaxSurfaceConnectivity = 64 << 20
+
+// h5PolyReadSpan is how far apart two faces' vertex runs may sit before they
+// are fetched separately. Boundary faces are scattered through the face table,
+// so coalescing turns their runs into a handful of reads while still skipping
+// the interior spans between them.
+const h5PolyReadSpan = 1 << 20
 
 // h5SurfaceMagic identifies the binary framing below. The payload is a few
 // megabytes of positions and indices — as JSON the largest measured case would
@@ -125,21 +137,33 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 		return http.StatusNotFound, err
 	}
 
-	offsets, err := h5Ints(f, stream+"/CONNECTIVITY/POLYGON_OFFSET")
+	offsetsDS, err := f.Dataset(stream + "/CONNECTIVITY/POLYGON_OFFSET")
 	if err != nil {
 		return http.StatusNotFound, fmt.Errorf("%s carries no face connectivity: %w", stream, err)
 	}
-	polyToVertex, err := h5Ints(f, stream+"/CONNECTIVITY/POLYGON_TO_VERTEX")
+	polyDS, err := f.Dataset(stream + "/CONNECTIVITY/POLYGON_TO_VERTEX")
 	if err != nil {
 		return http.StatusNotFound, err
 	}
-	connected, err := h5Ints(f, stream+"/CONNECTIVITY/CONNECTED_CELLS")
+	connDS, err := f.Dataset(stream + "/CONNECTIVITY/CONNECTED_CELLS")
 	if err != nil {
 		return http.StatusNotFound, err
 	}
-	if len(polyToVertex) > h5MaxConnectivity || len(offsets) > h5MaxConnectivity {
+	// Priced from the headers, before a byte of any of them is decoded: the
+	// arrays below widen to int64 on the way in, so a check made after the read
+	// would be reporting a mesh the box had already made room for.
+	if offsetsDS.Len() > h5MaxFaces+1 {
 		return http.StatusRequestEntityTooLarge,
-			fmt.Errorf("mesh too large to extract: %d faces, %d face vertices", len(offsets)-1, len(polyToVertex))
+			fmt.Errorf("mesh too large to extract: %d faces", offsetsDS.Len()-1)
+	}
+
+	offsets, err := offsetsDS.Ints()
+	if err != nil {
+		return http.StatusNotFound, err
+	}
+	connected, err := connDS.Ints()
+	if err != nil {
+		return http.StatusNotFound, err
 	}
 	if ctx.Err() != nil {
 		return h5Abandoned()
@@ -212,6 +236,29 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 		stride = (trianglesTotal + limit - 1) / limit
 	}
 
+	// Settling the stride here rather than inside the extractor means the faces
+	// the stride drops are never fetched: at the top step of a large geometry
+	// that is most of the boundary, and all of it would otherwise be read only
+	// to be stepped over.
+	drawn := h5DrawnFaces(offsets, ids, byBoundary, stride, int64(polyDS.Len()))
+	starts, total := h5CompactOffsets(offsets, drawn)
+	if total > h5MaxSurfaceConnectivity {
+		return http.StatusRequestEntityTooLarge,
+			fmt.Errorf("surface too large to extract: %d faces, %d face vertices",
+				len(drawn), total)
+	}
+
+	polyToVertex, err := h5ReadFaceVertices(ctx, polyDS, offsets, drawn, total)
+	if err != nil {
+		if ctx.Err() != nil {
+			return h5Abandoned()
+		}
+		return http.StatusNotFound, err
+	}
+	// The runs are concatenated in face order, so the face table can be
+	// restated over them in place; every face left in byBoundary is drawn.
+	h5RebaseOffsets(offsets, drawn, starts, total)
+
 	scalar := firstValue(query, "scalar")
 	var cellValues []float64
 	if scalar != "" {
@@ -229,7 +276,7 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 		IDs:        ids,
 		ByBoundary: byBoundary,
 		CellValues: cellValues,
-		Stride:     stride,
+		Stride:     1,
 		WithEdges:  edges == "1" || edges == "true",
 	})
 	if err != nil {
@@ -265,6 +312,105 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 		return h5Abandoned()
 	}
 	return h5WriteSurface(w, r, header, surface.Positions, surface.Indices, surface.Values, surface.Edges)
+}
+
+// h5DrawnFaces reduces each boundary to the faces that will actually be drawn
+// — the stride's survivors, minus any whose vertex run the file does not back
+// — and returns them all in ascending face order. byBoundary is narrowed to
+// match, so what the extractor walks and what was fetched cannot drift apart.
+func h5DrawnFaces(offsets []int64, ids []int64, byBoundary map[int64][]int32, stride int, polyLen int64) []int32 {
+	drawn := make([]int32, 0, 1024)
+	for _, id := range ids {
+		faces := byBoundary[id]
+		kept := faces[:0]
+		for k, face := range faces {
+			if stride > 1 && k%stride != 0 {
+				continue
+			}
+			if int(face)+1 >= len(offsets) {
+				continue
+			}
+			start, end := offsets[face], offsets[face+1]
+			if start < 0 || end < start || end > polyLen {
+				continue
+			}
+			kept = append(kept, face)
+		}
+		byBoundary[id] = kept
+		drawn = append(drawn, kept...)
+	}
+	sort.Slice(drawn, func(i, j int) bool { return drawn[i] < drawn[j] })
+	return drawn
+}
+
+// h5CompactOffsets gives each drawn face its start in the concatenated run,
+// and the total length of them all.
+func h5CompactOffsets(offsets []int64, drawn []int32) ([]int64, int64) {
+	starts := make([]int64, len(drawn))
+	total := int64(0)
+	for i, face := range drawn {
+		starts[i] = total
+		// h5DrawnFaces has already dropped the inverted runs; clamping here
+		// keeps the pricing total whatever it is handed, since a negative one
+		// would be a capacity the allocator panics on.
+		if n := offsets[face+1] - offsets[face]; n > 0 {
+			total += n
+		}
+	}
+	return starts, total
+}
+
+// h5ReadFaceVertices fetches the vertex runs of the drawn faces and returns
+// them concatenated in face order.
+func h5ReadFaceVertices(ctx context.Context, ds *hdf5.Dataset, offsets []int64, drawn []int32, total int64) ([]int64, error) {
+	out := make([]int64, 0, total)
+	for i := 0; i < len(drawn); {
+		start := offsets[drawn[i]]
+		end := offsets[drawn[i]+1]
+		// A well-formed table runs ascending, but nothing read off disk is
+		// owed that, so the batch closes on anything that would reach outside
+		// the block it is about to fetch.
+		j := i + 1
+		for j < len(drawn) {
+			s, e := offsets[drawn[j]], offsets[drawn[j]+1]
+			if s < start || e-start > h5PolyReadSpan {
+				break
+			}
+			if e > end {
+				end = e
+			}
+			j++
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		block, err := ds.IntsRange(uint64(start), uint64(end-start))
+		if err != nil {
+			return nil, err
+		}
+		for k := i; k < j; k++ {
+			s, e := offsets[drawn[k]], offsets[drawn[k]+1]
+			if e <= s {
+				continue
+			}
+			out = append(out, block[s-start:e-start]...)
+		}
+		i = j
+	}
+	return out, nil
+}
+
+// h5RebaseOffsets restates the face table over the concatenated runs. Only the
+// drawn faces are given meaningful bounds; nothing else is read from it.
+func h5RebaseOffsets(offsets []int64, drawn []int32, starts []int64, total int64) {
+	for i, face := range drawn {
+		end := total
+		if i+1 < len(drawn) {
+			end = starts[i+1]
+		}
+		offsets[face] = starts[i]
+		offsets[face+1] = end
+	}
 }
 
 type h5SurfaceInput struct {
@@ -624,14 +770,6 @@ func h5FaceSize(offsets []int64, face int) int {
 
 func h5Finite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
-}
-
-func h5Ints(f *hdf5.File, path string) ([]int64, error) {
-	ds, err := f.Dataset(path)
-	if err != nil {
-		return nil, err
-	}
-	return ds.Ints()
 }
 
 func h5VertexCoords(f *hdf5.File, stream string) (xs, ys, zs []float64, err error) {

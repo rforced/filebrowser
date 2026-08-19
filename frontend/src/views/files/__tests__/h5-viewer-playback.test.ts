@@ -113,6 +113,11 @@ function mountViewer() {
           variables: "Variables",
           playbackCapped:
             "Playback stopped after {minutes} minutes. Press play to carry on.",
+          resolution: "Detail",
+          resLow: "Low",
+          resMedium: "Medium",
+          resHigh: "High",
+          resUltra: "Ultra",
         },
         buttons: { play: "Play", pause: "Pause" },
       },
@@ -259,6 +264,76 @@ describe("H5Viewer playback cap", () => {
 
     expect(playButton(wrapper)!.attributes("aria-label")).toBe("Pause");
     expect(wrapper.text()).not.toContain("Playback stopped");
+
+    wrapper.unmount();
+  });
+});
+
+describe("H5Viewer playback resolution cap", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    mockSummary.mockReset();
+    mockFetch.mockReset();
+    mockSurface.mockReset();
+    mockSummary.mockResolvedValue(postSummary);
+    mockFetch.mockResolvedValue(frameListing);
+    mockSurface.mockResolvedValue({
+      positions: new Float32Array(new ArrayBuffer(64)),
+    });
+    clearSurfaceCache();
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "Date", "performance"],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // A step the user picked used to survive into playback, so a FileSystem box
+  // could be asked to cut five million triangles a frame for a viewer showing
+  // each one for a second.
+  it("drops a hand-picked ultra step when playback starts", async () => {
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+
+    const wrapper = mountViewer();
+    await flushPromises();
+    await openSurfaceTab(wrapper);
+
+    const select = wrapper.find('select[aria-label="Detail"]');
+    expect(select.exists(), "detail control should be on screen").toBe(true);
+    await select.setValue("ultra");
+    expect((select.element as HTMLSelectElement).value).toBe("ultra");
+
+    await playButton(wrapper)!.trigger("click");
+    await flushPromises();
+
+    expect((select.element as HTMLSelectElement).value).toBe("high");
+    const ultra = select
+      .findAll("option")
+      .find((o: any) => o.text() === "Ultra");
+    expect(ultra!.attributes("disabled")).toBeDefined();
+
+    wrapper.unmount();
+  });
+
+  // Below the ceiling the choice is still the user's, and playback leaves it be
+  // rather than forcing the low step on someone who asked for more.
+  it("leaves a step inside the ceiling alone", async () => {
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+
+    const wrapper = mountViewer();
+    await flushPromises();
+    await openSurfaceTab(wrapper);
+
+    const select = wrapper.find('select[aria-label="Detail"]');
+    await select.setValue("medium");
+    await playButton(wrapper)!.trigger("click");
+    await flushPromises();
+
+    expect((select.element as HTMLSelectElement).value).toBe("medium");
 
     wrapper.unmount();
   });

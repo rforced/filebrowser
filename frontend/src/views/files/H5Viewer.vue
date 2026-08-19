@@ -333,10 +333,18 @@
               class="form-control py-1 text-sm w-auto"
               :aria-label="t('h5View.resolution')"
             >
-              <option value="low">{{ t("h5View.resLow") }}</option>
-              <option value="medium">{{ t("h5View.resMedium") }}</option>
-              <option value="high">{{ t("h5View.resHigh") }}</option>
-              <option value="ultra">{{ t("h5View.resUltra") }}</option>
+              <option value="low" :disabled="stepDisabled('low')">
+                {{ t("h5View.resLow") }}
+              </option>
+              <option value="medium" :disabled="stepDisabled('medium')">
+                {{ t("h5View.resMedium") }}
+              </option>
+              <option value="high" :disabled="stepDisabled('high')">
+                {{ t("h5View.resHigh") }}
+              </option>
+              <option value="ultra" :disabled="stepDisabled('ultra')">
+                {{ t("h5View.resUltra") }}
+              </option>
             </select>
 
             <div
@@ -559,8 +567,10 @@ import { clearParcelCache, prefetchParcels } from "@/utils/parcelCache";
 import {
   clearSurfaceCache,
   DEFAULT_SURFACE_RESOLUTION,
+  PLAYBACK_MAX_RESOLUTION,
   PLAYBACK_SURFACE_RESOLUTION,
   prefetchSurface,
+  SURFACE_TRIANGLE_LIMITS,
   type SurfaceResolution,
 } from "@/utils/surfaceCache";
 import url from "@/utils/url";
@@ -595,6 +605,15 @@ const PLAYBACK_MAX_MS = PLAYBACK_MAX_MINUTES * 60_000;
 // so the menu says what is being drawn — and once the choice is the user's,
 // playback never takes it back.
 let resolutionChosen = false;
+
+// The steps past the playback ceiling are the ones a sequence cannot afford,
+// whoever picked them. They grey out while the player runs rather than
+// disappearing, so the menu still shows what the still was drawn at.
+const abovePlaybackCap = (step: SurfaceResolution) =>
+  SURFACE_TRIANGLE_LIMITS[step] >
+  SURFACE_TRIANGLE_LIMITS[PLAYBACK_MAX_RESOLUTION];
+const stepDisabled = (step: SurfaceResolution) =>
+  playing.value && abovePlaybackCap(step);
 const surfaceOpened = ref(false);
 const surfaceBoundaries = ref<SurfaceBoundaryInfo[]>([]);
 const hiddenBoundaries = ref<Set<number>>(new Set());
@@ -899,6 +918,8 @@ const play = () => {
   if (!resolutionChosen) {
     resolutionChosen = true;
     surfaceResolution.value = PLAYBACK_SURFACE_RESOLUTION;
+  } else if (abovePlaybackCap(surfaceResolution.value)) {
+    surfaceResolution.value = PLAYBACK_MAX_RESOLUTION;
   }
   playing.value = true;
   playbackCapped.value = false;
