@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mount, RouterLinkStub } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
 
@@ -56,8 +56,12 @@ import { useAuthStore } from "@/stores/auth";
 
 import AppFooter from "../AppFooter.vue";
 import AppHeader from "../AppHeader.vue";
+import FileActions from "@/components/files/FileActions.vue";
 
-function mountChrome(component: unknown, { loggedIn = false } = {}) {
+function mountChrome(
+  component: unknown,
+  { loggedIn = false, props = {} } = {}
+) {
   const i18n = createI18n({
     legacy: false,
     locale: "en",
@@ -74,13 +78,19 @@ function mountChrome(component: unknown, { loggedIn = false } = {}) {
   }
 
   return mount(component as never, {
+    props,
     global: {
       plugins: [i18n, pinia],
-      stubs: { Search: true, ThemeSwitch: true, RouterLink: true },
+      stubs: { Search: true, ThemeSwitch: true, RouterLink: RouterLinkStub },
       directives: { tooltip: {} },
     },
   });
 }
+
+const settingsLink = (wrapper: ReturnType<typeof mountChrome>) =>
+  wrapper
+    .findAllComponents(RouterLinkStub)
+    .filter((link) => link.props("to") === "/settings/profile");
 
 describe("embedded chrome", () => {
   beforeEach(() => {
@@ -96,15 +106,13 @@ describe("embedded chrome", () => {
     expect(mountChrome(AppFooter).find("footer").exists()).toBe(false);
   });
 
-  it("shows the brand link standalone and drops it when embedded", () => {
-    const brand = '[aria-label="Test Manager"]';
-
-    expect(mountChrome(AppHeader).find(brand).exists()).toBe(true);
+  it("shows the header standalone and drops it whole when embedded", () => {
+    const standalone = mountChrome(AppHeader);
+    expect(standalone.find("header").exists()).toBe(true);
+    expect(standalone.find('[aria-label="Test Manager"]').exists()).toBe(true);
 
     state.embedded = true;
-    const embedded = mountChrome(AppHeader);
-    expect(embedded.find(brand).exists()).toBe(false);
-    expect(embedded.find("header").exists()).toBe(true);
+    expect(mountChrome(AppHeader).find("header").exists()).toBe(false);
   });
 
   it("points the header action at settings, and back at the files once there", async () => {
@@ -120,5 +128,29 @@ describe("embedded chrome", () => {
     expect(inSettings.find("i.fa-gear").exists()).toBe(false);
     await inSettings.get("i.fa-folder-open").trigger("click");
     expect(push).toHaveBeenCalledWith({ path: "/files/" });
+  });
+
+  it("adds settings to the sidebar stack only when embedded", () => {
+    expect(
+      settingsLink(mountChrome(FileActions, { loggedIn: true })).length
+    ).toBe(0);
+
+    state.embedded = true;
+    const embedded = settingsLink(mountChrome(FileActions, { loggedIn: true }));
+    expect(embedded.length).toBe(1);
+    expect(embedded[0].find("i.fa-gear").exists()).toBe(true);
+  });
+
+  it("adds settings to the mobile rail only when embedded", () => {
+    const props = { variant: "rail" as const };
+
+    expect(
+      settingsLink(mountChrome(FileActions, { loggedIn: true, props })).length
+    ).toBe(0);
+
+    state.embedded = true;
+    expect(
+      settingsLink(mountChrome(FileActions, { loggedIn: true, props })).length
+    ).toBe(1);
   });
 });

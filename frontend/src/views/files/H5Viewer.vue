@@ -365,84 +365,22 @@
         <!-- Playback over the sibling post files of this run: the same
              transport as the Catalyst image player, but every frame is a
              fresh surface (AMR remeshes between outputs). -->
-        <div
+        <FramePlayer
           v-if="frames.length > 1"
-          class="flex items-center gap-2 px-3 md:px-6 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0"
-        >
-          <button
-            v-tooltip="t('h5View.prevFrame')"
-            type="button"
-            class="action disabled:opacity-40"
-            :aria-label="t('h5View.prevFrame')"
-            :disabled="frameIndex === 0"
-            @click="stepFrame(-1)"
-          >
-            <i class="fa-solid fa-backward-step"></i>
-          </button>
-          <button
-            type="button"
-            class="action"
-            :aria-label="playing ? t('buttons.pause') : t('buttons.play')"
-            @click="togglePlay"
-          >
-            <i class="fa-solid" :class="playing ? 'fa-pause' : 'fa-play'"></i>
-          </button>
-          <button
-            v-tooltip="t('h5View.nextFrame')"
-            type="button"
-            class="action disabled:opacity-40"
-            :aria-label="t('h5View.nextFrame')"
-            :disabled="frameIndex >= frames.length - 1"
-            @click="stepFrame(1)"
-          >
-            <i class="fa-solid fa-forward-step"></i>
-          </button>
-
-          <input
-            type="range"
-            class="flex-1 min-w-24 accent-blue-500"
-            :min="0"
-            :max="frames.length - 1"
-            :value="frameIndex"
-            :aria-label="t('h5View.frame')"
-            @input="onScrub"
-          />
-
-          <span
-            class="text-xs tabular-nums text-gray-600 dark:text-gray-300 shrink-0"
-          >
-            {{ frameCaption }}
-          </span>
-
-          <select
-            v-model.number="fps"
-            class="form-control py-0.5 text-xs w-auto"
-            :aria-label="t('h5View.playbackSpeed')"
-          >
-            <option v-for="rate in [2, 5, 10]" :key="rate" :value="rate">
-              {{ t("sequence.speed", { fps: rate }) }}
-            </option>
-          </select>
-
-          <button
-            v-if="surfaceScalar && lockedRange"
-            v-tooltip="t('h5View.rescale')"
-            type="button"
-            class="action"
-            :aria-label="t('h5View.rescale')"
-            @click="rescaleRange"
-          >
-            <i class="fa-solid fa-arrows-left-right"></i>
-          </button>
-        </div>
-
-        <div
-          v-if="playbackCapped"
-          class="flex items-center gap-1.5 px-3 md:px-6 py-1.5 border-b border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950 text-xs text-amber-800 dark:text-amber-200 shrink-0"
-        >
-          <i class="fa-solid fa-circle-pause"></i>
-          {{ t("h5View.playbackCapped", { minutes: PLAYBACK_MAX_MINUTES }) }}
-        </div>
+          :playing="playing"
+          :frame-index="frameIndex"
+          :total="frames.length"
+          :caption="frameCaption"
+          :fps="fps"
+          :can-rescale="!!(surfaceScalar && lockedRange)"
+          :capped="playbackCapped"
+          :capped-minutes="PLAYBACK_MAX_MINUTES"
+          @toggle="togglePlay"
+          @step="stepFrame"
+          @scrub="onScrub"
+          @update:fps="fps = $event"
+          @rescale="rescaleRange"
+        />
 
         <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
           <!-- Mounted on first use and kept: the surface is megabytes of
@@ -450,7 +388,7 @@
           <BoundarySurface
             v-if="surfaceOpened && surfaceStream"
             ref="surfaceView"
-            :path="surfacePath"
+            :path="surfaceShown"
             :stream="surfaceStream"
             :scalar="surfaceScalar || undefined"
             :representation="surfaceRepresentation"
@@ -497,13 +435,34 @@
           </select>
         </div>
 
+        <!-- The spray develops output by output, so the same transport plays
+             the parcel cloud through the run. -->
+        <FramePlayer
+          v-if="frames.length > 1"
+          :playing="playing"
+          :frame-index="frameIndex"
+          :total="frames.length"
+          :caption="frameCaption"
+          :fps="fps"
+          :can-rescale="!!(parcelScalar && parcelLockedRange)"
+          :capped="playbackCapped"
+          :capped-minutes="PLAYBACK_MAX_MINUTES"
+          @toggle="togglePlay"
+          @step="stepFrame"
+          @scrub="onScrub"
+          @update:fps="fps = $event"
+          @rescale="rescaleRange"
+        />
+
         <div class="flex-1 min-h-0 bg-gray-800 dark:bg-gray-950">
           <ParcelCloud
             v-if="parcelGroup"
             :key="parcelGroup"
-            :path="path"
+            :path="parcelShown"
             :group="parcelGroup"
             :scalar="parcelScalar || undefined"
+            :range="parcelLockedRange"
+            @loaded="onParcelLoaded"
           />
         </div>
       </section>
@@ -543,7 +502,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  watchEffect,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
@@ -552,6 +518,7 @@ import * as h5 from "@/api/h5";
 import { useAuthStore } from "@/stores/auth";
 import { useFileStore } from "@/stores/file";
 import BoundarySurface from "@/components/files/BoundarySurface.vue";
+import FramePlayer from "@/components/files/FramePlayer.vue";
 import ParcelCloud from "@/components/files/ParcelCloud.vue";
 import {
   divergenceOf,
@@ -563,6 +530,7 @@ import {
   type OutputPoint,
 } from "@/utils/convergeH5";
 import type { SurfaceBoundaryInfo } from "@/utils/convergeSurface";
+import { clearParcelCache, prefetchParcels } from "@/utils/parcelCache";
 import {
   clearSurfaceCache,
   DEFAULT_SURFACE_RESOLUTION,
@@ -616,7 +584,9 @@ const playing = ref(false);
 const fps = ref(5);
 const playbackCapped = ref(false);
 const lockedRange = ref<[number, number] | null>(null);
+const parcelLockedRange = ref<[number, number] | null>(null);
 let lastRange: [number, number] | null = null;
+let lastParcelRange: [number, number] | null = null;
 let playTimer = 0;
 let scrubTimer = 0;
 let frameShownAt = 0;
@@ -628,6 +598,22 @@ let controller: AbortController | null = null;
 const path = computed(() => fileStore.req?.path ?? "");
 
 const surfacePath = computed(() => shownFrame.value || path.value);
+
+// Only the visible 3D view follows the player; the hidden one would otherwise
+// stream every frame too. It stays frozen where it was and catches up the
+// moment its tab is opened.
+const surfaceShown = ref("");
+const parcelShown = ref("");
+watchEffect(() => {
+  if (activeTab.value === "surface" || !shownFrame.value) {
+    surfaceShown.value = surfacePath.value;
+  }
+});
+watchEffect(() => {
+  if (activeTab.value === "parcels" || !shownFrame.value) {
+    parcelShown.value = surfacePath.value;
+  }
+});
 
 const downloadUrl = computed(() =>
   fileStore.req ? api.files.getDownloadURL(fileStore.req, false) : ""
@@ -846,10 +832,13 @@ const showFrame = (index: number) => {
   const clamped = Math.max(0, Math.min(index, frames.value.length - 1));
   const frame = frames.value[clamped];
   if (!frame) return;
-  // Lock the ramp to the range in effect when the sequence starts moving, so
-  // the colours keep one meaning instead of re-normalising every frame.
+  // Lock the ramps to the ranges in effect when the sequence starts moving,
+  // so the colours keep one meaning instead of re-normalising every frame.
   if (surfaceScalar.value && !lockedRange.value && lastRange) {
     lockedRange.value = lastRange;
+  }
+  if (parcelScalar.value && !parcelLockedRange.value && lastParcelRange) {
+    parcelLockedRange.value = lastParcelRange;
   }
   frameIndex.value = clamped;
   shownFrame.value = frameResourcePath(frame.name);
@@ -914,9 +903,9 @@ const stepFrame = (delta: number) => {
   showFrame(frameIndex.value + delta);
 };
 
-const onScrub = (event: Event) => {
+const onScrub = (index: number) => {
   stopPlayback();
-  frameIndex.value = Number((event.target as HTMLInputElement).value);
+  frameIndex.value = index;
   // Committing every tick of a drag would fire a fetch per notch; the label
   // tracks the thumb and the frame follows once it settles.
   window.clearTimeout(scrubTimer);
@@ -924,23 +913,42 @@ const onScrub = (event: Event) => {
 };
 
 const rescaleRange = () => {
-  if (lastRange) lockedRange.value = [lastRange[0], lastRange[1]];
+  if (activeTab.value === "parcels") {
+    if (lastParcelRange) {
+      parcelLockedRange.value = [lastParcelRange[0], lastParcelRange[1]];
+    }
+  } else if (lastRange) {
+    lockedRange.value = [lastRange[0], lastRange[1]];
+  }
+};
+
+const prefetchNext = () => {
+  if (!shownFrame.value || frames.value.length < 2) return;
+  const next = frames.value[(frameIndex.value + 1) % frames.value.length];
+  if (!next) return;
+  if (activeTab.value === "parcels") {
+    if (parcelGroup.value) {
+      prefetchParcels(frameResourcePath(next.name), {
+        group: parcelGroup.value,
+        scalar: parcelScalar.value || undefined,
+      });
+    }
+  } else {
+    prefetchSurface(frameResourcePath(next.name), surfaceRequest());
+  }
 };
 
 // Paces playback: the next frame is scheduled only once the current one is on
 // screen, so the fps setting is a ceiling and a slow network simply plays
-// slower instead of piling up requests.
-const onSurfaceLoaded = (range: [number, number] | null) => {
-  lastRange = range;
-  if (range === null) {
+// slower instead of piling up requests. Only the visible view drives the
+// transport — a frozen view catching up must not schedule anything.
+const paceFrame = (ok: boolean) => {
+  if (!ok) {
     stopPlayback();
     return;
   }
 
-  if (shownFrame.value && frames.value.length > 1) {
-    const next = frames.value[(frameIndex.value + 1) % frames.value.length];
-    if (next) prefetchSurface(frameResourcePath(next.name), surfaceRequest());
-  }
+  prefetchNext();
 
   if (playing.value) {
     const wait = Math.max(
@@ -951,9 +959,19 @@ const onSurfaceLoaded = (range: [number, number] | null) => {
     playTimer = window.setTimeout(advance, wait);
   } else {
     // A step or scrub landed: let the rest of the viewer (facts, variables,
-    // deep link) catch up with what the surface is showing.
+    // deep link) catch up with what the view is showing.
     syncFrameRoute();
   }
+};
+
+const onSurfaceLoaded = (range: [number, number] | null) => {
+  lastRange = range;
+  if (activeTab.value === "surface") paceFrame(range !== null);
+};
+
+const onParcelLoaded = (range: [number, number] | null) => {
+  lastParcelRange = range;
+  if (activeTab.value === "parcels") paceFrame(range !== null);
 };
 
 const toggleBoundary = (id: number) => {
@@ -1075,6 +1093,8 @@ const load = async () => {
     framesDir = "";
     lockedRange.value = null;
     lastRange = null;
+    parcelLockedRange.value = null;
+    lastParcelRange = null;
   }
   error.value = "";
   statsError.value = "";
@@ -1087,7 +1107,7 @@ const load = async () => {
     const first = parcelGroups.value.find((g) => g.hasCoords && g.count > 0);
     parcelGroup.value = first?.path ?? "";
     parcelScalar.value = parcelScalars.value.includes("TEMP") ? "TEMP" : "";
-    if (surfaceOpened.value) loadFrames();
+    if (surfaceOpened.value || activeTab.value === "parcels") loadFrames();
   } catch (e: any) {
     if (e?.name === "AbortError") return;
     error.value =
@@ -1106,7 +1126,12 @@ const keyEvent = (event: KeyboardEvent) => {
     close();
     return;
   }
-  if (activeTab.value !== "surface" || frames.value.length < 2) return;
+  if (
+    (activeTab.value !== "surface" && activeTab.value !== "parcels") ||
+    frames.value.length < 2
+  ) {
+    return;
+  }
   const target = event.target as HTMLElement | null;
   if (
     target &&
@@ -1134,6 +1159,8 @@ watch(activeTab, (tab) => {
   if (tab === "surface") {
     surfaceOpened.value = true;
     loadFrames();
+  } else if (tab === "parcels") {
+    loadFrames();
   }
 });
 
@@ -1147,6 +1174,9 @@ watch(surfaceResolution, () => {
 // colour it with another quantity's scale.
 watch(surfaceScalar, () => {
   lockedRange.value = null;
+});
+watch(parcelScalar, () => {
+  parcelLockedRange.value = null;
 });
 
 // A field the new file does not carry would be a 404 where the wall should be.
@@ -1189,5 +1219,6 @@ onBeforeUnmount(() => {
   // The frames a session cached are only worth their memory while the viewer
   // that fetched them is on screen.
   clearSurfaceCache();
+  clearParcelCache();
 });
 </script>

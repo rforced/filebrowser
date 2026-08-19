@@ -45,6 +45,9 @@
         </template>
 
         <template #sidebar>
+          <Card v-if="embedded" class="p-3">
+            <search />
+          </Card>
           <storage-card v-if="!disableUsedPercentage" />
           <file-actions variant="stack" />
           <HelpBox v-if="domain" />
@@ -106,6 +109,7 @@ import { useFileStore } from "@/stores/file";
 import { useLayoutStore } from "@/stores/layout";
 import { StatusError } from "@/api/utils";
 import { name, disableUsedPercentage, domain } from "@/utils/constants";
+import { embedded } from "@/utils/embedded";
 import { isOutFileName } from "@/utils/convergeOut";
 import { isSurfaceDatFile } from "@/utils/convergeSurface";
 import { isH5FileName } from "@/utils/convergeH5";
@@ -113,6 +117,7 @@ import { isLogFileName } from "@/utils/logTail";
 import { useFileActions } from "@/composables/useFileActions";
 
 import Breadcrumbs from "@/components/Breadcrumbs.vue";
+import Search from "@/components/Search.vue";
 import Errors from "@/views/Errors.vue";
 import FileListing from "@/views/files/FileListing.vue";
 import TwoColumns from "@/components/layout/TwoColumns.vue";

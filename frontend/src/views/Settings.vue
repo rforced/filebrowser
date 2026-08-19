@@ -14,6 +14,16 @@
       >
         {{ tab.label }}
       </router-link>
+
+      <!-- Embedded there is no header to go back from, so the way out is here. -->
+      <router-link
+        v-if="embedded"
+        to="/files/"
+        class="btn btn-flex btn-gray btn-soft whitespace-nowrap ml-auto self-center"
+      >
+        <i class="fa-solid fa-folder-open"></i>
+        <span>{{ t("sidebar.myFiles") }}</span>
+      </router-link>
     </nav>
 
     <Card v-if="loading" class="p-10">
@@ -38,6 +48,7 @@ import { useRoute } from "vue-router";
 
 import { useAuthStore } from "@/stores/auth";
 import { useLayoutStore } from "@/stores/layout";
+import { embedded } from "@/utils/embedded";
 import Card from "@/components/ui/Card.vue";
 
 const { t } = useI18n();

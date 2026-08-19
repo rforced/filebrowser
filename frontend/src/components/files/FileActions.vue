@@ -17,6 +17,16 @@
             <span class="truncate">{{ t("sidebar.createJob") }}</span>
           </a>
 
+          <router-link
+            v-else-if="entry.id === 'settings'"
+            to="/settings/profile"
+            class="btn btn-menu btn-white btn-soft min-w-0"
+            :class="entry.span === 2 ? 'col-span-2' : ''"
+          >
+            <i class="fa-solid fa-gear fa-fw"></i>
+            <span class="truncate">{{ t("sidebar.settings") }}</span>
+          </router-link>
+
           <button
             v-else-if="entry.action"
             :id="`${entry.action.id}-button`"
@@ -69,6 +79,15 @@
         <i class="fa-kit fa-converge-mark fa-fw"></i>
         <span>{{ t("sidebar.createJob") }}</span>
       </a>
+
+      <router-link
+        v-if="embedded"
+        to="/settings/profile"
+        class="btn btn-flex btn-white btn-soft whitespace-nowrap"
+      >
+        <i class="fa-solid fa-gear fa-fw"></i>
+        <span>{{ t("sidebar.settings") }}</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -102,6 +121,7 @@ const STACK_LAYOUT: string[][][] = [
   ],
   [["create-job"], ["converge-clean"]],
   [["info", "rename"], ["copy", "move"], ["share"], ["extract"], ["delete"]],
+  [["settings"]],
 ];
 
 interface StackEntry {
@@ -129,6 +149,9 @@ const stackGroups = computed<StackEntry[][]>(() => {
       for (const id of row) {
         if (id === "create-job") {
           if (jobUrl.value) entries.push({ id, span: 2 });
+        } else if (id === "settings") {
+          // Only embedded: standalone keeps its header button.
+          if (embedded) entries.push({ id, span: 2 });
         } else {
           const action = byId.get(id);
           if (action) entries.push({ id, action, span: 2 });
