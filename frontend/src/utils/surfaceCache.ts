@@ -83,6 +83,10 @@ export function prefetchSurface(path: string, req: SurfaceRequest): void {
   fetchSurface(path, req).catch(() => {});
 }
 
+export function abortPendingSurfaces(): void {
+  cache.abortPending();
+}
+
 export function clearSurfaceCache(): void {
   cache.clear();
 }

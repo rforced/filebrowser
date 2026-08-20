@@ -338,3 +338,230 @@ describe("H5Viewer playback resolution cap", () => {
     wrapper.unmount();
   });
 });
+
+// A case that is still solving keeps writing while it is being watched. The
+// running player re-reads the listing and takes on what has settled, without
+// a control of its own.
+describe("H5Viewer live frames", () => {
+  const listingOf = (...items: { name: string; size: number }[]) => ({
+    items: items.map((i) => ({ ...i, isDir: false })),
+  });
+
+  const three = [
+    { name: "post000001_+1.00000e+00.h5", size: 1024 },
+    { name: "post000002_+2.00000e+00.h5", size: 1024 },
+    { name: "post000003_+3.00000e+00.h5", size: 1024 },
+  ];
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    mockSummary.mockReset();
+    mockFetch.mockReset();
+    mockSurface.mockReset();
+    mockSummary.mockResolvedValue(postSummary);
+    mockFetch.mockResolvedValue(listingOf(...three));
+    mockSurface.mockResolvedValue({
+      positions: new Float32Array(new ArrayBuffer(64)),
+    });
+    clearSurfaceCache();
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "Date", "performance"],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+  });
+
+  const startPlaying = async () => {
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+
+    const wrapper = mountViewer();
+    await flushPromises();
+    await openSurfaceTab(wrapper);
+    await playButton(wrapper)!.trigger("click");
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("takes on a new output once its size has settled", async () => {
+    const wrapper = await startPlaying();
+    expect(wrapper.text()).toContain("1/3");
+
+    // Appears mid-write. One sighting is not enough to read it.
+    mockFetch.mockResolvedValue(
+      listingOf(...three, { name: "post000004_+4.00000e+00.h5", size: 400 })
+    );
+    await turn(wrapper, 30_000);
+    expect(wrapper.text()).toContain("/3");
+
+    // Still growing.
+    mockFetch.mockResolvedValue(
+      listingOf(...three, { name: "post000004_+4.00000e+00.h5", size: 900 })
+    );
+    await turn(wrapper, 30_000);
+    expect(wrapper.text()).toContain("/3");
+
+    // Unchanged across a poll: the write finished, so it joins the loop.
+    await turn(wrapper, 30_000);
+    expect(wrapper.text()).toContain("/4");
+
+    wrapper.unmount();
+  });
+
+  it("keeps the frame on screen when the listing shifts under it", async () => {
+    const wrapper = await startPlaying();
+
+    // Move the loop on and leave the frame unsettled: the player then waits on
+    // it while the poll chain carries on, which is the window where a merge
+    // lands under a display that is standing still.
+    vi.advanceTimersByTime(1000);
+    await flushPromises();
+    expect(wrapper.text()).toContain("2.00000 · 2/3");
+
+    // A leg written before this one turns up late, so it sorts in ahead of
+    // everything on screen rather than appending.
+    const earlier = { name: "post000000_+5.00000e-01.h5", size: 1024 };
+    mockFetch.mockResolvedValue(listingOf(earlier, ...three));
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+    vi.advanceTimersByTime(30_000);
+    await flushPromises();
+
+    // Same frame still on screen; only its number moved, to account for the
+    // one that slotted in front of it.
+    expect(wrapper.text()).toContain("2.00000 · 3/4");
+
+    wrapper.unmount();
+  });
+
+  it("stops at the cap even while outputs are still landing", async () => {
+    const wrapper = await startPlaying();
+
+    for (let i = 0; i < 4; i++) {
+      mockFetch.mockResolvedValue(
+        listingOf(...three, {
+          name: `post00000${4 + i}_+${4 + i}.00000e+00.h5`,
+          size: 1024,
+        })
+      );
+      await turn(wrapper, 30_000);
+    }
+    await turn(wrapper, 1000);
+
+    expect(
+      playButton(wrapper)!.attributes("aria-label"),
+      "a live case does not buy more than one sitting"
+    ).toBe("Play");
+    expect(wrapper.text()).toContain("Playback stopped after 2 minutes");
+
+    wrapper.unmount();
+  });
+
+  it("stops polling once playback stops", async () => {
+    const wrapper = await startPlaying();
+    await turn(wrapper, 30_000);
+
+    await playButton(wrapper)!.trigger("click");
+    await flushPromises();
+    mockFetch.mockClear();
+
+    vi.advanceTimersByTime(5 * 60_000);
+    await flushPromises();
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+});
+
+describe("H5Viewer pauses when nobody is looking", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    mockSummary.mockReset();
+    mockFetch.mockReset();
+    mockSurface.mockReset();
+    mockSummary.mockResolvedValue(postSummary);
+    mockFetch.mockResolvedValue(frameListing);
+    mockSurface.mockResolvedValue({
+      positions: new Float32Array(new ArrayBuffer(64)),
+    });
+    clearSurfaceCache();
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "Date", "performance"],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: false,
+    });
+  });
+
+  const play = async () => {
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+    const wrapper = mountViewer();
+    await flushPromises();
+    await openSurfaceTab(wrapper);
+    await playButton(wrapper)!.trigger("click");
+    await flushPromises();
+    await turn(wrapper, 1000);
+    return wrapper;
+  };
+
+  // Each frame is a surface cut on a box that is also running the solve, so
+  // a backgrounded tab must not keep buying them.
+  it("stops on a hidden tab and pulls nothing more", async () => {
+    const wrapper = await play();
+    expect(playButton(wrapper)!.attributes("aria-label")).toBe("Pause");
+
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+
+    expect(playButton(wrapper)!.attributes("aria-label")).toBe("Play");
+
+    const afterHide = mockSurface.mock.calls.length;
+    vi.advanceTimersByTime(60_000);
+    await flushPromises();
+    expect(mockSurface.mock.calls.length).toBe(afterHide);
+
+    wrapper.unmount();
+  });
+
+  it("stops when the window loses focus with the tab still selected", async () => {
+    const wrapper = await play();
+
+    window.dispatchEvent(new Event("blur"));
+    await flushPromises();
+
+    expect(playButton(wrapper)!.attributes("aria-label")).toBe("Play");
+
+    wrapper.unmount();
+  });
+
+  // Coming back is the user's call: it must not resume a stream on its own.
+  it("stays stopped when the page comes back", async () => {
+    const wrapper = await play();
+    window.dispatchEvent(new Event("blur"));
+    await flushPromises();
+
+    window.dispatchEvent(new Event("focus"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+
+    expect(playButton(wrapper)!.attributes("aria-label")).toBe("Play");
+
+    wrapper.unmount();
+  });
+});

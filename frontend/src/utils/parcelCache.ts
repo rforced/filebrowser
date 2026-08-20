@@ -49,6 +49,10 @@ export function prefetchParcels(path: string, req: ParcelRequest): void {
   fetchParcels(path, req).catch(() => {});
 }
 
+export function abortPendingParcels(): void {
+  cache.abortPending();
+}
+
 export function clearParcelCache(): void {
   cache.clear();
 }

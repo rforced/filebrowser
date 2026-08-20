@@ -4,6 +4,7 @@ const surfaceMock = vi.hoisted(() => vi.fn());
 vi.mock("@/api/h5", () => ({ surface: surfaceMock }));
 
 import {
+  abortPendingSurfaces,
   clearSurfaceCache,
   DEFAULT_SURFACE_RESOLUTION,
   fetchSurface,
@@ -161,6 +162,39 @@ describe("fetchSurface", () => {
       await fetchSurface(`/case/post${i}.h5`, { stream: "STREAM_00" });
     }
     expect(surfaceMock).not.toHaveBeenCalled();
+  });
+
+  // What suspending playback costs the box: the frame being cut is dropped,
+  // the frames already paid for are still there when the user comes back.
+  it("drops what is in flight and keeps what has landed", async () => {
+    await fetchSurface("/case/post1.h5", { stream: "STREAM_00" });
+
+    let signal: AbortSignal | undefined;
+    surfaceMock.mockImplementation(
+      (_path: string, _opts: unknown, s: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal = s;
+          s.addEventListener("abort", () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        })
+    );
+    const inFlight = fetchSurface("/case/post2.h5", { stream: "STREAM_00" });
+
+    abortPendingSurfaces();
+    expect(signal?.aborted).toBe(true);
+    await expect(inFlight).rejects.toThrow("aborted");
+
+    surfaceMock.mockClear();
+    surfaceMock.mockImplementation(async () => fakeSurface());
+    await fetchSurface("/case/post1.h5", { stream: "STREAM_00" });
+    expect(surfaceMock).not.toHaveBeenCalled();
+
+    // The aborted one left nothing behind that would replay the failure.
+    await fetchSurface("/case/post2.h5", { stream: "STREAM_00" });
+    expect(surfaceMock).toHaveBeenCalledTimes(1);
   });
 
   it("does not keep a failed fetch, so retrying reaches the network", async () => {

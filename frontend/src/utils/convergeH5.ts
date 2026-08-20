@@ -165,6 +165,51 @@ export function outputProfile(
   return points;
 }
 
+export interface FrameMerge {
+  frames: OutputPoint[];
+  pending: Map<string, number>;
+  added: number;
+}
+
+/**
+ * mergeOutputFrames folds a fresh listing into a sequence that is already
+ * playing, for a run that is still writing.
+ *
+ * A file appearing in a directory is not a file that has finished being
+ * written, and a post output is tens to hundreds of megabytes: reading one
+ * mid-write tears. A name is therefore admitted only on the poll where its
+ * size matches what the previous poll saw — one interval of latency against
+ * an output cadence measured in tens of seconds. `pending` carries that
+ * between polls and belongs to the caller.
+ *
+ * Order comes from outputProfile, so a restart re-emitting a lower write index
+ * sorts into place instead of landing at the end. Names the listing no longer
+ * has are dropped: a case can be cleaned while it is being watched.
+ */
+export function mergeOutputFrames(
+  current: OutputPoint[],
+  items: { name: string; size: number }[],
+  pending: Map<string, number>
+): FrameMerge {
+  const known = new Set(current.map((f) => f.name));
+  const next = new Map<string, number>();
+  const frames: OutputPoint[] = [];
+  let added = 0;
+
+  for (const point of outputProfile(items)) {
+    if (known.has(point.name)) {
+      frames.push(point);
+    } else if (pending.get(point.name) === point.size) {
+      frames.push(point);
+      added++;
+    } else {
+      next.set(point.name, point.size);
+    }
+  }
+
+  return { frames, pending: next, added };
+}
+
 /**
  * projectTotal estimates what a run will write in total, from what it has
  * written so far against the fraction of the deck it has covered. Returns null

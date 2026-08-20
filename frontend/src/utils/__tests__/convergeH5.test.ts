@@ -6,6 +6,7 @@ import {
   formatValue,
   h5KindOf,
   isH5FileName,
+  mergeOutputFrames,
   outputProfile,
   projectTotal,
   sequenceFromName,
@@ -219,5 +220,101 @@ describe("divergenceOf", () => {
       reason: "inf",
       count: 7,
     });
+  });
+});
+
+describe("mergeOutputFrames", () => {
+  const item = (n: number, size: number) => ({
+    name: `post00000${n}_+${n}.00000e+00.h5`,
+    size,
+  });
+  const named = (r: { frames: { name: string }[] }) =>
+    r.frames.map((f) => f.name);
+
+  const seed = (...items: { name: string; size: number }[]) =>
+    outputProfile(items);
+
+  it("holds a newly seen file back until its size stops moving", () => {
+    const current = seed(item(1, 100), item(2, 100));
+    const listing = [item(1, 100), item(2, 100), item(3, 40)];
+
+    // First sighting: the solver may still be writing it.
+    const first = mergeOutputFrames(current, listing, new Map());
+    expect(named(first)).toEqual([current[0].name, current[1].name]);
+    expect(first.added).toBe(0);
+    expect(first.pending.get(item(3, 0).name)).toBe(40);
+
+    // Still growing, so still held back.
+    const second = mergeOutputFrames(
+      current,
+      [item(1, 100), item(2, 100), item(3, 90)],
+      first.pending
+    );
+    expect(second.frames).toHaveLength(2);
+    expect(second.added).toBe(0);
+    expect(second.pending.get(item(3, 0).name)).toBe(90);
+
+    // Unchanged across a poll: the write has finished.
+    const third = mergeOutputFrames(
+      current,
+      [item(1, 100), item(2, 100), item(3, 90)],
+      second.pending
+    );
+    expect(third.frames).toHaveLength(3);
+    expect(third.added).toBe(1);
+    expect(third.pending.size).toBe(0);
+  });
+
+  it("keeps an admitted frame without re-testing its size", () => {
+    const current = seed(item(1, 100), item(2, 100));
+    const merged = mergeOutputFrames(
+      current,
+      [item(1, 100), item(2, 512)],
+      new Map()
+    );
+    expect(merged.frames).toHaveLength(2);
+    expect(merged.added).toBe(0);
+    expect(merged.pending.size).toBe(0);
+  });
+
+  it("drops a frame the listing no longer carries", () => {
+    const current = seed(item(1, 100), item(2, 100), item(3, 100));
+    const merged = mergeOutputFrames(
+      current,
+      [item(1, 100), item(3, 100)],
+      new Map()
+    );
+    expect(named(merged)).toEqual([current[0].name, current[2].name]);
+    expect(merged.added).toBe(0);
+  });
+
+  it("sorts a late arrival by write index rather than appending it", () => {
+    const current = seed(item(1, 100), item(3, 100));
+    const pending = new Map([[item(2, 0).name, 100]]);
+    const merged = mergeOutputFrames(
+      current,
+      [item(1, 100), item(2, 100), item(3, 100)],
+      pending
+    );
+    expect(named(merged)).toEqual([
+      item(1, 0).name,
+      item(2, 0).name,
+      item(3, 0).name,
+    ]);
+    expect(merged.added).toBe(1);
+  });
+
+  it("ignores everything that is not an output of this run", () => {
+    const merged = mergeOutputFrames(
+      [],
+      [
+        { name: "restart000001.rst", size: 10 },
+        { name: "map_1.0.h5", size: 10 },
+        { name: "horizon.log", size: 10 },
+      ],
+      new Map()
+    );
+    expect(merged.frames).toHaveLength(0);
+    expect(merged.pending.size).toBe(0);
   });
 });

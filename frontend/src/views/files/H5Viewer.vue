@@ -564,12 +564,18 @@ import {
   formatCount,
   formatSimTime,
   formatValue,
+  mergeOutputFrames,
   outputProfile,
   type OutputPoint,
 } from "@/utils/convergeH5";
 import type { SurfaceBoundaryInfo } from "@/utils/convergeSurface";
-import { clearParcelCache, prefetchParcels } from "@/utils/parcelCache";
 import {
+  abortPendingParcels,
+  clearParcelCache,
+  prefetchParcels,
+} from "@/utils/parcelCache";
+import {
+  abortPendingSurfaces,
   clearSurfaceCache,
   DEFAULT_SURFACE_RESOLUTION,
   PLAYBACK_MAX_RESOLUTION,
@@ -646,6 +652,15 @@ let scrubTimer = 0;
 let frameShownAt = 0;
 let playStartedAt = 0;
 let framesDir = "";
+
+// A hot case keeps writing while it is being watched, so a running player
+// re-reads the listing and takes on what has landed. It polls only while
+// playing: that is what keeps this off a button of its own, and it costs a
+// listing against frames costing a full pass over a post file each.
+const FRAME_POLL_MS = 30_000;
+let framePollTimer = 0;
+// Names seen once but not yet admitted, against the size they were seen at.
+let pendingFrames = new Map<string, number>();
 
 let controller: AbortController | null = null;
 
@@ -864,6 +879,7 @@ const loadFrames = async () => {
   if (framesDir !== dir) {
     framesDir = dir;
     frames.value = [];
+    pendingFrames = new Map();
     try {
       const listing = await api.files.fetch(dir);
       if (framesDir !== dir) return;
@@ -877,12 +893,57 @@ const loadFrames = async () => {
   syncFrameIndex();
 };
 
+// Anchors the index on the frame actually on screen rather than on a position
+// in the array: a poll can insert a restart's output ahead of it or drop one
+// a clean removed, and an index left alone across that would move the display
+// on its own.
 const syncFrameIndex = () => {
   const name = shownFrame.value
     ? shownFrame.value.split("/").pop()
     : fileStore.req?.name;
   const index = frames.value.findIndex((f) => f.name === name);
-  if (index >= 0) frameIndex.value = index;
+  if (index >= 0) {
+    frameIndex.value = index;
+    return;
+  }
+  frameIndex.value = Math.max(
+    0,
+    Math.min(frameIndex.value, frames.value.length - 1)
+  );
+};
+
+const pollFrames = async () => {
+  const dir = framesDir;
+  if (!dir) return;
+  try {
+    const listing = await api.files.fetch(dir, controller?.signal);
+    if (framesDir !== dir) return;
+    const merged = mergeOutputFrames(
+      frames.value,
+      (listing.items ?? []).filter((item) => !item.isDir),
+      pendingFrames
+    );
+    pendingFrames = merged.pending;
+    if (merged.added > 0 || merged.frames.length !== frames.value.length) {
+      frames.value = merged.frames;
+      syncFrameIndex();
+    }
+  } catch {
+    // A dropped poll is retried on the next tick.
+  }
+};
+
+// Chained rather than an interval, so a slow listing cannot stack polls. The
+// first one runs at once: a name needs two sightings to be admitted, and
+// waiting an interval to take the first would push that past the cap.
+const startFramePolling = () => {
+  window.clearTimeout(framePollTimer);
+  const tick = async () => {
+    await pollFrames();
+    if (!playing.value) return;
+    framePollTimer = window.setTimeout(tick, FRAME_POLL_MS);
+  };
+  tick();
 };
 
 const showFrame = (index: number) => {
@@ -930,15 +991,21 @@ const play = () => {
   }
   playing.value = true;
   playbackCapped.value = false;
+  // The cap measures one sitting and nothing else. Frames landing mid-run do
+  // not extend it: a live case would otherwise never stop on its own, and
+  // every frame is a full pass over a post file on a box also running the
+  // solve. Pressing play again is what buys the next two minutes.
   playStartedAt = performance.now();
   frameShownAt = performance.now();
   window.clearTimeout(playTimer);
   playTimer = window.setTimeout(advance, 1000 / fps.value);
+  startFramePolling();
 };
 
 const stopPlayback = () => {
   playing.value = false;
   window.clearTimeout(playTimer);
+  window.clearTimeout(framePollTimer);
 };
 
 const syncFrameRoute = () => {
@@ -958,6 +1025,23 @@ const pause = () => {
 };
 
 const togglePlay = () => (playing.value ? pause() : play());
+
+// Playback is the most expensive thing this viewer can do — a surface cut per
+// frame on a box that is also running the solve — and none of it is worth
+// anything to a page nobody is looking at. Both signals are transitions away,
+// never a state read: an iframe the user scrolled to but never clicked into
+// has no focus to begin with, so asking document.hasFocus() would refuse to
+// play at all.
+const suspendPlayback = () => {
+  if (!playing.value) return;
+  pause();
+  abortPendingSurfaces();
+  abortPendingParcels();
+};
+
+const onVisibility = () => {
+  if (document.hidden) suspendPlayback();
+};
 
 const stepFrame = (delta: number) => {
   stopPlayback();
@@ -1154,6 +1238,7 @@ const load = async () => {
     shownFrame.value = "";
     frames.value = [];
     framesDir = "";
+    pendingFrames = new Map();
     lockedRange.value = null;
     lastRange = null;
     parcelLockedRange.value = null;
@@ -1262,11 +1347,15 @@ watch(parcelGroup, () => {
 
 onMounted(() => {
   window.addEventListener("keydown", keyEvent);
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("blur", suspendPlayback);
   load();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", keyEvent);
+  document.removeEventListener("visibilitychange", onVisibility);
+  window.removeEventListener("blur", suspendPlayback);
   controller?.abort();
   stopPlayback();
   window.clearTimeout(scrubTimer);
