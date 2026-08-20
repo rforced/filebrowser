@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeAll, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 
@@ -7,22 +7,34 @@ import ContextMenu from "../ContextMenu.vue";
 const MENU_WIDTH = 200;
 const BORDERS = 2;
 
-const mountMenu = (menuHeight: number) => {
-  const wrapper = mount(ContextMenu, {
+let menuHeight = 0;
+
+const laidOut = (el: HTMLElement) =>
+  el.isConnected && el.style.display !== "none";
+
+beforeAll(() => {
+  const stub = (name: string, value: () => number) =>
+    Object.defineProperty(HTMLElement.prototype, name, {
+      configurable: true,
+      get(this: HTMLElement) {
+        return laidOut(this) ? value() : 0;
+      },
+    });
+
+  stub("scrollHeight", () => menuHeight);
+  stub("offsetHeight", () => menuHeight + BORDERS);
+  stub("clientHeight", () => menuHeight);
+  stub("offsetWidth", () => MENU_WIDTH);
+});
+
+const mountMenu = (height: number) => {
+  menuHeight = height;
+
+  return mount(ContextMenu, {
     props: { show: false, pos: { x: 0, y: 0 } },
     slots: { default: "<button>action</button>" },
     attachTo: document.body,
   });
-
-  const el = wrapper.element as HTMLElement;
-  Object.defineProperty(el, "scrollHeight", { get: () => menuHeight });
-  Object.defineProperty(el, "offsetHeight", {
-    get: () => menuHeight + BORDERS,
-  });
-  Object.defineProperty(el, "clientHeight", { get: () => menuHeight });
-  Object.defineProperty(el, "offsetWidth", { get: () => MENU_WIDTH });
-
-  return wrapper;
 };
 
 const open = async (
@@ -31,7 +43,7 @@ const open = async (
 ) => {
   await wrapper.setProps({ show: true, pos });
   await nextTick();
-  return (wrapper.element as HTMLElement).style;
+  return wrapper.get("div").element.style;
 };
 
 describe("ContextMenu placement", () => {
@@ -79,5 +91,13 @@ describe("ContextMenu placement", () => {
 
     expect(style.maxHeight).toBe(`${800 - 16}px`);
     expect(style.top).toBe("8px");
+  });
+
+  it("measures a menu that is already open when the position moves", async () => {
+    const wrapper = mountMenu(300);
+    await open(wrapper, { x: 100, y: 100 });
+    const style = await open(wrapper, { x: 100, y: 700 });
+
+    expect(style.top).toBe(`${700 - 302}px`);
   });
 });

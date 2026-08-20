@@ -280,7 +280,6 @@ func combineOutFile(ctx context.Context, afs afero.Fs, sources []string, target 
 func combineStream(ctx context.Context, afs afero.Fs, sources []string, w io.Writer, state *combineState) error {
 	buffered := bufio.NewWriter(w)
 
-	// Each leg stops where the one after it starts.
 	cutoffs := make([]float64, len(sources))
 	hasCutoff := make([]bool, len(sources))
 	for i := 1; i < len(sources); i++ {

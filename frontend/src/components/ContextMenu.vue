@@ -1,6 +1,6 @@
 <template>
   <div
-    v-show="show"
+    v-if="show"
     ref="contextMenu"
     class="absolute min-w-48 max-w-[80svw] overflow-y-auto overflow-x-hidden border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 py-1 rounded-md shadow-lg z-50"
     :style="style"
