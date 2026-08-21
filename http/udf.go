@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -538,7 +537,7 @@ func runUdfBuild(
 	send func(udfProgress),
 ) {
 	buildDir := path.Join(dir, udfBuildDir)
-	logPath := path.Join(buildDir, udfLogName)
+	logPath := path.Join(dir, udfLogName)
 
 	// cvg_udf_init backs up CMakeLists.txt before refreshing it, so running it
 	// on every compile would leave a .back file behind each time. A package that
@@ -629,10 +628,6 @@ func udfCacheDir(content []byte) string {
 	return ""
 }
 
-// udfPublishArtifact copies the built library up to the package root. The
-// CONVERGE environment puts "./" first on LD_LIBRARY_PATH, so that is where the
-// solver looks for it. The copy lands under a temporary name and is renamed, so
-// a solver reading the previous library never sees a half-written one.
 func udfPublishArtifact(d *data, dir, buildDir string) (string, error) {
 	src := path.Join(buildDir, udfLibName)
 	if _, err := d.user.Fs.Stat(src); err != nil {
@@ -640,40 +635,15 @@ func udfPublishArtifact(d *data, dir, buildDir string) (string, error) {
 	}
 
 	dst := path.Join(dir, udfLibName)
-	tmp := dst + ".tmp"
-	if !d.Check(dst) || !d.Check(tmp) {
+	if !d.Check(dst) {
 		return "", errors.New("cannot write the compiled library to the package directory")
 	}
 
-	if err := udfCopyFile(d.user.Fs, src, tmp); err != nil {
-		return "", fmt.Errorf("could not write %s: %w", udfLibName, err)
-	}
-	if err := d.user.Fs.Rename(tmp, dst); err != nil {
-		_ = d.user.Fs.Remove(tmp)
-		return "", fmt.Errorf("could not replace %s: %w", udfLibName, err)
+	if err := d.user.Fs.Rename(src, dst); err != nil {
+		return "", fmt.Errorf("could not move %s into the package: %w", udfLibName, err)
 	}
 
 	return dst, nil
-}
-
-func udfCopyFile(afs afero.Fs, src, dst string) error {
-	in, err := afs.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := afs.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o755)
-	if err != nil {
-		return err
-	}
-
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		_ = afs.Remove(dst)
-		return err
-	}
-	return out.Close()
 }
 
 // udfRunScript runs the build and returns everything it printed. Output is

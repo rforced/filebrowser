@@ -497,7 +497,7 @@ func TestUdfCacheDir(t *testing.T) {
 	}
 }
 
-func TestUdfPublishArtifactCopiesToPackageRoot(t *testing.T) {
+func TestUdfPublishArtifactMovesToPackageRoot(t *testing.T) {
 	root := t.TempDir()
 	pkg := filepath.Join(root, "pkg")
 	udfPackage(t, pkg)
@@ -519,10 +519,38 @@ func TestUdfPublishArtifactCopiesToPackageRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(body) != "ELF\n" {
-		t.Errorf("got %q, want the built library copied verbatim", body)
+		t.Errorf("got %q, want the built library moved verbatim", body)
+	}
+
+	// Moved, not copied: one library in the package, never two.
+	if _, err := os.Stat(filepath.Join(pkg, "build", "libconverge_udf.so")); err == nil {
+		t.Error("the library was left in build/ as well as the package root")
 	}
 	if _, err := os.Stat(filepath.Join(pkg, "libconverge_udf.so.tmp")); err == nil {
-		t.Error("the temporary copy was left behind")
+		t.Error("a temporary file was left behind")
+	}
+}
+
+// Rebuilding must replace the library at the root rather than fail on it
+// already being there.
+func TestUdfPublishArtifactReplacesPreviousLibrary(t *testing.T) {
+	root := t.TempDir()
+	pkg := filepath.Join(root, "pkg")
+	udfPackage(t, pkg)
+	writeUdfFile(t, pkg, "libconverge_udf.so", "OLD\n")
+	writeUdfFile(t, pkg, filepath.Join("build", "libconverge_udf.so"), "NEW\n")
+
+	d := udfTestData(t, root, users.Permissions{Create: true})
+	if _, err := udfPublishArtifact(d, "/pkg", "/pkg/build"); err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(pkg, "libconverge_udf.so"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "NEW\n" {
+		t.Errorf("got %q, want the previous library replaced", body)
 	}
 }
 

@@ -105,7 +105,7 @@ describe("udf store", () => {
         phase: "done",
         percent: 0,
         error: "src/configure.c:4:1: error: expected ';'",
-        logPath: "/pkg/build/compile.log",
+        logPath: "/pkg/compile.log",
       } as UdfProgress);
     });
 
