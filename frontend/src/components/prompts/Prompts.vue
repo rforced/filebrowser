@@ -37,6 +37,7 @@ import CurrentPassword from "./CurrentPassword.vue";
 import Extract from "./Extract.vue";
 import ConvergeClean from "./ConvergeClean.vue";
 import ConvergeCombine from "./ConvergeCombine.vue";
+import UdfCompile from "./UdfCompile.vue";
 
 const layoutStore = useLayoutStore();
 
@@ -63,6 +64,7 @@ const components = new Map<string, any>([
   ["extract", Extract],
   ["converge-clean", ConvergeClean],
   ["converge-combine", ConvergeCombine],
+  ["converge-udf", UdfCompile],
 ]);
 
 /*

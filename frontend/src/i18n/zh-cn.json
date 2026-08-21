@@ -339,7 +339,22 @@
     "upload": "上传",
     "uploadFiles": "正在上传 {files} 个文件…",
     "uploadMessage": "选择上传选项。",
-    "uploadingFiles": "正在上传文件"
+    "uploadingFiles": "正在上传文件",
+    "udfCompile": "编译 UDF",
+    "udfCompileMessage": "使用已安装的 CONVERGE 版本编译 {name} 中的 UDF 源文件。",
+    "udfCompileTotal": "使用 CONVERGE {version} 构建，并将 {name} 写入此文件夹。",
+    "udfVersion": "CONVERGE 版本",
+    "udfScanning": "正在查找已安装的 CONVERGE 版本…",
+    "udfNotPackage": "此文件夹中没有 CONVERGE UDF 的 CMakeLists.txt，因此没有可构建的内容。",
+    "udfNoVersions": "此文件系统上已安装的 CONVERGE 版本均无法编译 UDF。",
+    "udfNoSource": "src/ 中没有源文件，因此编译将使用 CONVERGE 自带的示例。",
+    "udfCompilingName": "正在编译 {name}…",
+    "udfCancelConfirm": "要停止此次构建吗？",
+    "udfSuccess": "已编译 {name}",
+    "udfFailed": "编译 {name} 失败：{error}",
+    "udfAlreadyBuilding": "此文件夹中已有构建正在运行。",
+    "udfBusy": "同时运行的构建过多，请稍后重试。",
+    "udfUnknownVersion": "此文件系统上未安装该 CONVERGE 版本。"
   },
   "search": {
     "fields": "场数据",

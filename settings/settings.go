@@ -68,6 +68,11 @@ type Server struct {
 	TeamID                string `json:"teamId"`
 	FilesystemID          string `json:"filesystemId"`
 
+	// ConvergeApps is the directory holding the CONVERGE installs a UDF may be
+	// compiled against, one sub-directory per version. It sits outside every
+	// user's scope, so it is read through the OS filesystem rather than theirs.
+	ConvergeApps string `json:"convergeApps"`
+
 	// FrameAncestors is the CSP frame-ancestors source list naming the origins
 	// allowed to embed the app in a frame. Empty means no one may.
 	FrameAncestors string `json:"frameAncestors"`

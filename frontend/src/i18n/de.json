@@ -339,7 +339,22 @@
     "upload": "Hochladen",
     "uploadFiles": "{files} Dateien werden hochgeladen …",
     "uploadMessage": "Wähle eine Upload-Option.",
-    "uploadingFiles": "Dateien werden hochgeladen"
+    "uploadingFiles": "Dateien werden hochgeladen",
+    "udfCompile": "UDF kompilieren",
+    "udfCompileMessage": "Dies kompiliert die UDF-Quelldateien in {name} gegen eine installierte CONVERGE-Version.",
+    "udfCompileTotal": "Wird gegen CONVERGE {version} gebaut und schreibt {name} in diesen Ordner.",
+    "udfVersion": "CONVERGE-Version",
+    "udfScanning": "Installierte CONVERGE-Versionen werden gesucht …",
+    "udfNotPackage": "Dieser Ordner enthält keine CONVERGE-UDF-CMakeLists.txt, es gibt also nichts zu bauen.",
+    "udfNoVersions": "Keine auf diesem Dateisystem installierte CONVERGE-Version kann eine UDF kompilieren.",
+    "udfNoSource": "In src/ liegen keine Quelldateien, daher greift die Kompilierung auf die Beispiele von CONVERGE zurück.",
+    "udfCompilingName": "{name} wird kompiliert …",
+    "udfCancelConfirm": "Diesen Build abbrechen?",
+    "udfSuccess": "{name} kompiliert",
+    "udfFailed": "Kompilieren von {name} fehlgeschlagen: {error}",
+    "udfAlreadyBuilding": "In diesem Ordner läuft bereits ein Build.",
+    "udfBusy": "Es laufen bereits zu viele Builds. Bitte kurz warten.",
+    "udfUnknownVersion": "Diese CONVERGE-Version ist auf diesem Dateisystem nicht installiert."
   },
   "search": {
     "fields": "Felder",

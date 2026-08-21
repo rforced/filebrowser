@@ -119,6 +119,7 @@ func addServerFlags(flags *pflag.FlagSet) {
 	flags.String("domain", "", "Job platform domain (e.g. app.job.io)")
 	flags.String("teamId", "", "Job platform team ID")
 	flags.String("filesystemId", "", "Job platform filesystem ID")
+	flags.String("convergeApps", "", "directory of CONVERGE installs available for compiling UDFs (default /mnt/fs/.cache/apps/converge)")
 	flags.String("frameAncestors", "", "CSP frame-ancestors source list of origins allowed to embed the app (empty means none)")
 }
 
@@ -421,6 +422,10 @@ func getServerSettings(v *viper.Viper, st *storage.Storage) (*settings.Server, e
 
 	if v.IsSet("filesystemId") {
 		server.FilesystemID = v.GetString("filesystemId")
+	}
+
+	if v.IsSet("convergeApps") {
+		server.ConvergeApps = v.GetString("convergeApps")
 	}
 
 	if v.IsSet("frameAncestors") {

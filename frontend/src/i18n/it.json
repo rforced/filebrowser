@@ -339,7 +339,22 @@
     "upload": "Carica",
     "uploadFiles": "Caricamento di {files} file in corso…",
     "uploadMessage": "Seleziona un'opzione per il caricamento.",
-    "uploadingFiles": "Caricamento dei file in corso"
+    "uploadingFiles": "Caricamento dei file in corso",
+    "udfCompile": "Compila UDF",
+    "udfCompileMessage": "Compila i sorgenti UDF in {name} con una versione di CONVERGE installata.",
+    "udfCompileTotal": "Compila con CONVERGE {version} e scrive {name} in questa cartella.",
+    "udfVersion": "Versione di CONVERGE",
+    "udfScanning": "Ricerca delle versioni di CONVERGE installate in corso…",
+    "udfNotPackage": "Questa cartella non contiene un CMakeLists.txt UDF di CONVERGE, quindi non c'è nulla da compilare.",
+    "udfNoVersions": "Nessuna versione di CONVERGE installata su questo file system può compilare una UDF.",
+    "udfNoSource": "Non ci sono sorgenti in src/, quindi la compilazione userà gli esempi forniti da CONVERGE.",
+    "udfCompilingName": "Compilazione di {name} in corso…",
+    "udfCancelConfirm": "Interrompere questa compilazione?",
+    "udfSuccess": "{name} compilato",
+    "udfFailed": "Compilazione di {name} non riuscita: {error}",
+    "udfAlreadyBuilding": "In questa cartella è già in corso una compilazione.",
+    "udfBusy": "Ci sono già troppe compilazioni in corso. Riprova tra poco.",
+    "udfUnknownVersion": "Quella versione di CONVERGE non è installata su questo file system."
   },
   "search": {
     "fields": "Campi",

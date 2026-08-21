@@ -339,7 +339,22 @@
     "upload": "अपलोड करें",
     "uploadFiles": "{files} फ़ाइलें अपलोड हो रही हैं...",
     "uploadMessage": "अपलोड करने का विकल्प चुनें।",
-    "uploadingFiles": "फ़ाइलें अपलोड हो रही हैं"
+    "uploadingFiles": "फ़ाइलें अपलोड हो रही हैं",
+    "udfCompile": "UDF संकलित करें",
+    "udfCompileMessage": "यह {name} में मौजूद UDF स्रोत फ़ाइलों को CONVERGE के किसी स्थापित संस्करण के साथ संकलित करता है।",
+    "udfCompileTotal": "CONVERGE {version} के साथ बनाता है और {name} को इस फ़ोल्डर में लिखता है।",
+    "udfVersion": "CONVERGE संस्करण",
+    "udfScanning": "स्थापित CONVERGE संस्करण खोजे जा रहे हैं...",
+    "udfNotPackage": "इस फ़ोल्डर में CONVERGE UDF की CMakeLists.txt नहीं है, इसलिए बनाने के लिए कुछ नहीं है।",
+    "udfNoVersions": "इस फ़ाइल सिस्टम पर स्थापित कोई भी CONVERGE संस्करण UDF संकलित नहीं कर सकता।",
+    "udfNoSource": "src/ में कोई स्रोत फ़ाइल नहीं है, इसलिए संकलन CONVERGE के अपने नमूनों का उपयोग करेगा।",
+    "udfCompilingName": "{name} संकलित किया जा रहा है...",
+    "udfCancelConfirm": "यह बिल्ड रोकें?",
+    "udfSuccess": "{name} संकलित हुआ",
+    "udfFailed": "{name} संकलित करना विफल रहा: {error}",
+    "udfAlreadyBuilding": "इस फ़ोल्डर में पहले से एक बिल्ड चल रहा है।",
+    "udfBusy": "पहले से बहुत सारे बिल्ड चल रहे हैं। कुछ देर बाद पुनः प्रयास करें।",
+    "udfUnknownVersion": "वह CONVERGE संस्करण इस फ़ाइल सिस्टम पर स्थापित नहीं है।"
   },
   "search": {
     "fields": "फ़ील्ड",

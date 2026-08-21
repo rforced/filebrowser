@@ -102,6 +102,9 @@ func NewHandler(
 	api.PathPrefix("/combine").Handler(monkey(combineViewHandler, "/api/combine")).Methods("GET")
 	api.PathPrefix("/combine").Handler(monkey(combineHandler, "/api/combine")).Methods("POST")
 
+	api.PathPrefix("/udf").Handler(monkey(udfInfoHandler, "/api/udf")).Methods("GET")
+	api.PathPrefix("/udf").Handler(monkey(udfBuildHandler, "/api/udf")).Methods("POST")
+
 	api.PathPrefix("/h5").Handler(monkey(h5Handler, "/api/h5")).Methods("GET")
 
 	api.PathPrefix("/raw").Handler(monkey(rawHandler, "/api/raw")).Methods("GET")

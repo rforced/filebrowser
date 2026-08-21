@@ -85,6 +85,18 @@ export const useFileActions = () => {
       )
   );
 
+  // A UDF package is a CMakeLists.txt plus sources, and need not be a CONVERGE
+  // case at all — the reference package carries no inputs.in. The listing is
+  // only the cheap half of the test: the server confirms the file really is the
+  // CONVERGE one by its content before it offers a build.
+  const isUdfPackage = computed(
+    () =>
+      fileStore.req?.isDir === true &&
+      fileStore.req.items.some(
+        (item) => !item.isDir && item.name === "CMakeLists.txt"
+      )
+  );
+
   // The combined tree is derived from the legs rather than being one, so it
   // does not count toward having something to combine. The server agrees.
   const outputRunCount = computed(
@@ -348,8 +360,8 @@ export const useFileActions = () => {
         icon: "fa-hammer",
         label: t("buttons.compileUdf"),
         visible: !!perm.value?.create,
-        enabled: isConvergeCase.value,
-        run: () => {},
+        enabled: isUdfPackage.value && !isButtonBusy("converge-udf"),
+        run: () => showPrompt("converge-udf"),
       },
     ].filter((action) => action.visible);
   });
@@ -359,6 +371,7 @@ export const useFileActions = () => {
     selectedCount,
     selectedItem,
     isConvergeCase,
+    isUdfPackage,
     viewIcon,
     switchView,
     download,

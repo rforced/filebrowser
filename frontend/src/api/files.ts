@@ -2,7 +2,13 @@ import { useAuthStore } from "@/stores/auth";
 import { useLayoutStore } from "@/stores/layout";
 import { baseURL } from "@/utils/constants";
 import { upload as postTus, useTus } from "./tus";
-import { createURL, fetchURL, removePrefix, StatusError } from "./utils";
+import {
+  applyErrorDetail,
+  createURL,
+  fetchURL,
+  removePrefix,
+  StatusError,
+} from "./utils";
 import { encodePath } from "@/utils/url";
 
 export async function fetch(url: string, signal?: AbortSignal) {
@@ -296,6 +302,25 @@ export async function extract(
 
   onStart?.();
 
+  await readEventStream<ExtractProgress>(res, (progress) => {
+    if (onProgress) onProgress(progress);
+    if (progress.error) {
+      throw new Error(progress.error);
+    }
+  });
+}
+
+/*
+ * Reads a `data: {...}` Server-Sent Event stream, handing each parsed event to
+ * onEvent. A chunk can split an event in half and can carry several at once, so
+ * events are only taken once their blank-line terminator has arrived. A payload
+ * that does not parse is skipped rather than ending the stream: it means the
+ * chunk boundary landed mid-JSON, not that the operation failed.
+ */
+async function readEventStream<T>(
+  res: Response,
+  onEvent: (event: T) => void
+): Promise<void> {
   const reader = res.body?.getReader();
   if (!reader) throw new Error("No response body");
 
@@ -307,19 +332,14 @@ export async function extract(
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n\n");
-    buffer = lines.pop() || "";
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() || "";
 
-    for (const line of lines) {
-      const dataLine = line.trim();
+    for (const chunk of chunks) {
+      const dataLine = chunk.trim();
       if (!dataLine.startsWith("data: ")) continue;
-      const json = dataLine.slice(6);
       try {
-        const progress = JSON.parse(json) as ExtractProgress;
-        if (onProgress) onProgress(progress);
-        if (progress.error) {
-          throw new Error(progress.error);
-        }
+        onEvent(JSON.parse(dataLine.slice(6)) as T);
       } catch (e) {
         if (e instanceof SyntaxError) continue;
         throw e;
@@ -513,6 +533,107 @@ export async function convergeCombinePreview(
   url = removePrefix(url);
   const res = await fetchURL(`/api/combine${url}`, { signal });
   return (await res.json()) as ConvergeCombinePreview;
+}
+
+export interface UdfInstall {
+  version: string;
+}
+
+export interface UdfInfo {
+  package: boolean;
+  hasSource: boolean;
+  versions: UdfInstall[];
+  lastVersion?: string;
+}
+
+/*
+ * What a UDF compile of this directory would run: whether it is a UDF package
+ * at all, which installed CONVERGE versions it can be built against, and what
+ * it was last built against. The server decides all three — a package is
+ * recognised by the content of its CMakeLists.txt, and the version list is read
+ * from an install directory that sits outside every user's scope.
+ */
+export async function udfInfo(
+  url: string,
+  signal?: AbortSignal
+): Promise<UdfInfo> {
+  url = removePrefix(url);
+  const res = await fetchURL(`/api/udf${url}`, { signal });
+  return (await res.json()) as UdfInfo;
+}
+
+export type UdfPhase = "configure" | "build" | "done";
+
+export interface UdfProgress {
+  phase: UdfPhase;
+  percent: number;
+  line?: string;
+  artifact?: string;
+  logPath?: string;
+  error?: string;
+}
+
+/*
+ * Compiles a UDF package, streaming the compiler's own output. Aborting the
+ * signal kills the build's process group on the server, so a cancelled compile
+ * leaves no cc behind.
+ */
+export async function udfBuild(
+  url: string,
+  version: string,
+  onProgress?: (progress: UdfProgress) => void,
+  onStart?: () => void,
+  signal?: AbortSignal
+): Promise<UdfProgress | null> {
+  url = removePrefix(url);
+  const authStore = useAuthStore();
+
+  const res = await globalThis.fetch(`${baseURL}/api/udf${url}`, {
+    method: "POST",
+    headers: {
+      "X-Auth": authStore.token,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ version }),
+    signal,
+  });
+
+  if (
+    !res.ok &&
+    !res.headers.get("Content-Type")?.includes("text/event-stream")
+  ) {
+    throw await streamStartError(res);
+  }
+
+  onStart?.();
+
+  // The terminal event carries the outcome, so it is kept rather than only
+  // reported: the caller needs the artifact path or the failure, not the
+  // running commentary.
+  let final: UdfProgress | null = null;
+  await readEventStream<UdfProgress>(res, (progress) => {
+    if (progress.phase === "done") final = progress;
+    if (onProgress) onProgress(progress);
+  });
+
+  return final;
+}
+
+/*
+ * Turns a refused build into the error to throw. The server answers a rejected
+ * request with the same coded JSON body the other CONVERGE endpoints use, so a
+ * caller can tell "already building" from "unknown version" without matching on
+ * prose. This request is made with globalThis.fetch rather than fetchURL, so
+ * the detail has to be applied here as fetchURL would have done it.
+ */
+async function streamStartError(res: Response): Promise<StatusError> {
+  const text = await res.text();
+  const error = new StatusError(
+    text || `${res.status} ${res.statusText}`,
+    res.status
+  );
+  applyErrorDetail(error, text);
+  return error;
 }
 
 /*

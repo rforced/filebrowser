@@ -435,6 +435,8 @@ func getSettings(flags *pflag.FlagSet, set *settings.Settings, ser *settings.Ser
 			ser.TeamID, err = flags.GetString(flag.Name)
 		case "filesystemId":
 			ser.FilesystemID, err = flags.GetString(flag.Name)
+		case "convergeApps":
+			ser.ConvergeApps, err = flags.GetString(flag.Name)
 		case "frameAncestors":
 			ser.FrameAncestors, err = flags.GetString(flag.Name)
 

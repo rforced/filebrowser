@@ -339,7 +339,22 @@
     "upload": "アップロード",
     "uploadFiles": "{files} 個のファイルをアップロードしています…",
     "uploadMessage": "アップロードするオプションを選択してください。",
-    "uploadingFiles": "ファイルをアップロード中"
+    "uploadingFiles": "ファイルをアップロード中",
+    "udfCompile": "UDF をコンパイル",
+    "udfCompileMessage": "{name} 内の UDF ソースを、インストール済みの CONVERGE でコンパイルします。",
+    "udfCompileTotal": "CONVERGE {version} でビルドし、{name} をこのフォルダーに書き出します。",
+    "udfVersion": "CONVERGE バージョン",
+    "udfScanning": "インストール済みの CONVERGE バージョンを探しています…",
+    "udfNotPackage": "このフォルダーには CONVERGE UDF の CMakeLists.txt がないため、ビルドするものがありません。",
+    "udfNoVersions": "このファイルシステムにインストールされた CONVERGE では UDF をコンパイルできません。",
+    "udfNoSource": "src/ にソースがないため、コンパイルは CONVERGE 付属のサンプルを使用します。",
+    "udfCompilingName": "{name} をコンパイルしています…",
+    "udfCancelConfirm": "このビルドを中止しますか？",
+    "udfSuccess": "{name} をコンパイルしました",
+    "udfFailed": "{name} のコンパイルに失敗しました: {error}",
+    "udfAlreadyBuilding": "このフォルダーでは既にビルドが実行中です。",
+    "udfBusy": "実行中のビルドが多すぎます。しばらくしてからお試しください。",
+    "udfUnknownVersion": "その CONVERGE バージョンはこのファイルシステムにインストールされていません。"
   },
   "search": {
     "fields": "フィールド",
