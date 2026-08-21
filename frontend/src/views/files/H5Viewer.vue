@@ -1022,10 +1022,6 @@ const play = () => {
   }
   playing.value = true;
   playbackCapped.value = false;
-  // The cap measures one sitting and nothing else. Frames landing mid-run do
-  // not extend it: a live case would otherwise never stop on its own, and
-  // every frame is a full pass over a post file on a box also running the
-  // solve. Pressing play again is what buys the next two minutes.
   playStartedAt = performance.now();
   frameShownAt = performance.now();
   window.clearTimeout(playTimer);

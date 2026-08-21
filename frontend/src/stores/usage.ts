@@ -165,9 +165,13 @@ export const useUsageStore = defineStore("usage", () => {
     running.value = 0;
   };
 
-  // Deleting or moving things changes the answer; the clean prompt and the
-  // delete flow drop what they touched rather than showing a stale total.
+  const revision = ref(0);
+  const changedAt = ref(0);
+
   const invalidate = (path?: string) => {
+    revision.value++;
+    changedAt.value = Date.now();
+
     if (path === undefined) {
       sizes.clear();
       failed.clear();
@@ -181,6 +185,8 @@ export const useUsageStore = defineStore("usage", () => {
     sizes,
     pending,
     failed,
+    revision,
+    changedAt,
     fresh,
     measure,
     breakdown,

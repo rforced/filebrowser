@@ -16,6 +16,7 @@ import { baseURL, name } from "@/utils/constants";
 import i18n from "@/i18n";
 import { validateLogin } from "@/utils/auth";
 import { catchAllRedirect } from "./catchAll";
+import { scrollOnNavigate } from "./scroll";
 
 const titles = {
   Login: "sidebar.login",
@@ -143,6 +144,7 @@ async function initAuth() {
 const router = createRouter({
   history: createWebHistory(baseURL),
   routes,
+  scrollBehavior: scrollOnNavigate,
 });
 
 router.beforeResolve(async (to, from) => {

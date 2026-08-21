@@ -2,13 +2,7 @@ import { authMethod, baseURL, domain } from "./constants";
 import { saveToken } from "./auth";
 import { applyEmbeddedTheme } from "./theme";
 
-// Whether Horizon is really running inside a frame (the job platform embeds
-// it). Auth handoff and theme sync only make sense here — they talk to the
-// embedding page.
 export const framed = window.self !== window.top;
-
-// Presentation switch: the slimmed-down chrome. Follows framing, but can be
-// forced with ?embed in a plain tab to work on the embedded styling.
 export const embedded =
   framed || new URLSearchParams(window.location.search).has("embed");
 
@@ -21,12 +15,6 @@ function fromPlatform(event: MessageEvent): boolean {
   return event.origin === domain && event.source === window.parent;
 }
 
-/**
- * Ask Horizon for a single-use handoff code and exchange
- * it for a session, so an embedded user never sees a second login form.
- * Resolves false when not framed, when the parent stays silent, or when the
- * exchange is refused — callers fall back to the interactive login.
- */
 export async function embeddedHandoff(): Promise<boolean> {
   if (!framed || authMethod !== "hook" || !domain) {
     return false;
@@ -55,10 +43,6 @@ export async function embeddedHandoff(): Promise<boolean> {
   }
 }
 
-/**
- * Follow the embedding platform's light/dark theme: ask once at startup and
- * apply every change it pushes afterwards.
- */
 export function syncEmbeddedTheme(): void {
   if (!framed || !domain) {
     return;

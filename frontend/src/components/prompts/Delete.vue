@@ -72,13 +72,12 @@ const targets = computed(() => {
 const submit = async () => {
   buttons.loading("delete");
 
-  // Any measured folder size upstream of what goes is now wrong, and a size the
-  // user just changed is exactly the one they will be looking at.
   usageStore.invalidate();
 
   try {
     if (!fileStore.isListing) {
       await api.remove(route.path);
+      usageStore.invalidate();
       buttons.success("delete");
 
       layoutStore.currentPrompt?.confirm();
@@ -98,6 +97,7 @@ const submit = async () => {
     }
 
     await Promise.all(promises);
+    usageStore.invalidate();
     buttons.success("delete");
 
     const nearbyItem =
@@ -107,6 +107,7 @@ const submit = async () => {
 
     fileStore.reload = true;
   } catch (e) {
+    usageStore.invalidate();
     buttons.done("delete");
     $showError(e as Error);
     if (fileStore.isListing) fileStore.reload = true;

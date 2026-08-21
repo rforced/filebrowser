@@ -42,6 +42,7 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import { files as api } from "@/api";
+import { useUsageStore } from "@/stores/usage";
 import { filesize } from "@/utils";
 import Card from "@/components/ui/Card.vue";
 import Gauge from "@/components/ui/Gauge.vue";
@@ -49,6 +50,7 @@ import Gauge from "@/components/ui/Gauge.vue";
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
+const usageStore = useUsageStore();
 
 const DEFAULT = {
   used: "0 B",
@@ -60,14 +62,29 @@ const usage = reactive({ ...DEFAULT });
 
 let controller = new AbortController();
 
+/*
+ * ZFS applies frees at transaction-group sync, so the statfs behind /api/usage
+ * still reports the old number for a moment after a delete. Measured on a
+ * Horizon FileSystem (zfs_txg_timeout=5): the space reappears in a single step
+ * 3.3-4.5s after the unlink, identically for one 5 GiB file and for 2000 small
+ * ones. It is a txg boundary rather than a drain, so one late read catches all
+ * of it — and watching for the number to move would not work anyway, since a
+ * solver writing output moves it every txg regardless. Without this a 40 GB
+ * clean looks like it did nothing.
+ */
+const SETTLE_DELAY = 8000;
+
+let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
 const fetchUsage = async () => {
   const path = route.path.endsWith("/") ? route.path : route.path + "/";
 
-  try {
-    controller.abort();
-    controller = new AbortController();
+  controller.abort();
+  controller = new AbortController();
+  const mine = controller;
 
-    const result = await api.usage(path, controller.signal);
+  try {
+    const result = await api.usage(path, mine.signal);
 
     Object.assign(usage, {
       used: filesize(result.used),
@@ -77,8 +94,27 @@ const fetchUsage = async () => {
         : 0,
     });
   } catch {
-    Object.assign(usage, DEFAULT);
+    // Our own abort means a newer read is already on its way. Falling back to
+    // DEFAULT here would flash 0 B under the gauge before it lands.
+    if (!mine.signal.aborted) Object.assign(usage, DEFAULT);
+  } finally {
+    if (!mine.signal.aborted) scheduleSettle();
   }
+};
+
+/*
+ * Re-read once the filesystem has had time to catch up, whether this card was
+ * mounted when the change happened or navigated to afterwards — deleting a file
+ * lands you in its parent directory, which mounts this card fresh. Self-
+ * terminating: the follow-up read finds the window elapsed and arms nothing.
+ */
+const scheduleSettle = () => {
+  clearTimeout(settleTimer);
+
+  const since = Date.now() - usageStore.changedAt;
+  if (since >= SETTLE_DELAY) return;
+
+  settleTimer = setTimeout(fetchUsage, SETTLE_DELAY - since);
 };
 
 const openUsage = () => {
@@ -91,5 +127,15 @@ watch(
   { immediate: true }
 );
 
-onUnmounted(() => controller.abort());
+// A delete in the directory already on screen moves nothing else this card
+// watches, so the usage store's "bytes changed" signal is the only cue it gets.
+watch(
+  () => usageStore.revision,
+  () => fetchUsage()
+);
+
+onUnmounted(() => {
+  controller.abort();
+  clearTimeout(settleTimer);
+});
 </script>

@@ -115,7 +115,7 @@ function mountViewer() {
           playbackCapped:
             "Playback stopped after {minutes} minutes. Press play to carry on.",
           surfacePlaybackOff:
-            "Too large to play back: every frame is a fresh cut of {faces} faces. Parcels still play.",
+            "Too large to play back: {faces} faces. Parcels still play.",
           resolution: "Detail",
           resLow: "Low",
           resMedium: "Medium",

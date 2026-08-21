@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { describe, expect, it, afterEach, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 
 const api = vi.hoisted(() => ({
@@ -23,6 +23,10 @@ describe("usage store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("caches a measured directory instead of walking it twice", async () => {
@@ -163,5 +167,31 @@ describe("usage store", () => {
     await store.measure("/cases/a");
 
     expect(api.dirSize).toHaveBeenCalledTimes(2);
+  });
+
+  /*
+   * The disk gauge reads /api/usage rather than this cache, so dropping entries
+   * tells it nothing. It watches the counter instead: a delete in the directory
+   * already on screen moves no route and no listing path, and this is the only
+   * cue it gets. The timestamp is what lets a card mounted after the fact know
+   * the filesystem may not have caught up yet.
+   */
+  it("signals that bytes on disk have changed", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(1_000);
+
+    const store = useUsageStore();
+    expect(store.revision).toBe(0);
+    expect(store.changedAt).toBe(0);
+
+    store.invalidate();
+    expect(store.revision).toBe(1);
+    expect(store.changedAt).toBe(1_000);
+
+    // Clearing one path is the same signal: something left the disk.
+    vi.setSystemTime(2_000);
+    store.invalidate("/cases/a");
+    expect(store.revision).toBe(2);
+    expect(store.changedAt).toBe(2_000);
   });
 });
