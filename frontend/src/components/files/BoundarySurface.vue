@@ -1,10 +1,6 @@
 <template>
   <div class="relative w-full h-full" @wheel.stop @touchmove.stop>
     <canvas ref="canvasEl" class="w-full h-full block"></canvas>
-
-    <!-- Light-on-dark in both themes: the stage behind the canvas is dark.
-         During playback the previous frame stays up while the next loads, so
-         the spinner only shows before there is anything to look at. -->
     <div
       v-if="loading && !surface"
       class="absolute inset-0 flex items-center justify-center text-gray-400"
@@ -72,9 +68,6 @@
         </div>
       </div>
 
-      <!-- Styled like the legend chip opposite: the canvas is transparent
-           over the page, so a fixed white-on-translucent-white treatment
-           disappears entirely in the light theme. -->
       <div class="absolute right-2 bottom-2 flex gap-2">
         <button
           type="button"
@@ -464,12 +457,6 @@ const animate = () => {
   }
 };
 
-// A refusal now names its own ceiling, which is the difference between advice
-// that works and advice that cannot. Only the drawn surface is a question of
-// detail: a mesh too large to read is a fact about the file, and a scalar too
-// large to invert is answered by dropping the colour-by. Sending every 413
-// down the "try a lower step" path is what left an unreadable mesh looking
-// like a setting the user had got wrong.
 const refusalMessage = (e: any): string => {
   if (e?.status !== 413) return e?.message ?? String(e);
   if (e?.code === "meshTooLarge") return t("h5View.meshTooLarge");
@@ -490,8 +477,6 @@ const load = async () => {
 
   const withEdges = rep() === "edges";
   try {
-    // The cache owns the request, so a frame revisited while scrubbing — or
-    // reloaded by the route sync on pause — never hits the network twice.
     const data = await fetchSurface(props.path, {
       stream: props.stream,
       scalar: props.scalar,
@@ -510,8 +495,6 @@ const load = async () => {
     resize();
     emit("loaded", [data.range[0], data.range[1]]);
 
-    // The representation moved to edges while this request was in flight
-    // without them; go straight back for the same surface with its outline.
     if (!withEdges && rep() === "edges") {
       load();
     }

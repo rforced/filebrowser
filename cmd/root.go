@@ -120,7 +120,7 @@ func addServerFlags(flags *pflag.FlagSet) {
 	flags.String("teamId", "", "Job platform team ID")
 	flags.String("filesystemId", "", "Job platform filesystem ID")
 	flags.String("convergeApps", "", "directory of CONVERGE installs available for compiling UDFs (default /mnt/fs/.cache/apps/converge)")
-	flags.String("frameAncestors", "", "CSP frame-ancestors source list of origins allowed to embed the app (empty means none)")
+	flags.String("frameAncestors", "", "CSP frame-ancestors source list of origins allowed to embed Horizon (empty means none)")
 }
 
 // splitList turns a comma-separated flag value into the slice it stands for,

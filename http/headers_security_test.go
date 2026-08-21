@@ -199,8 +199,8 @@ func TestIndexTemplateNoncesEveryInlineScript(t *testing.T) {
 	}
 }
 
-// The frame-ancestors directive follows the server configuration so a deploy
-// can name the one platform origin allowed to embed the app, while a server
+// The frame-ancestors directive follows the server configuration so a deployment
+// can name the one platform origin allowed to embed horizon, while a server
 // that configures nothing stays unframeable.
 func TestFrameAncestorsFollowsConfiguration(t *testing.T) {
 	t.Parallel()

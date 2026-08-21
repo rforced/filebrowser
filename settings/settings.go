@@ -25,7 +25,7 @@ const DefaultSessionMaxLifetime = 24 * time.Hour
 // AuthMethod describes an authentication method.
 type AuthMethod string
 
-// Settings contain the main settings of the application.
+// Settings contain the main settings of horizon.
 type Settings struct {
 	Key                   []byte       `json:"key"`
 	HideLoginButton       bool         `json:"hideLoginButton"`
@@ -69,12 +69,12 @@ type Server struct {
 	FilesystemID          string `json:"filesystemId"`
 
 	// ConvergeApps is the directory holding the CONVERGE installs a UDF may be
-	// compiled against, one sub-directory per version. It sits outside every
+	// compiled against, one subdirectory per version. It sits outside every
 	// user's scope, so it is read through the OS filesystem rather than theirs.
 	ConvergeApps string `json:"convergeApps"`
 
 	// FrameAncestors is the CSP frame-ancestors source list naming the origins
-	// allowed to embed the app in a frame. Empty means no one may.
+	// allowed to embed Horizon in a frame. Empty means no one may.
 	FrameAncestors string `json:"frameAncestors"`
 
 	// TrustedProxies lists, as IP addresses or CIDR blocks, the reverse proxies

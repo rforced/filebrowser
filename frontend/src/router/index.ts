@@ -32,7 +32,7 @@ const titles = {
   InternalServerError: "errors.internal",
 };
 
-// An error page belongs inside the app frame: reached on its own it would
+// An error page belongs inside horizon frame: reached on its own it would
 // otherwise be a card on a blank tab, with no header and nowhere to go. The
 // name stays on the child so the document-title lookup still finds it.
 const errorRoute = (path: string, name: string, errorCode: number) => [

@@ -2,7 +2,7 @@ import { authMethod, baseURL, domain } from "./constants";
 import { saveToken } from "./auth";
 import { applyEmbeddedTheme } from "./theme";
 
-// Whether the app is really running inside a frame (the job platform embeds
+// Whether Horizon is really running inside a frame (the job platform embeds
 // it). Auth handoff and theme sync only make sense here — they talk to the
 // embedding page.
 export const framed = window.self !== window.top;
@@ -22,7 +22,7 @@ function fromPlatform(event: MessageEvent): boolean {
 }
 
 /**
- * Ask the embedding platform page for a single-use handoff code and exchange
+ * Ask Horizon for a single-use handoff code and exchange
  * it for a session, so an embedded user never sees a second login form.
  * Resolves false when not framed, when the parent stays silent, or when the
  * exchange is refused — callers fall back to the interactive login.
