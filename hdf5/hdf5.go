@@ -152,12 +152,22 @@ func (f *File) readAt(addr uint64, n int) ([]byte, error) {
 	if n < 0 {
 		return nil, fmt.Errorf("%w: negative read", ErrUnsupported)
 	}
-	if f.size > 0 && (addr > uint64(f.size) || uint64(n) > uint64(f.size)-addr) {
-		return nil, fmt.Errorf("%w: read of %d at %d past end of file", ErrNotHDF5, n, addr)
-	}
 	buf := make([]byte, n)
-	if _, err := f.r.ReadAt(buf, int64(addr)); err != nil {
+	if err := f.readAtInto(addr, buf); err != nil {
 		return nil, err
 	}
 	return buf, nil
+}
+
+// readAtInto fills buf from addr, so a caller walking a dataset in blocks can
+// hold one buffer rather than allocate one per read.
+func (f *File) readAtInto(addr uint64, buf []byte) error {
+	n := len(buf)
+	if f.size > 0 && (addr > uint64(f.size) || uint64(n) > uint64(f.size)-addr) {
+		return fmt.Errorf("%w: read of %d at %d past end of file", ErrNotHDF5, n, addr)
+	}
+	if _, err := f.r.ReadAt(buf, int64(addr)); err != nil {
+		return err
+	}
+	return nil
 }

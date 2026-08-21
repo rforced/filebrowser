@@ -1,6 +1,7 @@
 package fbhttp
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"net/http/httptest"
@@ -103,7 +104,7 @@ func TestH5SurfaceProbe(t *testing.T) {
 		}
 		fmt.Printf("  payload   %.1f MB  sha %x  workers %d\n",
 			float64(rec.Body.Len())/(1<<20),
-			sha256.Sum256(rec.Body.Bytes()), h5SurfaceWorkers(1<<20))
+			sha256.Sum256(rec.Body.Bytes()), h5SurfaceWorkers(1<<20, 0))
 		if tc.enc == "" {
 			d := decodeSurface(t, rec)
 			h := d.header
@@ -211,4 +212,91 @@ func reportBoundaries(t *testing.T, f *hdf5.File, stream string) {
 		fmt.Printf("  id %-4d %9d  %5.1f%%\n", id, count[id],
 			100*float64(count[id])/float64(total))
 	}
+}
+
+// TestH5ScanBoundaryFacesMatchesAWholeRead proves the streamed scan against
+// the read it replaced, on a real mesh rather than a five-face fixture. The
+// fluid cell is the part worth checking: it moved from being indexed by mesh
+// face to being indexed by position within a boundary, and getting that wrong
+// colours a wall with its neighbour's values — which looks entirely plausible.
+//
+//	FB_PROBE_H5=/path/post.h5 /tmp/h5probe.bin -test.run ScanBoundaryFacesMatches -test.v
+func TestH5ScanBoundaryFacesMatchesAWholeRead(t *testing.T) {
+	path := os.Getenv("FB_PROBE_H5")
+	if path == "" {
+		t.Skip("set FB_PROBE_H5 to a post file to check it")
+	}
+
+	fh, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+	st, err := fh.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := hdf5.Open(fh, st.Size())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stream := os.Getenv("FB_PROBE_STREAM")
+	if stream == "" {
+		stream = "STREAM_00"
+	}
+	offsetsDS, err := f.Dataset(stream + "/CONNECTIVITY/POLYGON_OFFSET")
+	if err != nil {
+		t.Fatal(err)
+	}
+	connDS, err := f.Dataset(stream + "/CONNECTIVITY/CONNECTED_CELLS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	faceCount := int(offsetsDS.Len() - 1)
+
+	byBoundary, fluid, err := h5ScanBoundaryFaces(
+		context.Background(), connDS, faceCount, nil, h5FaceScanSpan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	whole, err := connDS.Ints()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seen, mismatched := 0, 0
+	for id, faces := range byBoundary {
+		cells := fluid[id]
+		if len(cells) != len(faces) {
+			t.Fatalf("boundary %d: %d faces but %d cells", id, len(faces), len(cells))
+		}
+		for k, face := range faces {
+			seen++
+			if owner := whole[2*int(face)]; owner != -id-1 {
+				t.Fatalf("face %d filed under boundary %d but its owner is %d",
+					face, id, owner)
+			}
+			if want := int32(whole[2*int(face)+1]); cells[k] != want {
+				if mismatched++; mismatched < 5 {
+					t.Errorf("boundary %d face %d: cell %d, want %d",
+						id, face, cells[k], want)
+				}
+			}
+		}
+	}
+
+	expected := 0
+	for i := 0; i+1 < len(whole) && i/2 < faceCount; i += 2 {
+		if whole[i] < 0 {
+			expected++
+		}
+	}
+	if seen != expected {
+		t.Errorf("streamed scan found %d boundary faces, whole read found %d",
+			seen, expected)
+	}
+	fmt.Printf("%d boundary faces of %d, %d cell mismatches\n",
+		seen, faceCount, mismatched)
 }

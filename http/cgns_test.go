@@ -242,9 +242,16 @@ func TestCGNSSurfaceIsTheWholeWettedBoundary(t *testing.T) {
 	// The bounding box is the file's own coordinate range. Vertex ids in CGNS
 	// start at one, so an off-by-one in rebasing them would shift every corner
 	// onto its neighbour and move this box.
+	//
+	// Compared at float32 scale because that is what the coordinates are now
+	// held and sent as: CGNS stores them float64, but the payload has always
+	// been float32, so the box now describes the vertices the client actually
+	// receives rather than the ones the file held. This still catches what it
+	// is for by a wide margin — a rebased corner moves ~0.005 here, five
+	// thousand times the tolerance.
 	want := [6]float64{0, -0.06, -9.765625e-07, 0.16, 0, 9.765625e-07}
 	for i, v := range got.header.Bounds {
-		if math.Abs(v-want[i]) > 1e-12 {
+		if math.Abs(v-want[i]) > 1e-6 {
 			t.Errorf("bounds = %v, want %v", got.header.Bounds, want)
 			break
 		}

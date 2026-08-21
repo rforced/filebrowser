@@ -378,11 +378,26 @@
             </div>
           </div>
 
+          <!-- A mesh too large to play is still perfectly fine to look at, so
+             the tab keeps everything except the transport and says why it is
+             missing rather than leaving a gap where a player usually sits. -->
+          <p
+            v-if="!surfacePlayable"
+            class="flex items-center gap-2 px-3 md:px-6 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 text-xs text-gray-500 dark:text-gray-400"
+          >
+            <i class="fa-solid fa-circle-info"></i>
+            {{
+              t("h5View.surfacePlaybackOff", {
+                faces: formatCount(surfaceFaces),
+              })
+            }}
+          </p>
+
           <!-- Playback over the sibling post files of this run: the same
              transport as the Catalyst image player, but every frame is a
              fresh surface (AMR remeshes between outputs). -->
           <FramePlayer
-            v-if="frames.length > 1"
+            v-if="surfacePlayable && frames.length > 1"
             :playing="playing"
             :frame-index="frameIndex"
             :total="frames.length"
@@ -578,6 +593,7 @@ import {
   abortPendingSurfaces,
   clearSurfaceCache,
   DEFAULT_SURFACE_RESOLUTION,
+  PLAYBACK_MAX_FACES,
   PLAYBACK_MAX_RESOLUTION,
   PLAYBACK_SURFACE_RESOLUTION,
   prefetchSurface,
@@ -737,6 +753,21 @@ const surfaceScalars = computed(() => {
   );
   return (stream?.variables ?? []).filter((v) => !v.type.startsWith("string"));
 });
+
+const surfaceFaces = computed(
+  () =>
+    summary.value?.streams.find((s) => s.name === surfaceStream.value)?.faces ??
+    0
+);
+
+// Playback is priced on the mesh, not on what gets drawn. Every frame is a
+// fresh pass over the whole face table to find the boundary, which no detail
+// step reduces — so past a point the sequence is unaffordable while the still
+// is perfectly fine. Parcels are unaffected: a parcel cloud never touches the
+// mesh, which is why they keep playing on a file whose surface cannot.
+const surfacePlayable = computed(
+  () => surfaceFaces.value === 0 || surfaceFaces.value <= PLAYBACK_MAX_FACES
+);
 
 const hasParcels = computed(() =>
   parcelGroups.value.some((g) => g.hasCoords && g.count > 0)
@@ -1255,7 +1286,12 @@ const load = async () => {
     const first = parcelGroups.value.find((g) => g.hasCoords && g.count > 0);
     parcelGroup.value = first?.path ?? "";
     parcelScalar.value = parcelScalars.value.includes("TEMP") ? "TEMP" : "";
-    if (surfaceOpened.value || activeTab.value === "parcels") loadFrames();
+    if (
+      (surfaceOpened.value && surfacePlayable.value) ||
+      activeTab.value === "parcels"
+    ) {
+      loadFrames();
+    }
   } catch (e: any) {
     if (e?.name === "AbortError") return;
     error.value =
@@ -1274,10 +1310,12 @@ const keyEvent = (event: KeyboardEvent) => {
     close();
     return;
   }
-  if (
-    (activeTab.value !== "surface" && activeTab.value !== "parcels") ||
-    frames.value.length < 2
-  ) {
+  // Same gate the transport is drawn behind, or space and the arrows would
+  // play a sequence the tab has no player for.
+  const playable =
+    activeTab.value === "parcels" ||
+    (activeTab.value === "surface" && surfacePlayable.value);
+  if (!playable || frames.value.length < 2) {
     return;
   }
   const target = event.target as HTMLElement | null;
@@ -1306,7 +1344,9 @@ watch(path, () => load());
 watch(activeTab, (tab) => {
   if (tab === "surface") {
     surfaceOpened.value = true;
-    loadFrames();
+    // The listing is only ever wanted for the transport, so a surface that
+    // cannot play does not pay for it.
+    if (surfacePlayable.value) loadFrames();
   } else if (tab === "parcels") {
     loadFrames();
   }

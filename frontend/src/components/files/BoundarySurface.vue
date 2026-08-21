@@ -464,6 +464,23 @@ const animate = () => {
   }
 };
 
+// A refusal now names its own ceiling, which is the difference between advice
+// that works and advice that cannot. Only the drawn surface is a question of
+// detail: a mesh too large to read is a fact about the file, and a scalar too
+// large to invert is answered by dropping the colour-by. Sending every 413
+// down the "try a lower step" path is what left an unreadable mesh looking
+// like a setting the user had got wrong.
+const refusalMessage = (e: any): string => {
+  if (e?.status !== 413) return e?.message ?? String(e);
+  if (e?.code === "meshTooLarge") return t("h5View.meshTooLarge");
+  if (e?.code === "scalarTooLarge") return t("h5View.scalarTooLarge");
+  return t(
+    props.resolution === "low"
+      ? "h5View.surfaceTooLarge"
+      : "h5View.surfaceTooLargeForStep"
+  );
+};
+
 const load = async () => {
   if (!props.path) return;
   const token = ++loadToken;
@@ -502,17 +519,7 @@ const load = async () => {
     if (token !== loadToken || e?.name === "AbortError" || e?.is_canceled) {
       return;
     }
-    error.value =
-      e?.status === 413
-        ? // The top step asks for the surface whole, so a refusal there is one
-          // a lower step may well answer. At the lowest there is nothing left
-          // to suggest, and the size is the file's rather than the setting's.
-          t(
-            props.resolution === "low"
-              ? "h5View.surfaceTooLarge"
-              : "h5View.surfaceTooLargeForStep"
-          )
-        : (e?.message ?? String(e));
+    error.value = refusalMessage(e);
     emit("loaded", null);
   } finally {
     if (token === loadToken) loading.value = false;

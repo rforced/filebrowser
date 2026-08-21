@@ -106,6 +106,17 @@ describe("fetchSurface", () => {
     );
   });
 
+  // The budgets are per-frame, and a still is not a frame. Defaulting to any
+  // of them holes a surface that would have fitted whole — a 27.4M-cell case
+  // measured 2,640,214 boundary triangles, which the 2M step strides by 2.
+  it("names no triangle budget for a still, so nothing strides it by default", () => {
+    const budgets = Object.values(SURFACE_TRIANGLE_LIMITS);
+    expect(SURFACE_TRIANGLE_LIMITS[DEFAULT_SURFACE_RESOLUTION]).toBe(
+      Math.max(...budgets)
+    );
+    expect(SURFACE_TRIANGLE_LIMITS[DEFAULT_SURFACE_RESOLUTION]).toBe(Infinity);
+  });
+
   it("evicts the oldest frames once past the entry cap", async () => {
     for (let i = 0; i < 9; i++) {
       await fetchSurface(`/case/post${i}.h5`, { stream: "STREAM_00" });
@@ -148,13 +159,16 @@ describe("fetchSurface", () => {
     );
 
     // Eight of these fit the byte budget; ten do not. The first two are pushed
-    // out by the entry cap before any of them resolve.
-    const fifteenMB = 15 << 20;
+    // out by the entry cap before any of them resolve — and if their bytes
+    // were still charged afterwards the budget would evict a ninth that is
+    // genuinely there. Sized against the budget deliberately: make these small
+    // enough that ten of them fit and the stranding goes unnoticed.
+    const thirtyMB = 30 << 20;
     const pending = [];
     for (let i = 0; i < 10; i++) {
       pending.push(fetchSurface(`/case/post${i}.h5`, { stream: "STREAM_00" }));
     }
-    resolvers.forEach((resolve) => resolve(fakeSized(fifteenMB)));
+    resolvers.forEach((resolve) => resolve(fakeSized(thirtyMB)));
     await Promise.all(pending);
 
     surfaceMock.mockClear();
@@ -205,5 +219,79 @@ describe("fetchSurface", () => {
 
     await fetchSurface("/case/post1.h5", { stream: "STREAM_00" });
     expect(surfaceMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Stills stopped being strided, so they got larger: the largest case measured
+// is 45MB drawn whole and 66MB with edges. The budget has to hold enough of
+// those that comparing two fields, or turning edges on and back off, is not a
+// refetch each way.
+describe("surface cache budget against measured payloads", () => {
+  const ULTRA_BYTES = 45 << 20;
+  const ULTRA_EDGES_BYTES = 66 << 20;
+  const PLAYBACK_BYTES = 6.4 * (1 << 20);
+
+  it("keeps several full-fidelity stills, not just the one on screen", async () => {
+    surfaceMock.mockImplementation(async () => fakeSized(ULTRA_BYTES));
+
+    const fields = ["TEMPERATURE", "PRESSURE", "VELOCITY_X"];
+    for (const scalar of fields) {
+      await fetchSurface("/case/post1.h5", { stream: "STREAM_00", scalar });
+    }
+    surfaceMock.mockClear();
+
+    // Going back to the first field must not pay for it again.
+    for (const scalar of fields) {
+      await fetchSurface("/case/post1.h5", { stream: "STREAM_00", scalar });
+    }
+    expect(surfaceMock).not.toHaveBeenCalled();
+  });
+
+  it("holds a still and its edged twin together", async () => {
+    surfaceMock.mockImplementation(async (_p: string, opts: any) =>
+      fakeSized(opts.edges ? ULTRA_EDGES_BYTES : ULTRA_BYTES)
+    );
+
+    await fetchSurface("/case/post1.h5", { stream: "STREAM_00" });
+    await fetchSurface("/case/post1.h5", { stream: "STREAM_00", edges: true });
+    surfaceMock.mockClear();
+
+    await fetchSurface("/case/post1.h5", { stream: "STREAM_00" });
+    expect(surfaceMock).not.toHaveBeenCalled();
+  });
+
+  // Playback runs at the low step, where the entry cap binds long before the
+  // byte cap does. If the bytes ever became the limit there, a scrub back
+  // would refetch every frame it passed.
+  it("lets playback fill the entry cap without hitting the byte cap", async () => {
+    surfaceMock.mockImplementation(async () => fakeSized(PLAYBACK_BYTES));
+
+    for (let i = 0; i < 8; i++) {
+      await fetchSurface(`/case/post${i}.h5`, {
+        stream: "STREAM_00",
+        resolution: "low",
+      });
+    }
+    surfaceMock.mockClear();
+
+    for (let i = 0; i < 8; i++) {
+      await fetchSurface(`/case/post${i}.h5`, {
+        stream: "STREAM_00",
+        resolution: "low",
+      });
+    }
+    expect(surfaceMock).not.toHaveBeenCalled();
+  });
+
+  // A surface that fills the budget on its own is still the one being looked
+  // at; dropping it would refetch on every redraw.
+  it("keeps a single entry that alone exceeds the budget", async () => {
+    surfaceMock.mockImplementation(async () => fakeSized(512 << 20));
+
+    await fetchSurface("/case/huge.h5", { stream: "STREAM_00" });
+    surfaceMock.mockClear();
+
+    await fetchSurface("/case/huge.h5", { stream: "STREAM_00" });
+    expect(surfaceMock).not.toHaveBeenCalled();
   });
 });

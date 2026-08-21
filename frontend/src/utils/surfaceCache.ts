@@ -17,7 +17,16 @@ export const SURFACE_TRIANGLE_LIMITS: Record<SurfaceResolution, number> = {
   ultra: Infinity,
 };
 
-export const DEFAULT_SURFACE_RESOLUTION: SurfaceResolution = "high";
+// These are per-frame budgets, and a still is not a frame. Defaulting to the
+// playback ceiling silently holed surfaces that would have fitted whole: a
+// 27.4M-cell case measured 2,640,214 boundary triangles, which against the
+// 2M step strides by 2 and throws away half the wall to save ~13MB on a
+// payload that is only ~50MB drawn entire. The stride drops whole faces
+// without closing the gap, so what it buys is never a coarser surface, only a
+// holed one — worth it for a sequence, never for the one frame being looked
+// at. Anything past what the server will draw is refused rather than thinned,
+// and the step menu is where that trade is opted into deliberately.
+export const DEFAULT_SURFACE_RESOLUTION: SurfaceResolution = "ultra";
 
 // A frame on screen for a fraction of a second cannot show detail that costs
 // seconds to arrive, so playback trades it away and takes it back on pause.
@@ -29,6 +38,20 @@ export const PLAYBACK_SURFACE_RESOLUTION: SurfaceResolution = "low";
 // fraction of a second — so the step exists for a still, not for a sequence.
 export const PLAYBACK_MAX_RESOLUTION: SurfaceResolution = "high";
 
+// Past this many faces in the mesh a surface is a still and nothing else.
+//
+// It counts mesh faces rather than drawn triangles because that is what a
+// frame actually costs: the whole face table is scanned to find the boundary
+// before a stride is even chosen, so a lower detail step buys a smaller
+// payload and not a cheaper frame. A 27.4M-cell case measured 84,125,742
+// faces and 1.4 seconds a frame on a workstation — on four threads with the
+// solver running it is several times that, and playback loops.
+//
+// Mirrors h5SoloFaces in http/h5_surface.go, where the server stops running
+// two extractions of this size at once. A mesh that has to be cut on its own
+// is not one to ask for a hundred and twenty times in two minutes.
+export const PLAYBACK_MAX_FACES = 16 * 1024 * 1024;
+
 export interface SurfaceRequest {
   stream: string;
   scalar?: string;
@@ -36,8 +59,21 @@ export interface SurfaceRequest {
   resolution?: SurfaceResolution;
 }
 
+// The entry cap is what playback wants: frames are cheap at the low step —
+// 6.4MB on the largest case measured — so eight of them cost little and cover
+// a scrub back and forth.
 const MAX_ENTRIES = 8;
-const MAX_BYTES = 128 << 20;
+
+// The byte cap is what stills want, and they got larger when they stopped
+// being strided: the same case is 45MB drawn whole, or 66MB with edges. At the
+// old 128MB that was two entries, so flipping between two fields — or turning
+// edges on and back off — refetched every time.
+//
+// Sized for four of them rather than for many: a still is looked at, compared
+// against one or two others, and left. Playback is nowhere near this, and a
+// surface large enough to fill the budget alone is kept anyway, since evicting
+// what was just asked for would turn a large case into a refetch loop.
+const MAX_BYTES = 256 << 20;
 
 // Every typed-array view is laid over the one response buffer.
 const cache = createFrameCache<h5.H5Surface>(

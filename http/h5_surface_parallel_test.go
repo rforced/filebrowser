@@ -15,26 +15,59 @@ func TestH5SurfaceWorkersLeavesHeadroom(t *testing.T) {
 	restore := runtime.GOMAXPROCS(0)
 	defer runtime.GOMAXPROCS(restore)
 
+	// A small mesh: the slot tables cost nothing, so only cores and boundaries
+	// decide it.
+	const small = 1024
+
 	for _, tc := range []struct {
-		procs, boundaries, want int
+		procs, boundaries, nverts, want int
 	}{
 		// Two cores are held back for the rest of the server.
-		{8, 32, 6},
-		{4, 32, 2},
+		{8, 32, small, 6},
+		{4, 32, small, 2},
 		// Never below one, however little there is to go round.
-		{3, 32, 1},
-		{2, 32, 1},
-		{1, 32, 1},
+		{3, 32, small, 1},
+		{2, 32, small, 1},
+		{1, 32, small, 1},
 		// Never more workers than there are boundaries to give them.
-		{16, 3, 3},
-		{16, 1, 1},
-		{16, 0, 1},
+		{16, 3, small, 3},
+		{16, 1, small, 1},
+		{16, 0, small, 1},
+		// Each worker holds an int32 per vertex of the whole mesh, so on a
+		// large one the parallelism costs more memory than the box has. A
+		// 29M-vertex case is 116MB a worker and drops to one however many
+		// cores and boundaries there are.
+		{16, 32, 29_000_000, 1},
+		{16, 32, 12_000_000, 4},
+		// An unknown vertex count must not cap anything to zero.
+		{16, 32, 0, 14},
 	} {
 		runtime.GOMAXPROCS(tc.procs)
-		if got := h5SurfaceWorkers(tc.boundaries); got != tc.want {
-			t.Errorf("h5SurfaceWorkers(%d) on %d procs = %d, want %d",
-				tc.boundaries, tc.procs, got, tc.want)
+		if got := h5SurfaceWorkers(tc.boundaries, tc.nverts); got != tc.want {
+			t.Errorf("h5SurfaceWorkers(%d, %d) on %d procs = %d, want %d",
+				tc.boundaries, tc.nverts, tc.procs, got, tc.want)
 		}
+	}
+}
+
+// The permits count cores, but a large mesh spends memory: one extraction of a
+// 27.4M-cell case holds ~2.3GB, and two of those beside a running solver is
+// how a 16GB box runs out.
+func TestH5SurfaceWeightGivesALargeMeshTheWholeBudget(t *testing.T) {
+	if got := h5SurfaceWeight(1024); got != 1 {
+		t.Errorf("weight of a small mesh = %d, want 1", got)
+	}
+	if got := h5SurfaceWeight(h5SoloFaces - 1); got != 1 {
+		t.Errorf("weight just under the threshold = %d, want 1", got)
+	}
+
+	limit := h5SurfaceSem.GetLimit()
+	if got := h5SurfaceWeight(h5SoloFaces); got != limit {
+		t.Errorf("weight at the threshold = %d, want the whole budget of %d", got, limit)
+	}
+	// The mesh that prompted all of this, at 84,125,742 faces.
+	if got := h5SurfaceWeight(84_125_742); got != limit {
+		t.Errorf("weight of a 84M-face mesh = %d, want the whole budget of %d", got, limit)
 	}
 }
 
@@ -85,10 +118,9 @@ func TestH5CutBoundaryReusesScratchCleanly(t *testing.T) {
 	in := h5SurfaceInput{
 		Offsets:      []int64{0, 3, 6},
 		PolyToVertex: []int64{0, 1, 2, 0, 1, 2},
-		Connected:    []int64{-2, 0, -3, 0},
-		X:            []float64{0, 1, 0},
-		Y:            []float64{0, 0, 1},
-		Z:            []float64{0, 0, 0},
+		X:            []float32{0, 1, 0},
+		Y:            []float32{0, 0, 1},
+		Z:            []float32{0, 0, 0},
 		IDs:          []int64{1, 2},
 		ByBoundary:   map[int64][]int32{1: {0}, 2: {1}},
 		Stride:       1,

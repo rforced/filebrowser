@@ -54,10 +54,30 @@ import (
 const h5MaxSurfaceTriangles = 12_000_000
 
 // h5MaxFaces caps the mesh whose face table the extractor will decode. Only
-// POLYGON_OFFSET and CONNECTED_CELLS are read whole — 24 bytes a face once
-// widened from the file's int32 storage — because both are indexed by face and
-// the boundary faces are not known until they have been scanned.
-const h5MaxFaces = 32 << 20
+// POLYGON_OFFSET is read whole now — 8 bytes a face once widened from the
+// file's int32 storage — because it is indexed randomly, by drawn face, right
+// through the cut. CONNECTED_CELLS is the same size again twice over and is
+// read in blocks instead: it is wanted once per face, in order, which is what
+// h5ScanBoundaryFaces exploits.
+//
+// Priced against the box this runs on rather than the mesh: a FileSystem is
+// 16GB and 4 threads with the solver beside it. At this ceiling the face table
+// is ~805MB, which is what the old 32<<20 cost at 24 bytes a face — so the
+// same memory now buys three times the geometry. A measured 27.4M-cell case
+// has 84,125,742 faces and sits inside it; the mesh that prompted the raise
+// had 37.5M and was refused by 11%.
+const h5MaxFaces = 96 << 20
+
+// cgnsMaxFaces is deliberately the lower, older ceiling. CGNS stores the
+// relationship the other way round, so colouring a wall inverts the cell
+// section into an owner table of 16 bytes a face on top of the offsets — the
+// native path's saving does not carry over, and neither does its headroom.
+const cgnsMaxFaces = 32 << 20
+
+// h5FaceScanSpan is how much of CONNECTED_CELLS is decoded at a time. Even by
+// construction, so a block always starts on a face's owner slot rather than
+// halfway through a pair.
+const h5FaceScanSpan = 1 << 21
 
 // h5MaxSurfaceConnectivity caps the face vertices actually decoded, which are
 // the drawn boundary faces alone. It bounds the wetted surface a request may
@@ -71,6 +91,83 @@ const h5MaxSurfaceConnectivity = 64 << 20
 // the interior spans between them.
 const h5PolyReadSpan = 1 << 20
 
+// h5LimitError names which of the ceilings above a request ran into. The
+// distinction is the whole point: a mesh too large to read is a fact about the
+// file and no detail step changes it, while a surface too large to draw is
+// answered by a lower one. Both are the same 413, so the code is all the
+// client has to tell them apart — and sending neither is what had the viewer
+// answer an unreadable mesh with "try a lower step", advice that cannot work.
+type h5LimitError struct {
+	code    string
+	message string
+	params  map[string]string
+}
+
+func (e *h5LimitError) Error() string { return e.message }
+
+func h5MeshTooLarge(faces, limit int) *h5LimitError {
+	return &h5LimitError{
+		code:    "meshTooLarge",
+		message: fmt.Sprintf("mesh too large to extract: %d faces", faces),
+		params: map[string]string{
+			"faces": strconv.Itoa(faces),
+			"limit": strconv.Itoa(limit),
+		},
+	}
+}
+
+func h5SurfaceTooLarge(triangles, faces int) *h5LimitError {
+	return &h5LimitError{
+		code: "surfaceTooLarge",
+		message: fmt.Sprintf("surface too large to draw: %d triangles from %d boundary faces",
+			triangles, faces),
+		params: map[string]string{
+			"triangles": strconv.Itoa(triangles),
+			"faces":     strconv.Itoa(faces),
+			"limit":     strconv.Itoa(h5MaxSurfaceTriangles),
+		},
+	}
+}
+
+func h5ConnectivityTooLarge(faces int, faceVertices int64) *h5LimitError {
+	return &h5LimitError{
+		code: "surfaceTooLarge",
+		message: fmt.Sprintf("surface too large to extract: %d faces, %d face vertices",
+			faces, faceVertices),
+		params: map[string]string{
+			"faces":        strconv.Itoa(faces),
+			"faceVertices": strconv.FormatInt(faceVertices, 10),
+			"limit":        strconv.Itoa(h5MaxSurfaceConnectivity),
+		},
+	}
+}
+
+// h5ScalarTooLarge is the CGNS-only refusal. Colouring a wall there means
+// inverting the cell section, which is a whole-mesh read the geometry never
+// pays for — so unlike the others this one is answered by dropping the
+// colour-by rather than by dropping detail.
+func h5ScalarTooLarge(references int64, limit int) *h5LimitError {
+	return &h5LimitError{
+		code: "scalarTooLarge",
+		message: fmt.Sprintf("too many face references to invert for a scalar: %d",
+			references),
+		params: map[string]string{
+			"references": strconv.FormatInt(references, 10),
+			"limit":      strconv.Itoa(limit),
+		},
+	}
+}
+
+// h5TooLarge answers a refusal with the cause named, rather than with a bare
+// status the client has to guess at.
+func h5TooLarge(w http.ResponseWriter, limit *h5LimitError) (int, error) {
+	return renderClientError(w, http.StatusRequestEntityTooLarge, clientError{
+		Code:    limit.code,
+		Message: limit.message,
+		Params:  limit.params,
+	})
+}
+
 // h5SurfaceMagic identifies the binary framing below. The payload is a few
 // megabytes of positions and indices — as JSON the largest measured case would
 // be ~26MB of text and several seconds of parsing, so it goes over the wire in
@@ -83,6 +180,25 @@ const h5SurfaceMagic = "FBSURF01"
 // otherwise put as many of those in flight as the browser opens sockets and
 // saturate the box. Half the cores leaves the rest of the server responsive.
 var h5SurfaceSem = semaphore.New(max(1, runtime.GOMAXPROCS(0)/2))
+
+// h5SoloFaces is the mesh size past which an extraction takes every permit and
+// runs on its own. The permits count cores, but what a large mesh spends is
+// memory: measured on a 27.4M-cell case at 84M faces, one extraction holds
+// ~2.3GB, and a FileSystem box has 16GB shared with a running solver and a ZFS
+// ARC that wants half of it. Two of those at once is how it runs out.
+//
+// Set where one extraction reaches roughly half a gigabyte, which the same
+// measurement puts at ~27 bytes a face. Below it two still run together, which
+// is what an ordinary case wants.
+const h5SoloFaces = 16 << 20
+
+// h5SurfaceWeight is how many permits one mesh takes.
+func h5SurfaceWeight(faceCount int) int {
+	if faceCount >= h5SoloFaces {
+		return h5SurfaceSem.GetLimit()
+	}
+	return 1
+}
 
 // h5Abandoned answers a request whose client has already gone away: no body,
 // no status, no log line. A viewer scrubbing or stepping through frames
@@ -140,13 +256,7 @@ type h5SurfaceHeader struct {
 // payload. The averaging is visible only as a gradient across the width of one
 // cell, which is the same interpolation a post-processor shows for point data.
 func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, query map[string][]string) (int, error) {
-	// Queueing here rather than at the door means a request whose client left
-	// while it waited never starts: Acquire gives up as soon as ctx is done.
 	ctx := r.Context()
-	if err := h5SurfaceSem.Acquire(ctx, 1); err != nil {
-		return h5Abandoned()
-	}
-	defer h5SurfaceSem.Release(1)
 
 	stream := strings.Trim(firstValue(query, "surface"), "/")
 	if stream == "" || stream == "1" || stream == "true" {
@@ -172,15 +282,28 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 	// arrays below widen to int64 on the way in, so a check made after the read
 	// would be reporting a mesh the box had already made room for.
 	if offsetsDS.Len() > h5MaxFaces+1 {
-		return http.StatusRequestEntityTooLarge,
-			fmt.Errorf("mesh too large to extract: %d faces", offsetsDS.Len()-1)
+		return h5TooLarge(w, h5MeshTooLarge(int(offsetsDS.Len()-1), h5MaxFaces))
 	}
 
-	offsets, err := offsetsDS.Ints()
-	if err != nil {
-		return http.StatusNotFound, err
+	faceCount := int(offsetsDS.Len()) - 1
+	if faceCount < 1 {
+		return http.StatusUnprocessableEntity, fmt.Errorf("%s has no faces", stream)
 	}
-	connected, err := connDS.Ints()
+
+	// Queueing here rather than at the door means a request whose client left
+	// while it waited never starts: Acquire gives up as soon as ctx is done.
+	// Everything above this is header parsing — the reads all sit below it.
+	//
+	// Weighted by the mesh, because the permits were sized for cores and the
+	// binding resource is memory: two large extractions fit the CPU budget and
+	// not the box.
+	weight := h5SurfaceWeight(faceCount)
+	if err := h5SurfaceSem.Acquire(ctx, weight); err != nil {
+		return h5Abandoned()
+	}
+	defer h5SurfaceSem.Release(weight)
+
+	offsets, err := offsetsDS.Ints()
 	if err != nil {
 		return http.StatusNotFound, err
 	}
@@ -196,28 +319,15 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 		return h5Abandoned()
 	}
 
-	faceCount := len(offsets) - 1
-	if faceCount < 1 {
-		return http.StatusUnprocessableEntity, fmt.Errorf("%s has no faces", stream)
-	}
-
 	// Group the boundary faces by boundary so each one lands in a contiguous
 	// run of the index array.
 	filter := h5SurfaceFilter(firstValue(query, "boundaries"))
-	byBoundary := map[int64][]int32{}
-	for face := 0; face < faceCount; face++ {
-		if 2*face >= len(connected) {
-			break
+	byBoundary, fluid, err := h5ScanBoundaryFaces(ctx, connDS, faceCount, filter, h5FaceScanSpan)
+	if err != nil {
+		if ctx.Err() != nil {
+			return h5Abandoned()
 		}
-		owner := connected[2*face]
-		if owner >= 0 {
-			continue // interior face: both sides are cells
-		}
-		id := -owner - 1
-		if filter != nil && !filter[id] {
-			continue
-		}
-		byBoundary[id] = append(byBoundary[id], int32(face))
+		return http.StatusNotFound, err
 	}
 	if len(byBoundary) == 0 {
 		return http.StatusUnprocessableEntity,
@@ -246,21 +356,17 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 
 	stride := h5SurfaceStride(trianglesTotal, firstValue(query, "limit"))
 	if drawnTriangles := trianglesTotal / stride; drawnTriangles > h5MaxSurfaceTriangles {
-		return http.StatusRequestEntityTooLarge,
-			fmt.Errorf("surface too large to draw: %d triangles from %d boundary faces",
-				drawnTriangles, facesTotal)
+		return h5TooLarge(w, h5SurfaceTooLarge(drawnTriangles, facesTotal))
 	}
 
 	// Settling the stride here rather than inside the extractor means the faces
 	// the stride drops are never fetched: at the top step of a large geometry
 	// that is most of the boundary, and all of it would otherwise be read only
 	// to be stepped over.
-	drawn := h5DrawnFaces(offsets, ids, byBoundary, stride, int64(polyDS.Len()))
+	drawn := h5DrawnFaces(offsets, ids, byBoundary, fluid, stride, int64(polyDS.Len()))
 	starts, total := h5CompactOffsets(offsets, drawn)
 	if total > h5MaxSurfaceConnectivity {
-		return http.StatusRequestEntityTooLarge,
-			fmt.Errorf("surface too large to extract: %d faces, %d face vertices",
-				len(drawn), total)
+		return h5TooLarge(w, h5ConnectivityTooLarge(len(drawn), total))
 	}
 
 	polyToVertex, err := h5ReadFaceVertices(ctx, polyDS, offsets, drawn, total)
@@ -286,7 +392,7 @@ func h5SurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, que
 	surface, err := h5ExtractSurface(ctx, h5SurfaceInput{
 		Offsets:      offsets,
 		PolyToVertex: polyToVertex,
-		Connected:    connected,
+		FluidCells:   fluid,
 		X:            xs, Y: ys, Z: zs,
 		IDs:        ids,
 		ByBoundary: byBoundary,
@@ -345,15 +451,86 @@ func h5SurfaceStride(trianglesTotal int, limit string) int {
 	return (trianglesTotal + n - 1) / n
 }
 
+// h5ScanBoundaryFaces walks the face table in blocks and keeps only what the
+// surface needs: which faces sit on a boundary, and for each the cell on the
+// fluid side that colours it. A boundary face is marked by a negative owner,
+// -(id+1), so the whole mesh has to be looked at — but only looked at, once,
+// in order, and nothing about the 98% that is interior is worth holding.
+//
+// That is the difference between 24 bytes per mesh face and 8 per boundary
+// face. Measured on a 27.4M-cell post file whose 84,125,742 faces carry
+// 1,366,195 boundary faces between them: reading CONNECTED_CELLS whole left
+// 1,926MB resident, this leaves 67MB — and it is faster, because the bytes it
+// does not widen are bytes it does not fault in or hand to the collector.
+// span is a parameter so that a test can drive the block edge across every
+// face in a fixture: the one thing this must not be able to do is lose or
+// shift a face at a boundary between two reads.
+func h5ScanBoundaryFaces(ctx context.Context, ds *hdf5.Dataset, faceCount int, filter map[int64]bool, span uint64) (
+	map[int64][]int32, map[int64][]int32, error,
+) {
+	byBoundary := map[int64][]int32{}
+	fluid := map[int64][]int32{}
+	if span < 2 {
+		span = 2
+	}
+	span -= span % 2
+
+	// The face table may run past the offsets; the offsets are what say how
+	// many faces there are, so the scan stops where they do.
+	total := ds.Len()
+	if faces := 2 * uint64(faceCount); total > faces {
+		total = faces
+	}
+
+	var reader hdf5.IntsBlockReader
+	for start := uint64(0); start < total; start += span {
+		n := span
+		if start+n > total {
+			n = total - start
+		}
+		if ctx.Err() != nil {
+			return nil, nil, ctx.Err()
+		}
+		block, err := reader.Range(ds, start, n)
+		if err != nil {
+			return nil, nil, err
+		}
+		base := int32(start / 2)
+		for i := 0; i+1 < len(block); i += 2 {
+			owner := block[i]
+			if owner >= 0 {
+				continue // interior face: both sides are cells
+			}
+			id := -owner - 1
+			if filter != nil && !filter[id] {
+				continue
+			}
+			byBoundary[id] = append(byBoundary[id], base+int32(i/2))
+			// The boundary is always the owner, so the neighbour slot is the
+			// fluid cell. Kept narrow: a mesh this reader will open cannot
+			// have more cells than an int32 addresses.
+			fluid[id] = append(fluid[id], int32(block[i+1]))
+		}
+	}
+	return byBoundary, fluid, nil
+}
+
 // h5DrawnFaces reduces each boundary to the faces that will actually be drawn
 // — the stride's survivors, minus any whose vertex run the file does not back
 // — and returns them all in ascending face order. byBoundary is narrowed to
 // match, so what the extractor walks and what was fetched cannot drift apart.
-func h5DrawnFaces(offsets []int64, ids []int64, byBoundary map[int64][]int32, stride int, polyLen int64) []int32 {
+// fluid, when given, is narrowed in the same pass and by the same condition:
+// it is indexed by position within a boundary, not by face, so a face dropped
+// from one and not the other would colour every face after it with its
+// neighbour's cell. Filtering both in one loop is what makes that impossible
+// rather than merely unlikely.
+func h5DrawnFaces(offsets []int64, ids []int64, byBoundary, fluid map[int64][]int32, stride int, polyLen int64) []int32 {
 	drawn := make([]int32, 0, 1024)
 	for _, id := range ids {
 		faces := byBoundary[id]
+		cells := fluid[id]
 		kept := faces[:0]
+		keptCells := cells[:0]
 		for k, face := range faces {
 			if stride > 1 && k%stride != 0 {
 				continue
@@ -366,8 +543,14 @@ func h5DrawnFaces(offsets []int64, ids []int64, byBoundary map[int64][]int32, st
 				continue
 			}
 			kept = append(kept, face)
+			if k < len(cells) {
+				keptCells = append(keptCells, cells[k])
+			}
 		}
 		byBoundary[id] = kept
+		if fluid != nil {
+			fluid[id] = keptCells
+		}
 		drawn = append(drawn, kept...)
 	}
 	sort.Slice(drawn, func(i, j int) bool { return drawn[i] < drawn[j] })
@@ -395,6 +578,7 @@ func h5CompactOffsets(offsets []int64, drawn []int32) ([]int64, int64) {
 // them concatenated in face order.
 func h5ReadFaceVertices(ctx context.Context, ds *hdf5.Dataset, offsets []int64, drawn []int32, total int64) ([]int64, error) {
 	out := make([]int64, 0, total)
+	var reader hdf5.IntsBlockReader
 	for i := 0; i < len(drawn); {
 		start := offsets[drawn[i]]
 		end := offsets[drawn[i]+1]
@@ -415,7 +599,7 @@ func h5ReadFaceVertices(ctx context.Context, ds *hdf5.Dataset, offsets []int64, 
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		block, err := ds.IntsRange(uint64(start), uint64(end-start))
+		block, err := reader.Range(ds, uint64(start), uint64(end-start))
 		if err != nil {
 			return nil, err
 		}
@@ -447,13 +631,20 @@ func h5RebaseOffsets(offsets []int64, drawn []int32, starts []int64, total int64
 type h5SurfaceInput struct {
 	Offsets      []int64
 	PolyToVertex []int64
-	Connected    []int64
-	X, Y, Z      []float64
-	IDs          []int64
-	ByBoundary   map[int64][]int32
-	CellValues   []float64
-	Stride       int
-	WithEdges    bool
+	// FluidCells runs parallel to ByBoundary: the cell whose value colours
+	// each boundary face, in the same order as the faces themselves. Holding
+	// it per boundary rather than per mesh face is what lets the face table be
+	// streamed instead of resident.
+	FluidCells map[int64][]int32
+	// Coordinates are stored float32 and sent float32, so they are never
+	// widened: on a 29M-vertex mesh the round trip through float64 is 348MB
+	// held for precision the wire discards.
+	X, Y, Z    []float32
+	IDs        []int64
+	ByBoundary map[int64][]int32
+	CellValues []float64
+	Stride     int
+	WithEdges  bool
 }
 
 type h5SurfaceResult struct {
@@ -653,14 +844,27 @@ func h5NewScratch(nverts int, withEdges bool) *h5BoundaryScratch {
 	return s
 }
 
+// h5SurfaceScratchBudget caps what the workers' slot tables may cost between
+// them. Each worker holds one int32 per vertex of the whole mesh, which is
+// 116MB on a 29M-vertex case — on a large mesh the parallelism is bought with
+// memory the box has not got. Losing it there costs less than it looks: one
+// wall is routinely most of the wetted surface, measured at 73.8% on that same
+// case, so the workers behind the largest one finish early and wait anyway.
+const h5SurfaceScratchBudget = 192 << 20
+
 // h5SurfaceWorkers is how many boundaries are cut at once. Two cores are held
 // back: a FileSystem box runs the solver beside this, and the response still
 // has to be packed once the geometry is done. More workers than boundaries
-// would only sit idle, and each one carries a mesh-sized slot table.
-func h5SurfaceWorkers(boundaries int) int {
+// would only sit idle.
+func h5SurfaceWorkers(boundaries, nverts int) int {
 	n := runtime.GOMAXPROCS(0) - 2
 	if n > boundaries {
 		n = boundaries
+	}
+	if nverts > 0 {
+		if afford := h5SurfaceScratchBudget / (4 * nverts); n > afford {
+			n = afford
+		}
 	}
 	if n < 1 {
 		n = 1
@@ -672,7 +876,7 @@ func h5SurfaceWorkers(boundaries int) int {
 // one to cut, and returns them in the order they were asked for.
 func h5CutBoundaries(ctx context.Context, in h5SurfaceInput, nverts int) ([]h5BoundaryPart, error) {
 	parts := make([]h5BoundaryPart, len(in.IDs))
-	workers := h5SurfaceWorkers(len(in.IDs))
+	workers := h5SurfaceWorkers(len(in.IDs), nverts)
 
 	if workers <= 1 {
 		s := h5NewScratch(nverts, in.WithEdges)
@@ -788,11 +992,11 @@ func h5CutBoundary(ctx context.Context, in h5SurfaceInput, id int64, s *h5Bounda
 				break
 			}
 			x, y, z := in.X[v], in.Y[v], in.Z[v]
-			if !h5Finite(x) || !h5Finite(y) || !h5Finite(z) {
+			if !h5FiniteCoord(x) || !h5FiniteCoord(y) || !h5FiniteCoord(z) {
 				ok = false
 				break
 			}
-			s.poly = append(s.poly, [3]float64{x, y, z})
+			s.poly = append(s.poly, [3]float64{float64(x), float64(y), float64(z)})
 			s.corn = append(s.corn, uint32(v))
 		}
 		if !ok {
@@ -851,10 +1055,15 @@ func h5CutBoundary(ctx context.Context, in h5SurfaceInput, id int64, s *h5Bounda
 		}
 
 		if in.CellValues != nil {
-			// The cell on the fluid side sits in the slot the boundary did
-			// not take; the owner slot is always the negative one.
-			cell := in.Connected[2*int(face)+1]
-			if cell >= 0 && cell < int64(len(in.CellValues)) {
+			// The cell on the fluid side, collected when this face was found:
+			// the boundary always takes the owner slot, so the neighbour is
+			// the cell whose value the wall is drawn with.
+			cells := in.FluidCells[id]
+			cell := -1
+			if k < len(cells) {
+				cell = int(cells[k])
+			}
+			if cell >= 0 && cell < len(in.CellValues) {
 				if v := in.CellValues[cell]; h5Finite(v) {
 					for _, g := range s.corn {
 						ci := s.slots[g]
@@ -1000,14 +1209,14 @@ func h5Finite(v float64) bool {
 	return !math.IsNaN(v) && !math.IsInf(v, 0)
 }
 
-func h5VertexCoords(f *hdf5.File, stream string) (xs, ys, zs []float64, err error) {
-	var got [3][]float64
+func h5VertexCoords(f *hdf5.File, stream string) (xs, ys, zs []float32, err error) {
+	var got [3][]float32
 	for i, axis := range []string{"X", "Y", "Z"} {
 		ds, err := f.Dataset(stream + "/VERTEX_COORDINATES/" + axis)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		if got[i], err = ds.Floats(); err != nil {
+		if got[i], err = ds.Float32s(); err != nil {
 			return nil, nil, nil, err
 		}
 	}

@@ -106,7 +106,12 @@ function mountSurface(props: Record<string, any> = {}) {
     messages: {
       en: {
         h5View: {
-          surfaceTooLarge: "This mesh is too large to draw.",
+          meshTooLarge:
+            "This mesh is too large for the viewer to read. No detail step will change that.",
+          scalarTooLarge:
+            "This mesh is too large to colour by a field. Switch to By boundary to see the geometry.",
+          surfaceTooLarge:
+            "This surface is too large to draw, even at the lowest detail.",
           surfaceTooLargeForStep:
             "This surface is too large to draw at this detail. Try a lower step.",
         },
@@ -153,9 +158,50 @@ describe("BoundarySurface errors", () => {
     const wrapper = mountSurface({ resolution: "low" });
     await flushPromises();
 
-    expect(wrapper.text()).toContain("This mesh is too large to draw.");
+    expect(wrapper.text()).toContain("even at the lowest detail");
     expect(wrapper.text()).not.toContain("Try a lower step.");
     expect(wrapper.text()).not.toContain("413");
+
+    wrapper.unmount();
+  });
+
+  // The refusal that prompted all of this: a 27.4M-cell file whose 84M faces
+  // the reader will not hold was answered with "try a lower step", so the user
+  // walked the menu down to the bottom and got told the same thing again. No
+  // step reduces the mesh — only the code separates that from a surface drawn
+  // at too much detail.
+  it("does not offer a detail step for a mesh it cannot read", async () => {
+    const err: any = new Error("mesh too large to extract: 84125742 faces");
+    err.status = 413;
+    err.code = "meshTooLarge";
+    err.params = { faces: "84125742", limit: "33554432" };
+    mockSurface.mockRejectedValue(err);
+
+    const wrapper = mountSurface({ resolution: "ultra" });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("too large for the viewer to read");
+    expect(wrapper.text()).not.toContain("Try a lower step.");
+
+    wrapper.unmount();
+  });
+
+  // Colouring a CGNS wall inverts the cell section, which the geometry never
+  // reads. Dropping the field is the lever, not dropping detail.
+  it("points at the colour-by when only the scalar is out of reach", async () => {
+    const err: any = new Error("too many face references to invert");
+    err.status = 413;
+    err.code = "scalarTooLarge";
+    mockSurface.mockRejectedValue(err);
+
+    const wrapper = mountSurface({
+      resolution: "ultra",
+      scalar: "TEMPERATURE",
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Switch to By boundary");
+    expect(wrapper.text()).not.toContain("Try a lower step.");
 
     wrapper.unmount();
   });

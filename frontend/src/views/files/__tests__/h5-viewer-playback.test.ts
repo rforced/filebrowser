@@ -110,9 +110,12 @@ function mountViewer() {
       en: {
         h5View: {
           surface: "Surface",
+          parcels: "Parcels",
           variables: "Variables",
           playbackCapped:
             "Playback stopped after {minutes} minutes. Press play to carry on.",
+          surfacePlaybackOff:
+            "Too large to play back: every frame is a fresh cut of {faces} faces. Parcels still play.",
           resolution: "Detail",
           resLow: "Low",
           resMedium: "Medium",
@@ -293,6 +296,10 @@ describe("H5Viewer playback resolution cap", () => {
   // A step the user picked used to survive into playback, so a FileSystem box
   // could be asked to cut five million triangles a frame for a viewer showing
   // each one for a second.
+  //
+  // Ultra is where a still lands now, so selecting it expresses no preference
+  // on its own — the step has to be moved off the default first for the choice
+  // to be the user's rather than the viewer's.
   it("drops a hand-picked ultra step when playback starts", async () => {
     const fileStore = useFileStore();
     fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
@@ -303,6 +310,7 @@ describe("H5Viewer playback resolution cap", () => {
 
     const select = wrapper.find('select[aria-label="Detail"]');
     expect(select.exists(), "detail control should be on screen").toBe(true);
+    await select.setValue("medium");
     await select.setValue("ultra");
     expect((select.element as HTMLSelectElement).value).toBe("ultra");
 
@@ -314,6 +322,29 @@ describe("H5Viewer playback resolution cap", () => {
       .findAll("option")
       .find((o: any) => o.text() === "Ultra");
     expect(ultra!.attributes("disabled")).toBeDefined();
+
+    wrapper.unmount();
+  });
+
+  // The still lands at full detail and nobody has said otherwise, so the first
+  // press of play is free to take the cheap step — the wire sets the frame
+  // rate, and a surface shown for a second cannot carry detail that costs
+  // seconds to arrive.
+  it("drops an untouched default to the playback step on first play", async () => {
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+
+    const wrapper = mountViewer();
+    await flushPromises();
+    await openSurfaceTab(wrapper);
+
+    const select = wrapper.find('select[aria-label="Detail"]');
+    expect((select.element as HTMLSelectElement).value).toBe("ultra");
+
+    await playButton(wrapper)!.trigger("click");
+    await flushPromises();
+
+    expect((select.element as HTMLSelectElement).value).toBe("low");
 
     wrapper.unmount();
   });
@@ -561,6 +592,128 @@ describe("H5Viewer pauses when nobody is looking", () => {
     await flushPromises();
 
     expect(playButton(wrapper)!.attributes("aria-label")).toBe("Play");
+
+    wrapper.unmount();
+  });
+});
+
+// A mesh can be perfectly fine to look at and far too expensive to play: every
+// frame is a fresh pass over the whole face table to find the boundary, which
+// no detail step reduces. The still stays; the transport goes.
+describe("H5Viewer playback on a mesh too large to sequence", () => {
+  // The file that prompted this: 27.4M cells, 84,125,742 faces, whose wetted
+  // surface is only 1,366,195 of them.
+  const hugeSummary = {
+    ...postSummary,
+    streams: [{ ...postSummary.streams[0], cells: 27412975, faces: 84125742 }],
+    parcels: undefined,
+  };
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    mockSummary.mockReset();
+    mockFetch.mockReset();
+    mockSurface.mockReset();
+    mockSummary.mockResolvedValue(hugeSummary);
+    mockFetch.mockResolvedValue(frameListing);
+    mockSurface.mockResolvedValue({
+      positions: new Float32Array(new ArrayBuffer(64)),
+    });
+    clearSurfaceCache();
+  });
+
+  it("offers no transport, and says why rather than leaving a gap", async () => {
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+
+    const wrapper = mountViewer();
+    await flushPromises();
+    await openSurfaceTab(wrapper);
+
+    expect(playButton(wrapper)).toBeUndefined();
+    expect(wrapper.text()).toContain("Too large to play back");
+    // The still itself is untouched — this is a playback limit, not a refusal.
+    expect(
+      wrapper.findComponent({ name: "BoundarySurface" }).exists(),
+      "the surface should still be drawn"
+    ).toBe(true);
+
+    wrapper.unmount();
+  });
+
+  // The listing is only ever wanted for the transport.
+  it("does not pay for the directory listing it cannot use", async () => {
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+
+    const wrapper = mountViewer();
+    await flushPromises();
+    await openSurfaceTab(wrapper);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  // Space and the arrows drive the same transport, so they have to be behind
+  // the same gate or they would play a sequence with no player on screen.
+  it("ignores the playback keys on the surface tab", async () => {
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+
+    const wrapper = mountViewer();
+    await flushPromises();
+    await openSurfaceTab(wrapper);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space" }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight" }));
+    await flushPromises();
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(playButton(wrapper)).toBeUndefined();
+
+    wrapper.unmount();
+  });
+
+  // A parcel cloud never touches the mesh — it is flat arrays of positions —
+  // so the same file that cannot play its surface plays its spray fine.
+  it("still plays parcels on the same file", async () => {
+    mockSummary.mockResolvedValue({
+      ...hugeSummary,
+      streams: [
+        {
+          ...hugeSummary.streams[0],
+          parcels: [
+            {
+              name: "LIQPARCEL_1",
+              path: "STREAM_00/PARCEL_DATA/LIQUID_PARCEL_DATA/LIQPARCEL_1",
+              count: 115553,
+              variables: ["TEMP"],
+              hasCoords: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    const fileStore = useFileStore();
+    fileStore.req = { path: "/case/post000001_+1.00000e+00.h5" } as any;
+
+    const wrapper = mountViewer();
+    await flushPromises();
+
+    const tab = wrapper
+      .findAll("button")
+      .find((b: any) => b.text().includes("Parcels"));
+    expect(tab, "parcels tab should be on screen").toBeTruthy();
+    await tab!.trigger("click");
+    await flushPromises();
+
+    expect(
+      mockFetch,
+      "parcels still need the sibling listing"
+    ).toHaveBeenCalled();
+    expect(playButton(wrapper), "parcel playback should survive").toBeTruthy();
 
     wrapper.unmount();
   });

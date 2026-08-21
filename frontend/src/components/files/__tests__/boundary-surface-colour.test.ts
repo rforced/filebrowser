@@ -220,7 +220,7 @@ describe("BoundarySurface colouring", () => {
     await flushPromises();
 
     await wrapper.setProps({ scalar: "TEMPERATURE" });
-    await wrapper.setProps({ resolution: "ultra" });
+    await wrapper.setProps({ resolution: "low" });
     await flushPromises();
 
     const all = built();
@@ -237,6 +237,10 @@ describe("BoundarySurface colouring", () => {
   // Changing "colour by" and then "Detail" leaves two requests in flight. The
   // second is the one the controls now describe, so its surface must be the one
   // on screen however the two responses race.
+  //
+  // The step has to move off the default to be a second request at all: an
+  // unset resolution and the default name one cache key, so asking for the
+  // step already being fetched joins that request rather than opening another.
   it("draws the newest request when the responses land out of order", async () => {
     const pending: { opts: any; resolve: (v: any) => void }[] = [];
     mockSurface.mockImplementation(
@@ -250,7 +254,7 @@ describe("BoundarySurface colouring", () => {
     await flushPromises();
 
     await wrapper.setProps({ scalar: "PRESSURE" });
-    await wrapper.setProps({ resolution: "ultra" });
+    await wrapper.setProps({ resolution: "low" });
     await flushPromises();
 
     expect(pending).toHaveLength(2);

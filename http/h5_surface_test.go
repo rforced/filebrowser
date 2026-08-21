@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"math"
@@ -397,6 +399,80 @@ func TestH5SurfaceStridesOverBudget(t *testing.T) {
 	}
 }
 
+// The viewer picks its message from the code, so a mesh it cannot read must
+// not arrive looking like a detail step the user got wrong. If these ever
+// collapse to one code the advice goes back to being wrong for half the
+// refusals — "try a lower step" cannot answer a mesh too large to read.
+func TestH5LimitErrorsNameTheirCause(t *testing.T) {
+	mesh := h5MeshTooLarge(40_000_000, h5MaxFaces)
+	surface := h5SurfaceTooLarge(20_000_000, 9_000_000)
+	scalar := h5ScalarTooLarge(80_000_000, h5MaxSurfaceConnectivity)
+
+	if mesh.code == surface.code {
+		t.Errorf("mesh and surface refusals share code %q, so the client cannot "+
+			"tell an unreadable mesh from one drawn at too much detail", mesh.code)
+	}
+	if scalar.code == mesh.code || scalar.code == surface.code {
+		t.Errorf("scalar refusal reuses code %q", scalar.code)
+	}
+	for _, e := range []*h5LimitError{mesh, surface, scalar} {
+		if e.code == "" || e.message == "" {
+			t.Errorf("%+v is missing a code or message", e)
+		}
+		if e.params["limit"] == "" {
+			t.Errorf("%s carries no limit alongside the count it refused", e.code)
+		}
+	}
+	if got := mesh.params["faces"]; got != "40000000" {
+		t.Errorf("faces = %q, want the count that was refused", got)
+	}
+}
+
+// cgnsBuildFaces hands its refusal back as a plain error and the handler digs
+// it out with errors.As. That is what turned a mesh-too-large on the CGNS path
+// from a 404 — "nothing here" — into the 413 it always was.
+func TestH5LimitErrorSurvivesWrapping(t *testing.T) {
+	err := fmt.Errorf("Zone: %w", h5MeshTooLarge(40_000_000, h5MaxFaces))
+
+	var limit *h5LimitError
+	if !errors.As(err, &limit) {
+		t.Fatal("errors.As did not recover the limit through a wrap")
+	}
+	if limit.code != "meshTooLarge" {
+		t.Errorf("code = %q, want meshTooLarge", limit.code)
+	}
+}
+
+func TestH5TooLargeRendersTheCode(t *testing.T) {
+	rec := httptest.NewRecorder()
+	status, err := h5TooLarge(rec, h5MeshTooLarge(40_000_000, h5MaxFaces))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// renderClientError writes the body itself and reports 0, so that handle()
+	// does not trail a bare status line after it and bury the code.
+	if status != 0 {
+		t.Errorf("status = %d, want 0 so handle() leaves the body alone", status)
+	}
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("code = %d, want 413", rec.Code)
+	}
+
+	var body struct {
+		Code   string            `json:"code"`
+		Params map[string]string `json:"params"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body %s: %v", rec.Body.String(), err)
+	}
+	if body.Code != "meshTooLarge" {
+		t.Errorf("code = %q, want meshTooLarge", body.Code)
+	}
+	if body.Params["faces"] != "40000000" {
+		t.Errorf("params = %v, want the refused count to travel", body.Params)
+	}
+}
+
 func TestH5SurfaceRejectsFilesWithoutAMesh(t *testing.T) {
 	h, token := h5Handlers(t, h5Scope(t), users.Permissions{Download: true})
 
@@ -696,10 +772,9 @@ func TestH5ExtractSurfaceHonoursCancellation(t *testing.T) {
 	in := h5SurfaceInput{
 		Offsets:      make([]int64, faces+1),
 		PolyToVertex: make([]int64, 3*faces),
-		Connected:    make([]int64, 2*faces),
-		X:            make([]float64, 3*faces),
-		Y:            make([]float64, 3*faces),
-		Z:            make([]float64, 3*faces),
+		X:            make([]float32, 3*faces),
+		Y:            make([]float32, 3*faces),
+		Z:            make([]float32, 3*faces),
 		IDs:          []int64{1},
 		ByBoundary:   map[int64][]int32{1: make([]int32, faces)},
 		Stride:       1,
@@ -707,14 +782,13 @@ func TestH5ExtractSurfaceHonoursCancellation(t *testing.T) {
 	for i := 0; i < faces; i++ {
 		in.Offsets[i] = int64(3 * i)
 		in.ByBoundary[1][i] = int32(i)
-		in.Connected[2*i] = -2 // boundary 1 owns the face
 		for k := 0; k < 3; k++ {
 			v := 3*i + k
 			in.PolyToVertex[v] = int64(v)
 		}
-		in.X[3*i], in.Y[3*i] = float64(i), 0
-		in.X[3*i+1], in.Y[3*i+1] = float64(i)+1, 0
-		in.X[3*i+2], in.Y[3*i+2] = float64(i), 1
+		in.X[3*i], in.Y[3*i] = float32(i), 0
+		in.X[3*i+1], in.Y[3*i+1] = float32(i)+1, 0
+		in.X[3*i+2], in.Y[3*i+2] = float32(i), 1
 	}
 	in.Offsets[faces] = int64(3 * faces)
 

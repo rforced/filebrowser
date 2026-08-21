@@ -2,6 +2,7 @@ package fbhttp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -72,6 +73,12 @@ func cgnsSurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, q
 	}
 	faces, err := cgnsBuildFaces(f, sections)
 	if err != nil {
+		// A mesh the reader refuses is a 413 with a cause, not the 404 this
+		// path used to report it as: nothing here is missing.
+		var limit *h5LimitError
+		if errors.As(err, &limit) {
+			return h5TooLarge(w, limit)
+		}
 		return http.StatusNotFound, fmt.Errorf("%s: %w", zone, err)
 	}
 	offsets := faces.offsets
@@ -113,17 +120,13 @@ func cgnsSurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, q
 
 	stride := h5SurfaceStride(trianglesTotal, firstValue(query, "limit"))
 	if drawnTriangles := trianglesTotal / stride; drawnTriangles > h5MaxSurfaceTriangles {
-		return http.StatusRequestEntityTooLarge,
-			fmt.Errorf("surface too large to draw: %d triangles from %d boundary faces",
-				drawnTriangles, facesTotal)
+		return h5TooLarge(w, h5SurfaceTooLarge(drawnTriangles, facesTotal))
 	}
 
-	drawn := h5DrawnFaces(offsets, ids, byBoundary, stride, faces.polyLen)
+	drawn := h5DrawnFaces(offsets, ids, byBoundary, nil, stride, faces.polyLen)
 	starts, total := h5CompactOffsets(offsets, drawn)
 	if total > h5MaxSurfaceConnectivity {
-		return http.StatusRequestEntityTooLarge,
-			fmt.Errorf("surface too large to extract: %d faces, %d face vertices",
-				len(drawn), total)
+		return h5TooLarge(w, h5ConnectivityTooLarge(len(drawn), total))
 	}
 
 	polyToVertex, err := faces.readVertices(ctx, drawn, total)
@@ -146,16 +149,36 @@ func cgnsSurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, q
 	// coloured. Geometry alone never reads the cells at all.
 	scalar := firstValue(query, "scalar")
 	var cellValues []float64
-	var faceOwners []int64
+	var fluid map[int64][]int32
 	if scalar != "" {
 		if cellValues, err = cgnsCellValues(f, zone, scalar); err != nil {
 			return http.StatusNotFound, err
 		}
-		if faceOwners, err = cgnsFaceOwners(ctx, f, faces, sections); err != nil {
+		faceOwners, err := cgnsFaceOwners(ctx, f, faces, sections)
+		if err != nil {
 			if ctx.Err() != nil {
 				return h5Abandoned()
 			}
+			var limit *h5LimitError
+			if errors.As(err, &limit) {
+				return h5TooLarge(w, limit)
+			}
 			return http.StatusUnprocessableEntity, err
+		}
+		// The extractor wants the fluid cell per drawn face, which is what the
+		// native path collects as it scans. Here it is a lookup into the
+		// inverted table — taken after the stride has narrowed byBoundary, so
+		// the two stay aligned without a second filtering pass.
+		fluid = make(map[int64][]int32, len(byBoundary))
+		for id, boundaryFaces := range byBoundary {
+			cells := make([]int32, len(boundaryFaces))
+			for i, face := range boundaryFaces {
+				cells[i] = -1
+				if slot := 2*int(face) + 1; slot < len(faceOwners) {
+					cells[i] = int32(faceOwners[slot])
+				}
+			}
+			fluid[id] = cells
 		}
 	}
 
@@ -163,7 +186,7 @@ func cgnsSurfaceResponse(w http.ResponseWriter, r *http.Request, f *hdf5.File, q
 	surface, err := h5ExtractSurface(ctx, h5SurfaceInput{
 		Offsets:      offsets,
 		PolyToVertex: polyToVertex,
-		Connected:    faceOwners,
+		FluidCells:   fluid,
 		X:            xs, Y: ys, Z: zs,
 		IDs:        ids,
 		ByBoundary: byBoundary,
@@ -306,8 +329,8 @@ func cgnsBuildFaces(f *hdf5.File, sections []cgnsSection) (*cgnsFaces, error) {
 		if length < 0 || length > int64(conn.Len()) {
 			return nil, fmt.Errorf("%s offsets run past its connectivity", s.path)
 		}
-		if faces.count+n > h5MaxFaces {
-			return nil, fmt.Errorf("mesh too large to extract: %d faces", faces.count+n)
+		if faces.count+n > cgnsMaxFaces {
+			return nil, h5MeshTooLarge(int(faces.count+n), cgnsMaxFaces)
 		}
 
 		section := cgnsFaceSection{
@@ -424,20 +447,23 @@ func cgnsSectionOffsets(f *hdf5.File, sec cgnsSection) ([]int64, *hdf5.Dataset, 
 }
 
 // cgnsVertexCoords reads the zone's grid coordinates.
-func cgnsVertexCoords(f *hdf5.File, zone string) (xs, ys, zs []float64, err error) {
+// CGNS writes these as float64 where the native format uses float32, but the
+// payload is float32 either way — so narrowing here costs nothing that reaches
+// the browser and halves the largest array a zone contributes.
+func cgnsVertexCoords(f *hdf5.File, zone string) (xs, ys, zs []float32, err error) {
 	grids := cgnsChildrenLabelled(f, zone, "GridCoordinates_t")
 	if len(grids) == 0 {
 		return nil, nil, nil, fmt.Errorf("%s has no grid coordinates", zone)
 	}
 	base := zone + "/" + grids[0]
 
-	var got [3][]float64
+	var got [3][]float32
 	for i, axis := range []string{"CoordinateX", "CoordinateY", "CoordinateZ"} {
 		ds, err := cgnsPayload(f, base+"/"+axis)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		if got[i], err = ds.Floats(); err != nil {
+		if got[i], err = ds.Float32s(); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -602,8 +628,7 @@ func cgnsFaceOwners(ctx context.Context, f *hdf5.File, faces *cgnsFaces, section
 	// cell's face references are read at once, and widening them afterwards is
 	// too late to refuse a mesh the box cannot hold.
 	if connDS.Len() > h5MaxSurfaceConnectivity {
-		return nil, fmt.Errorf("%s holds %d face references, too many to invert",
-			cell.path, connDS.Len())
+		return nil, h5ScalarTooLarge(int64(connDS.Len()), h5MaxSurfaceConnectivity)
 	}
 	conn, err := connDS.Ints()
 	if err != nil {
